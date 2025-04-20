@@ -1,5 +1,5 @@
 # living.py
-import random
+import random, math
 from items import *
 from PyQt5.QtGui import QPixmap
 from mapping import *  # Use shared sprite dictionary
@@ -27,6 +27,7 @@ class Character(Container):
     def equip_item(self, item, slot):
         if isinstance(item, Equippable) and item.slot == slot:
             if slot == "primary_hand" and self.add_item(item):
+                self.items.remove(item)
                 self.primary_hand = item
                 return True
         return False
@@ -49,6 +50,8 @@ class Character(Container):
         if self.current_tile:
             for item in self.items:
                 self.current_tile.add_item(item)  # Use Tile.add_item
+            if self.primary_hand and random.uniform(0,1)<0.2:
+                self.current_tile.add_item(self.primary_hand)
             self.items.clear()
 
     def get_sprite(self):
@@ -78,7 +81,7 @@ class Player(Character):
         self.stamina = 100
         self.max_stamina = 100
         self.hunger = 100
-        self.max_hunger = 100
+        self.max_hunger = 1000
         self.generate_initial_items()
     
     def move(self, dx, dy, game_map):
@@ -97,9 +100,10 @@ class Player(Character):
             return QPixmap()  # Fallback    
 
     def calculate_damage_done(self):
-        damage = 3
+        damage = 1
         if self.primary_hand and hasattr(self.primary_hand, 'damage'):
-            damage += self.primary_hand.damage
+            damage += random.uniform(self.primary_hand.damage/3.0, self.primary_hand.damage)
+            print(damage, self.primary_hand.damage)
         return max(1, damage)
 
     def regenerate_stamina(self):
@@ -109,7 +113,10 @@ class Player(Character):
         self.hp = min(self.hp + 1, self.max_hp) 
     
     def generate_initial_items(self):
-        self.equip_item(Weapon("Dagger", damage=2), "primary_hand")
+        self.equip_item(Weapon("Long_Sword", damage=10), "primary_hand")
+        #self.equip_item(Weapon("Long_Sword", damage=10), "primary_hand")
+        self.add_item(Food("Apple", nutrition=50))
+        self.add_item(Food("Apple", nutrition=50))
 
 class Enemy(Character):
     def __init__(self, name, hp, x, y):
@@ -136,7 +143,7 @@ class Enemy(Character):
         return damage
     
     def update(self, player, map, game):  # Add game parameter
-        print(f"Updating enemy {self.name} at ({self.x}, {self.y}), can_see={self.can_see_character(player, map)}")
+        #print(f"Updating enemy {self.name} at ({self.x}, {self.y}), can_see={self.can_see_character(player, map)}")
         if self.can_see_character(player, map):
             path = map.find_path(self.x, self.y, player.x, player.y)
             print(path)
@@ -203,14 +210,11 @@ class Zombie(Enemy):
         self.type = "Zombie"
         
     def calculate_damage_done(self):
-        damage = random.randint(1, 20)
-        if self.primary_hand and hasattr(self.primary_hand, 'damage'):
-            damage += self.primary_hand.damage
-        return damage    
+        return random.randint(0, 15)
 
     def generate_initial_items(self):
         if random.random() < 0.5:
-            self.add_item(Food("Bread", nutrition=random.randint(50, 100)))
+            self.add_item(Food("bread", nutrition=random.randint(50, 100)))
 
     def get_sprite(self):
         try:
@@ -219,9 +223,26 @@ class Zombie(Enemy):
             print("Warning: Zombie sprite not found")
             return QPixmap()
 
+class Rogue(Enemy):
+    def __init__(self, name, hp , x, y):
+        super().__init__(name, hp, x, y)
+        self.type = "Rogue"
+        
+    def calculate_damage_done(self):
+        damage = random.randint(0, 8)
+        if self.primary_hand and hasattr(self.primary_hand, 'damage'):
+            damage += self.primary_hand.damage
+        return damage    
 
+    def generate_initial_items(self):
+        self.equip_item(Weapon("Long_Sword", damage=10), "primary_hand")
 
-
+    def get_sprite(self):
+        try:
+            return Tile.SPRITES.get("rogue", Tile.SPRITES["rogue"])
+        except KeyError:
+            print("Warning: Rogue sprite not found")
+            return QPixmap()
 
 
 

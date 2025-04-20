@@ -7,18 +7,23 @@
 # message_window.py 
 # inventory_window.py
 
+import shutil
+import tempfile
 import os
 import sys
 import json
 import random
 from PyQt5.QtWidgets import QApplication, QGraphicsView, QGraphicsScene, QGraphicsRectItem
 from PyQt5.QtCore import Qt, QRectF
-from PyQt5.QtGui import QColor
-from mapping import Map
+from PyQt5.QtGui import QColor, QTransform
+from mapping import *
 from living import *
+from items import *
 from events import *
 import random  # Add for random enemy placement
 from message_window import MessagePopup  # Import the new MessagePopup
+from inventory_window import InventoryWindow
+import math 
 
 # Set working directory to the script's directory
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
@@ -44,7 +49,7 @@ class Game(QGraphicsView):
         # Create and place characters
         self.player = Player("Hero", 100, 50, 50)  # Start near center
         self.player.hunger = 200
-        self.player.max_hunger = 400
+        self.player.max_hunger = 1000
         self.events = []  # Initialize events list
         self.enemies = {(0, 0, 0): []}  # Dictionary with map coords as keys, enemy lists as values
         self.map.place_character(self.player)
@@ -62,6 +67,7 @@ class Game(QGraphicsView):
         self.setFixedSize(self.view_width * self.tile_size, self.view_height * self.tile_size)
         Game.instance = self
         
+        self.inventory_window = None  # Initialize later on demand
         # Initialize message window
         self.message_popup = MessagePopup(self)  # Set Game as parent
         self.messages = []  # List of (message, turns_remaining) tuples
@@ -69,7 +75,7 @@ class Game(QGraphicsView):
         # Attempt to load saved game
         try:
             self.load_current_game()
-            self.add_message("Loaded saved game on startup") #print("Loaded saved game on startup")
+            #self.add_message("Loaded saved game on startup") #print("Loaded saved game on startup")
         except FileNotFoundError:
             self.add_message("No save file found, starting new game") #print("No save file found, starting new game")
         except Exception as e:
@@ -99,15 +105,18 @@ class Game(QGraphicsView):
     def closeEvent(self, event):
         """Save the game state when the window is closed."""
         try:
-            self.add_message("Game Being Saved ...")
-            self.save_current_game()
-            
+            self.add_message("Saving game before exit...")
+            self.save_current_game(slot=1)
         except Exception as e:
+            self.add_message(f"Error saving game on exit: {e}")
             print(f"Error saving game on exit: {e}")
-        self.message_popup.close()  # Ensure message window closes
-        event.accept()    
+        self.message_popup.close()
+        if self.inventory_window:
+            self.inventory_window.close()
+        event.accept()  
     
     def check_map_transition(self, x, y):
+        """Handle map transitions by saving the current map and loading the new one."""
         current_x, current_y, current_z = self.current_map
         new_map_coord = None
         new_x, new_y = x, y
@@ -126,45 +135,78 @@ class Game(QGraphicsView):
 
         if new_map_coord:
             self.add_message(f"Transitioning from {self.current_map} to {new_map_coord}, player to ({new_x}, {new_y})")
-            # Save current map state
-            self.map.save_state(self.player)
             
-            # Clear current scene
-            self.scene.clear()
+            # Save current map
+            saves_dir = "./saves"
+            map_file = os.path.join(saves_dir, f"map_{'_'.join(map(str, self.current_map))}_1.json")
+            # Clear enemies to ensure only saved state is used
+            current_enemies = self.enemies.get(self.current_map, [])
+            self.enemies[self.current_map] = []
+            self.map.save_state(current_enemies, map_file)
             
-            # Remove player and enemies from current map
+            # Remove player from current map
             if not self.map.remove_character(self.player):
                 print(f"Warning: Failed to remove player from {self.current_map}")
-            for enemy in self.enemies.get(self.current_map, [])[:]:  # Use copy to avoid modifying while iterating
-                if not self.map.remove_character(enemy):
-                    print(f"Warning: Failed to remove enemy at ({enemy.x}, {enemy.y})")
+            
+            # Update player state
+            self.player.x, self.player.y = new_x, new_y
+            self.save_current_game(slot=1)  # Updates player_state.json with new map and position
+
+            # Clear current scene
+            self.scene.clear()           
             
             # Switch to new map
+            self.current_map = new_map_coord
+            self.enemies[new_map_coord] = []
             if new_map_coord not in self.maps:
                 print(f"Creating new map at {new_map_coord}")
                 map_type = random.choice(["procedural_lake", "procedural_field", "procedural_road"])
                 self.maps[new_map_coord] = Map(map_type)
-                self.enemies[new_map_coord] = []  # Initialize empty enemy list
-            else:
-                print(f"Loading existing map at {new_map_coord}")
-                self.maps[new_map_coord].load_state(self.player)  # Load saved state
-            
-            # Update map and player position
-            self.current_map = new_map_coord
-            #self.fill_enemies(100)  # Populate new map with enemies
             self.map = self.maps[self.current_map]
-            self.player.x, self.player.y = new_x, new_y
+            
+            # Load new map state
+            map_file = os.path.join(saves_dir, f"map_{'_'.join(map(str, self.current_map))}_1.json")
+            try:
+                with open(map_file, "r") as f:
+                    #print("(1) HERE")
+                    map_state = json.load(f)
+                    fill_list = []
+                    self.map.load_state(fill_list, map_state)
+                    self.enemies[self.current_map] = fill_list
+                    print(self.enemies[self.current_map])
+            except FileNotFoundError:
+                self.add_message(f"No map file found for {self.current_map}, generating new map")
+                self.map.generate()
+            except Exception as e:
+                self.add_message(f"Failed to load map for {self.current_map}: {e}")
+                print(f"Error loading map {map_file}: {e}")
+                self.map.generate()
+            
+            # Place player
             if not self.map.place_character(self.player):
                 print(f"Error: Failed to place player at ({new_x}, {new_y}) on map {self.current_map}")
+                self.player.x, self.player.y = self.map.width // 2, self.map.height // 2
+                self.map.place_character(self.player)
+            
+            # Place enemies
+            for enemy in self.enemies.get(self.current_map, []):
+                
+                if not self.map.place_character(enemy):
+                    print(f"Warning: Failed to place enemy {enemy.name} at ({enemy.x}, {enemy.y})")
+                else:
+                    print(f"placed enemy {enemy.name} at ({enemy.x}, {enemy.y})")
+            
+            # Populate enemies if needed
             if not self.enemies[self.current_map]:
-                self.fill_enemies(100)  # Adjust max_enemies as needed
-            elif len(self.enemies[self.current_map])<5: 
+                self.fill_enemies(100)
+            elif len(self.enemies[self.current_map]) < 5:
                 self.fill_enemies(50)
-            # Redraw everything
+
+            # Redraw
             self.dirty_tiles.clear()
             self.draw_grid()
             self.draw_hud()
-    
+
     def start_new_game(self):
         """Reset the game to a new state."""
         self.scene.clear()
@@ -186,202 +228,224 @@ class Game(QGraphicsView):
         self.draw_hud()
         self.dirty_tiles.clear()    
         
-    def save_current_game(self):
-        # state = {
-            # "player": {
-                # "x": self.player.x,
-                # "y": self.player.y,
-                # "hp": self.player.hp,
-                # "stamina": self.player.stamina,
-                # "hunger": self.player.hunger,
-                # "items": [item.__dict__ for item in self.player.items]
-            # },
-            # "enemies": {
-                # str(coord): [{"x": e.x, "y": e.y, "hp": e.hp, "type": e.type} for e in enemy_list]
-                # for coord, enemy_list in self.enemies.items()
-            # },
-            # "current_map": self.current_map,
-            # "maps": {str(coord): map.filename for coord, map in self.maps.items()}
-        # }
-        # with open("savegame.json", "w") as f:
-            # json.dump(state, f, indent=2)
-        # self.map.save_state(self.player)
-        # Save all maps' states
-        for coord, map_obj in self.maps.items():
-            map_obj.save_state(self.player)
-
-        state = {
-            "player": {
-                "x": self.player.x,
-                "y": self.player.y,
-                "hp": self.player.hp,
-                "stamina": self.player.stamina,
-                "hunger": self.player.hunger,
-                "items": [
-                    {
-                        "name": item.name,
-                        "nutrition": getattr(item, "nutrition", 0),
-                        "weight": item.weight,
-                        "description": item.description,
-                        "sprite": item.sprite
-                    } for item in self.player.items
-                ],
-                "equipped": {
-                    "primary_hand": {
-                        "name": self.player.primary_hand.name,
-                        "damage": self.player.primary_hand.damage,
-                        "weight": self.player.primary_hand.weight,
-                        "description": self.player.primary_hand.description,
-                        "sprite": self.player.primary_hand.sprite
-                    } if self.player.primary_hand else None,
-                    # Add other slots (e.g., torso) if Armor is implemented
-                }
-            },
-            "current_map": list(self.current_map),  # Convert tuple to list for JSON
-            "maps": {
-                str(list(coord)): {  # Convert tuple to stringified list
-                    "filename": map_obj.filename,
-                    "saved_grid": map_obj.saved_grid
-                } for coord, map_obj in self.maps.items()
-            },
-            "enemies": {
-                str(list(self.current_map)): [  # Only save enemies for current map
-                    {
-                        "x": e.x,
-                        "y": e.y,
-                        "hp": e.hp,
-                        "type": e.type,
-                        "patrol_direction": list(e.patrol_direction),
-                        "stance": e.stance,
-                        "items": [
-                            {
-                                "name": item.name,
-                                "nutrition": getattr(item, "nutrition", 0),
-                                "weight": item.weight,
-                                "description": item.description,
-                                "sprite": item.sprite
-                            } for item in e.items
-                        ]
-                    } for e in self.enemies.get(self.current_map, [])
-                ]
-            }
-        }
-        with open("savegame.json", "w") as f:
-            json.dump(state, f, indent=2)
-
-    def load_current_game(self):
-        # try:
-            # with open("savegame.json", "r") as f:
-                # state = json.load(f)
-            # self.player.x = state["player"]["x"]
-            # self.player.y = state["player"]["y"]
-            # self.player.hp = state["player"]["hp"]
-            # self.player.stamina = state["player"]["stamina"]
-            # self.player.hunger = state["player"]["hunger"]
-            # self.player.items = [Food(item["name"], item.get("nutrition", 0)) for item in state["player"]["items"]]
-            # self.current_map = tuple(map(int, state["current_map"].strip('()').split(',')))
-            # self.maps = {tuple(map(int, k.strip('()').split(','))): Map(v) for k, v in state["maps"].items()}
-            # self.map = self.maps[self.current_map]
-            
-            #Load enemies into dictionary
-            # self.enemies = {}
-            # for coord_str, enemy_list in state["enemies"].items():
-                # coord = tuple(map(int, coord_str.strip('()').split(',')))
-                # self.enemies[coord] = [Zombie("Zombie", e["hp"], e["x"], e["y"]) for e in enemy_list]
-            
-            #Place player and enemies on current map
-            # self.map.load_state(self.player)
-            # self.map.place_character(self.player)
-            # for enemy in self.enemies.get(self.current_map, []):
-                # self.map.place_character(enemy)
-            
-            # self.dirty_tiles.clear()
-            # self.draw_grid()
-            # self.draw_hud()
-        # except FileNotFoundError:
-            # print("No save file found")
-        # except Exception as e:
-            # print(f"Error loading game: {e}")
+    def save_current_game(self, slot=1):
+        """Save the current map to its JSON file and player state to a central file."""
         try:
-            with open("savegame.json", "r") as f:
+            # Ensure ./saves directory exists
+            saves_dir = "./saves"
+            if not os.path.exists(saves_dir):
+                os.makedirs(saves_dir)
+
+            # Save current map state
+            map_file = os.path.join(saves_dir, f"map_{'_'.join(map(str, self.current_map))}_{slot}.json")
+            self.map.save_state(self.enemies.get(self.current_map, []), map_file)
+
+            # Save player state
+            player_state = {
+                "version": "1.0.0",
+                "slot": slot,
+                "turn": self.turn,
+                "current_map": list(self.current_map),
+                "player": {
+                    "x": self.player.x,
+                    "y": self.player.y,
+                    "hp": self.player.hp,
+                    "max_hp": self.player.max_hp,
+                    "stamina": self.player.stamina,
+                    "max_stamina": self.player.max_stamina,
+                    "hunger": self.player.hunger,
+                    "max_hunger": self.player.max_hunger,
+                    "items": [
+                        {
+                            "type": "food" if isinstance(item, Food) else "weapon" if isinstance(item, Weapon) else "repair_tool" if isinstance(item, WeaponRepairTool) else "armor",
+                            "name": item.name,
+                            "nutrition": getattr(item, "nutrition", 0),
+                            "weight": item.weight,
+                            "description": item.description,
+                            "sprite": item.sprite,
+                            "damage": getattr(item, "damage", 0),
+                            "max_damage": getattr(item, "max_damage", 0),
+                            "stamina_consumption": getattr(item, "stamina_consumption", 0),
+                            "repairing_factor": getattr(item, "repairing_factor", 0),
+                            "armor": getattr(item, "armor", 0),
+                            "slot": getattr(item, "slot", None)
+                        } for item in self.player.items
+                    ],
+                    "equipped": {
+                        "primary_hand": {
+                            "type": "weapon",
+                            "name": self.player.primary_hand.name,
+                            "damage": self.player.primary_hand.damage,
+                            "max_damage": self.player.primary_hand.max_damage,
+                            "weight": self.player.primary_hand.weight,
+                            "description": self.player.primary_hand.description,
+                            "sprite": self.player.primary_hand.sprite,
+                            "stamina_consumption": self.player.primary_hand.stamina_consumption
+                        } if self.player.primary_hand else None,
+                        "torso": {
+                            "type": "armor",
+                            "name": self.player.torso.name,
+                            "armor": self.player.torso.armor,
+                            "weight": self.player.torso.weight,
+                            "description": self.player.torso.description,
+                            "sprite": self.player.torso.sprite
+                        } if self.player.torso else None
+                        # Add other slots (secondary_hand, head, etc.) as needed
+                    }
+                }
+            }
+
+            # Backup player state
+            player_file = os.path.join(saves_dir, f"player_state_{slot}.json")
+            if os.path.exists(player_file):
+                shutil.copy(player_file, os.path.join(saves_dir, f"player_state_{slot}.json.bak"))
+
+            # Write player state to temporary file in ./saves
+            temp_file_name = os.path.join(saves_dir, f"player_state_{slot}.tmp")
+            with open(temp_file_name, 'w') as temp_file:
+                json.dump(player_state, temp_file, indent=2)
+
+            # Atomically rename temporary file
+            os.replace(temp_file_name, player_file)
+            self.add_message(f"Game saved to slot {slot}!")
+
+        except Exception as e:
+            self.add_message(f"Failed to save game: {e}")
+            print(f"Error saving game: {e}")
+            if os.path.exists(os.path.join(saves_dir, f"player_state_{slot}.json.bak")):
+                shutil.copy(os.path.join(saves_dir, f"player_state_{slot}.json.bak"), player_file)  # Restore backup
+            
+    def load_current_game(self, slot=1):
+        """Load player state and current map from their respective JSON files."""
+        saves_dir = "./saves"
+        player_file = os.path.join(saves_dir, f"player_state_{slot}.json")
+        try:
+            # Load player state
+            with open(player_file, "r") as f:
                 state = json.load(f)
 
+            # Check version
+            save_version = state.get("version", "0.0.0")
+            if save_version != "1.0.0":
+                self.add_message(f"Warning: Save version {save_version} may not be compatible")
+
+            # Clear current state
             self.scene.clear()
             self.tile_items.clear()
-            self.events = []
+            self.events.clear()
+            self.enemies.clear()
+            self.maps.clear()
+
             # Load player
-            self.player.x = state["player"]["x"]
-            self.player.y = state["player"]["y"]
-            self.player.hp = state["player"]["hp"]
-            self.player.stamina = state["player"]["stamina"]
-            self.player.hunger = state["player"]["hunger"]
+            player_data = state["player"]
+            self.player.x = player_data["x"]
+            self.player.y = player_data["y"]
+            self.player.hp = player_data["hp"]
+            self.player.max_hp = player_data["max_hp"]
+            self.player.stamina = player_data["stamina"]
+            self.player.max_stamina = player_data["max_stamina"]
+            self.player.hunger = player_data["hunger"]
+            self.player.max_hunger = player_data["max_hunger"]
             self.player.items = []
-            for item_data in state["player"]["items"]:
-                if item_data["nutrition"] > 0:
-                    self.player.add_item(Food(
+            for item_data in player_data["items"]:
+                if item_data["type"] == "food":
+                    item = Food(
                         name=item_data["name"],
                         nutrition=item_data["nutrition"],
                         description=item_data.get("description", ""),
                         weight=item_data.get("weight", 1)
-                    ))
-            # Load equipped items
-            equipped = state["player"]["equipped"]
+                    )
+                elif item_data["type"] == "weapon":
+                    item = Weapon(
+                        name=item_data["name"],
+                        damage=item_data["damage"],
+                        description=item_data.get("description", ""),
+                        weight=item_data.get("weight", 1),
+                        stamina_consumption=item_data["stamina_consumption"]
+                    )
+                    item.max_damage = item_data["max_damage"]
+                elif item_data["type"] == "repair_tool":
+                    item = WeaponRepairTool(
+                        name=item_data["name"],
+                        repairing_factor=item_data["repairing_factor"],
+                        description=item_data.get("description", ""),
+                        weight=item_data.get("weight", 1)
+                    )
+                elif item_data["type"] == "armor":
+                    item = Armor(
+                        name=item_data["name"],
+                        armor=item_data["armor"],
+                        description=item_data.get("description", ""),
+                        weight=item_data.get("weight", 1),
+                        slot=item_data["slot"]
+                    )
+                self.player.add_item(item)
+            equipped = player_data["equipped"]
             if equipped["primary_hand"]:
-                self.player.equip_item(Weapon(
+                weapon = Weapon(
                     name=equipped["primary_hand"]["name"],
                     damage=equipped["primary_hand"]["damage"],
                     description=equipped["primary_hand"].get("description", ""),
-                    weight=equipped["primary_hand"].get("weight", 1)
-                ), "primary_hand")
+                    weight=equipped["primary_hand"].get("weight", 1),
+                    stamina_consumption=equipped["primary_hand"]["stamina_consumption"]
+                )
+                weapon.max_damage = equipped["primary_hand"]["max_damage"]
+                self.player.equip_item(weapon, "primary_hand") 
+                #self.player.items.remove(weapon) 
+            if equipped["torso"]:
+                self.player.equip_item(Armor(
+                    name=equipped["torso"]["name"],
+                    armor=equipped["torso"]["armor"],
+                    description=equipped["torso"].get("description", ""),
+                    weight=equipped["torso"].get("weight", 1),
+                    slot="torso"
+                ), "torso")
 
-            # Load maps
+            # Load current map
             self.current_map = tuple(state["current_map"])
-            self.maps = {}
-            for coord_str, map_data in state["maps"].items():
-                coord = tuple(map(int, coord_str.strip('[]').split(',')))
-                map_obj = Map(map_data["filename"])
-                map_obj.saved_grid = map_data["saved_grid"]
-                self.maps[coord] = map_obj
-
-            # Load enemies for current map
-            self.enemies = {}
-            enemies_data = state["enemies"].get(str(list(self.current_map)), [])
-            self.enemies[self.current_map] = []
-            for e in enemies_data:
-                enemy = Zombie("Zombie", e["hp"], e["x"], e["y"])
-                enemy.type = e["type"]
-                enemy.patrol_direction = tuple(e["patrol_direction"])
-                enemy.stance = e["stance"]
-                for item_data in e["items"]:
-                    if item_data["nutrition"] > 0:
-                        enemy.add_item(Food(
-                            name=item_data["name"],
-                            nutrition=item_data["nutrition"],
-                            description=item_data.get("description", ""),
-                            weight=item_data.get("weight", 1)
-                        ))
-                self.enemies[self.current_map].append(enemy)
-
-            # Initialize empty enemy lists for other maps
-            for coord in self.maps:
-                if coord != self.current_map and coord not in self.enemies:
-                    self.enemies[coord] = []
-
-            # Set current map and restore state
+            map_file = os.path.join(saves_dir, f"map_{'_'.join(map(str, self.current_map))}_{slot}.json")
+            self.maps[self.current_map] = Map(state.get("filename", "default"))
             self.map = self.maps[self.current_map]
-            self.map.load_state(self.enemies[self.current_map])
-            self.map.place_character(self.player)
-            for enemy in self.enemies[self.current_map]:
-                self.map.place_character(enemy)
+            self.enemies[self.current_map] = []
+            try:
+                with open(map_file, "r") as f:
+                    map_state = json.load(f)
+                    self.map.load_state(self.enemies[self.current_map], map_state)
+                    print("Load from Load Current State:", len(self.enemies[self.current_map]) )
+            except FileNotFoundError:
+                self.add_message(f"No map file found for {self.current_map}, generating new map")
+                self.map.generate()
+            except Exception as e:
+                self.add_message(f"Failed to load map for {self.current_map}: {e}")
+                print(f"Error loading map {map_file}: {e}")
+                self.map.generate()
 
-            #self.tile_items.clear()
+            # Place characters
+            if not self.map.place_character(self.player):
+                self.add_message(f"Warning: Could not place player at ({self.player.x}, {self.player.y})")
+                self.player.x, self.player.y = self.grid_width // 2, self.grid_height // 2
+                self.map.place_character(self.player)
+            for enemy in self.enemies[self.current_map]:
+                if not self.map.place_character(enemy):
+                    print(f"Warning: Could not place enemy at ({enemy.x}, {enemy.y})")
+
+            # Load turn
+            self.turn = state.get("turn", 0)
+
+            # Redraw
             self.draw_grid()
             self.draw_hud()
+            self.add_message(f"Game loaded from slot {slot}!")
+
         except FileNotFoundError:
-            print("No save file found")
+            self.add_message(f"No save file found for slot {slot}")
+            print(f"No save file found: {player_file}")
+            self.start_new_game()
         except Exception as e:
+            self.add_message(f"Failed to load game from slot {slot}: {e}")
             print(f"Error loading game: {e}")
-    
+            self.start_new_game()
+
     def draw_hud(self):
         hud_width = self.view_width * self.tile_size
         hud_height = 50
@@ -406,10 +470,72 @@ class Game(QGraphicsView):
         hunger_ratio = self.player.hunger / self.player.max_hunger
         hunger_bar = QGraphicsRectItem(10 + 2 * (bar_width + padding), hud_y + padding, bar_width * hunger_ratio, bar_height)
         hunger_bar.setBrush(QColor("yellow"))
-        if hunger_ratio<0.8: self.scene.addItem(hunger_bar)    
+        if hunger_ratio<0.8: self.scene.addItem(hunger_bar)
+
+        #North Arrow
+        # arrow_size = 40  # Size of the arrow in pixels
+        # arrow_x = (hud_width - arrow_size) / 2  # Desired center x-coordinate
+        # arrow_y = 30  # Desired center y-coordinate
+        # arrow_sprite = Tile.SPRITES.get("HUD_arrow", QPixmap())  # Get arrow sprite
+        # if not arrow_sprite.isNull():
+            # arrow_scaled = arrow_sprite.scaled(arrow_size, arrow_size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            # arrow_item = QGraphicsPixmapItem(arrow_scaled)
+            #Rotate to point north (opposite of player rotation)
+            # rotation_angle = -self.rotation  # Negative to counter player's rotation
+            # transform = QTransform().rotate(rotation_angle)
+            # arrow_item.setTransform(transform)
+            #Calculate the center of the pixmap
+            # center_x = arrow_scaled.width() / 2
+            # center_y = arrow_scaled.height() / 2
+            #Convert rotation angle to radians for math.cos and math.sin
+            # theta = math.radians(rotation_angle)
+            #Calculate the offset of the center after rotation
+            # offset_x = center_x * math.cos(theta) - center_y * math.sin(theta)
+            # offset_y = center_x * math.sin(theta) + center_y * math.cos(theta)
+            #Adjust position so the center of the pixmap is at (arrow_x, arrow_y)
+            # adjusted_x = arrow_x - offset_x
+            # adjusted_y = arrow_y - offset_y
+            # arrow_item.setPos(adjusted_x, adjusted_y)
+            # self.scene.addItem(arrow_item)
+        # else:
+            # print("Warning: Arrow sprite not found")
+        # North Arrow
+        arrow_size = 50  # Target size for scaling
+        arrow_x = hud_width / 2  # Desired center x-coordinate (middle of HUD)
+        arrow_y = 30  # Desired center y-coordinate
+        arrow_sprite = Tile.SPRITES.get("HUD_arrow", QPixmap())  # Get arrow sprite
+        if not arrow_sprite.isNull():
+            arrow_scaled = arrow_sprite.scaled(arrow_size, arrow_size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            arrow_item = QGraphicsPixmapItem(arrow_scaled)
+            # Rotate to point north (opposite of player rotation)
+            rotation_angle = -self.rotation
+            transform = QTransform().rotate(rotation_angle)
+            arrow_item.setTransform(transform)
+            # Calculate the center of the pixmap
+            center_x = arrow_scaled.width() / 2
+            center_y = arrow_scaled.height() / 2
+            # Convert rotation angle to radians
+            theta = math.radians(rotation_angle)
+            # Calculate the offset of the center after rotation
+            offset_x = center_x * math.cos(theta) - center_y * math.sin(theta)
+            offset_y = center_x * math.sin(theta) + center_y * math.cos(theta)
+            # Adjust position so the center of the pixmap is at (arrow_x, arrow_y)
+            adjusted_x = arrow_x - center_x - (center_x * (math.cos(theta) - 1) - center_y * math.sin(theta))
+            adjusted_y = arrow_y - center_y - (center_x * math.sin(theta) + center_y * (math.cos(theta) - 1))
+            arrow_item.setPos(adjusted_x, adjusted_y)
+            self.scene.addItem(arrow_item)
+            # Debug output
+            # print(f"Arrow scaled size: {arrow_scaled.width()}x{arrow_scaled.height()}")
+            # print(f"Arrow center: ({center_x}, {center_y})")
+            # print(f"Rotation angle: {rotation_angle} degrees")
+            # print(f"Offset: ({offset_x}, {offset_y})")
+            # print(f"Adjusted position: ({adjusted_x}, {adjusted_y})")
+            # print(f"Desired center: ({arrow_x}, {arrow_y})")
+        else:
+            print("Warning: Arrow sprite not found")    
         
     def fill_enemies(self, num_enemies):
-        print(f"Filling enemies for map {self.current_map}")
+        #print(f"Filling enemies for map {self.current_map}")
         if self.current_map not in self.enemies:
             self.enemies[self.current_map] = []
         placed = 0
@@ -423,12 +549,35 @@ class Game(QGraphicsView):
                 continue
             tile = self.map.get_tile(x, y)
             if tile and tile.walkable and not tile.current_char:
-                enemy = Zombie("Zombie", 20, x, y)
+                enemy = None
+                coin = random.uniform(0,1)
+                if self.map.filename == 'default':
+                    if coin < 0.8:
+                        enemy = Zombie("Zombie", 20, x, y)
+                    else:
+                        enemy = Rogue("Rogue",30,x,y)
+                elif self.map.filename == 'procedural_field':
+                    if coin < 0.8:
+                        enemy = Zombie("Zombie", 20, x, y)
+                    else:
+                        enemy = Rogue("Rogue",20,x,y)
+                elif self.map.filename == 'procedural_lake':
+                    if coin < 0.7:
+                        enemy = Zombie("Zombie", 20, x, y)
+                    else:
+                        enemy = Rogue("Rogue",30,x,y)
+                elif self.map.filename == 'procedural_road':
+                    if coin < 0.6:
+                        enemy = Zombie("Zombie",20, x, y)
+                    else:
+                        enemy = Rogue("Rogue",30,x,y)
+                else:
+                    enemy = Zombie("Zombie", 20, x, y)
                 if self.map.place_character(enemy):
                     self.enemies[self.current_map].append(enemy)  # Add to current map's list
                     
                     placed += 1
-                    print(f"Placed enemy at ({x}, {y})")
+                    #print(f"Placed enemy at ({x}, {y})")
                 else:
                     print(f"Failed to place enemy at ({x}, {y})")
             attempts += 1
@@ -510,33 +659,39 @@ class Game(QGraphicsView):
         self.process_events()
         self.update_enemies()
         if self.current_map in self.enemies and len(self.enemies[self.current_map]) < 5:
-            self.fill_enemies(max_enemies=50)
+            self.fill_enemies(50)
         self.update_messages()  # Critical: Update message window    
         self.draw_grid()
         self.draw_hud()
 
     def process_events(self):
-        # Future: handle enemy logic, attacks, etc.
+        """Process events and trigger autosave for significant changes."""
         for event in sorted(self.events, key=lambda e: getattr(e, 'priority', 0)):
             if isinstance(event, AttackEvent):
                 self.resolve_attack(event)
+                if event.target.hp <= 0 and event.target != self.player:
+                    pass #self.save_current_game(slot=1)  # Autosave on enemy death
             elif isinstance(event, MoveEvent):
-                self.dirty_tiles.add((event.old_x, event.old_y))  # Redraw vacated tile    
+                self.dirty_tiles.add((event.old_x, event.old_y))
             elif isinstance(event, PickupEvent):
                 for item in event.tile.items[:]:
                     if event.character.pickup_item(item):
                         event.tile.remove_item(item)
                         self.add_message(f"{event.character.name} picked up {item.name}")
-                        self.dirty_tiles.add((event.character.x, event.character.y))  # Redraw tile
+                        self.dirty_tiles.add((event.character.x, event.character.y))
+                        #self.save_current_game(slot=1)  # Autosave on pickup
             elif isinstance(event, UseItemEvent):
                 if event.item.use(event.character):
-                    event.character.remove_item(event.item)  # Remove used item
-                    self.draw_hud()  # Update HUD to reflect hunger change            
-            # Add other event types (e.g., MoveEvent, PickupEvent)
+                    event.character.remove_item(event.item)
+                    self.draw_hud()
+                    #self.save_current_game(slot=1)  # Autosave on item use
         self.events.clear()
-
+    
     def resolve_attack(self, event):
         event.target.hp -= event.damage
+        if not event.target is self.player:
+            if self.player.primary_hand:
+                self.player.stamina = max(0, self.player.stamina - self.player.primary_hand.stamina_consumption)
         if event.target.hp <= 0:
             if event.target is self.player:
                 # print("Game Over!")
@@ -585,14 +740,16 @@ class Game(QGraphicsView):
     def update_enemies(self):
         print(self.current_map)
         if self.current_map in self.enemies:  # Check if map has enemies
-            print(f"Updating {len(self.enemies[self.current_map])} enemies for map {self.current_map}")
+            #print(f"Updating {len(self.enemies[self.current_map])} enemies for map {self.current_map}")
             for enemy in self.enemies[self.current_map]:
-                old_x, old_y = enemy.x, enemy.y
-                enemy.update(self.player, self.map, self)
-                if (enemy.x, enemy.y) != (old_x, old_y):
-                    self.events.append(MoveEvent(enemy, old_x, old_y))
-                    self.dirty_tiles.add((old_x, old_y))
-                    self.dirty_tiles.add((enemy.x, enemy.y))
+                distance = abs(enemy.x - self.player.x) + abs(enemy.y - self.player.y)
+                if distance < 25:
+                    old_x, old_y = enemy.x, enemy.y
+                    enemy.update(self.player, self.map, self)
+                    if (enemy.x, enemy.y) != (old_x, old_y):
+                        self.events.append(MoveEvent(enemy, old_x, old_y))
+                        self.dirty_tiles.add((old_x, old_y))
+                        self.dirty_tiles.add((enemy.x, enemy.y))
         else:
             print(f"No enemies found for map {self.current_map}")
                     
@@ -641,14 +798,36 @@ class Game(QGraphicsView):
                 self.dirty_tiles.add((self.player.x, self.player.y))  # Redraw tile
                 self.game_iteration()
             return
-        elif key == Qt.Key_F5:  # Save game
-            self.save_current_game()
-            print("Game saved")
+        elif key == Qt.Key_F5:
+            self.save_current_game(slot=1)
             return
-        elif key == Qt.Key_F8:  # Load game
-            self.load_current_game()
-            print("Game loaded")
+        elif key == Qt.Key_F6:
+            self.save_current_game(slot=2)
             return
+        elif key == Qt.Key_F7:
+            self.load_current_game(slot=1)
+            return
+        elif key == Qt.Key_F8:
+            self.load_current_game(slot=2)
+            return
+        elif key == Qt.Key_F9:    
+            self.start_new_game()
+            return 
+        elif key == Qt.Key_I:  # Toggle inventory window
+            print(self.player.items)
+            print(self.player.primary_hand)
+            if not self.inventory_window:
+                self.inventory_window = InventoryWindow(self)
+            if self.inventory_window.isVisible():
+                self.inventory_window.update_inventory(self.player)
+                self.inventory_window.hide()
+            else:
+                self.inventory_window.update_inventory(self.player)
+            return
+        elif key == Qt.Key_Escape:  # Close inventory window
+            if self.inventory_window and self.inventory_window.isVisible():
+                self.inventory_window.hide()
+                return
         else:
             self.game_iteration()
             return 
@@ -683,29 +862,6 @@ if __name__ == '__main__':
     game = Game()
     game.show()
     sys.exit(app.exec_())
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 # --- END 
 

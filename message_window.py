@@ -21,6 +21,7 @@ class MessagePopup(QDialog):
         # Base size (updated in set_message)
         self.base_height = 31  # Height per message
         self.max_messages = 5  # Limit to prevent oversized pop-up
+        self.setWindowTitle("Messages")
         self.hide()  # Hidden by default
         print("MessagePopup initialized, hidden by default")
 

@@ -3,13 +3,39 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QPixmap, QPainter
 from PyQt5.QtWidgets import QGraphicsPixmapItem
 from items import *
+import json 
 import random
 import noise  # Use python-perlin-noise instead of pynoise
 from heapq import heappush, heappop
+import math
+import os 
+import tempfile
+import shutil
+#from living import * 
 
 # Tile : Container
 class Tile(Container):
     SPRITES = {}  # Class-level sprite cache
+    list_sprites_names = [
+        "grass",
+        "dirt",
+        "floor", 
+        "player", 
+        "enemy", 
+        "zombie", 
+        "wall", 
+        "tree", 
+        "water",
+        "food", 
+        "long_sword", 
+        "club", 
+        "sack",
+        "apple",
+        "fish",
+        "bread",
+        "HUD_arrow",
+        "rogue"
+    ]
     
     def __init__(self, walkable=True, sprite_key="grass"):
         super().__init__()
@@ -20,29 +46,83 @@ class Tile(Container):
         self.current_char = None
         self.items = []
         self.combined_sprite = None
+        self.stair = None # used to store a tuple map cooord to connect between maps 
         
+    # def __init__(self, type_of_tile="grass", walkable=True):
+        # super().__init__()
+        # self.type = type_of_tile
+        # self.walkable = walkable
+        # self.stair = None    
+    
+    def to_dict(self):
+        """Serialize Tile to a dictionary."""
+        data = super().to_dict()
+        data.update({
+            "type": self.type,
+            "walkable": self.walkable,
+            "stair": self.stair
+        })
+        return data
+        
+    @classmethod
+    def from_dict(cls, data, characters=None):
+        """Deserialize Tile from a dictionary."""
+        tile = cls(type_of_tile=data["type"], walkable=data["walkable"])
+        tile.items = Container.from_dict(data, characters).items
+        tile.current_char = Container.from_dict(data, characters).current_char
+        tile.stair = data.get("stair")
+        return tile    
+    
+    @classmethod
+    def _try_load(cls, key):
+        try: 
+            cls.SPRITES[key] = QPixmap("./assets/"+key)
+        except Exception as e:
+            print(f"Failed to load sprites: {e}")
+            cls.SPRITES[key] = QPixmap()
+    
     @classmethod
     def _load_sprites(cls):
         if not cls.SPRITES:
-            try:
-                cls.SPRITES["grass"] = QPixmap("./assets/grass")
-                cls.SPRITES["dirt"] = QPixmap("./assets/dirt")
-                cls.SPRITES["floor"] = QPixmap("./assets/floor")
-                cls.SPRITES["player"] = QPixmap("./assets/player")
-                cls.SPRITES["enemy"] = QPixmap("./assets/enemy")
-                cls.SPRITES["zombie"] = QPixmap("./assets/zombie")
-                cls.SPRITES["wall"] = QPixmap("./assets/wall")
-                cls.SPRITES["tree"] = QPixmap("./assets/tree")
-                cls.SPRITES["water"] = QPixmap("./assets/water")
-                cls.SPRITES["food"] = QPixmap("./assets/food")
-                cls.SPRITES["equippable_dagger"] = QPixmap("./assets/equippable_dagger")
-                cls.SPRITES["equippable_club"] = QPixmap("./assets/equippable_club")
-                cls.SPRITES["sack"] = QPixmap("./assets/sack")
-            except Exception as e:
-                print(f"Failed to load sprites: {e}")
-                for key in ["floor", "player", "enemy", "zombie", "wall", "tree", "water",
-                            "food", "equippable_dagger", "equippable_club", "sack"]:
-                    cls.SPRITES[key] = QPixmap()
+            for key in cls.list_sprites_names: cls._try_load(key)
+        # if not cls.SPRITES:
+            # try:
+                # cls.SPRITES["grass"] = QPixmap("./assets/grass")
+                # cls.SPRITES["dirt"] = QPixmap("./assets/dirt")
+                # cls.SPRITES["floor"] = QPixmap("./assets/floor")
+                # cls.SPRITES["player"] = QPixmap("./assets/player")
+                # cls.SPRITES["enemy"] = QPixmap("./assets/enemy")
+                # cls.SPRITES["zombie"] = QPixmap("./assets/zombie")
+                # cls.SPRITES["wall"] = QPixmap("./assets/wall")
+                # cls.SPRITES["tree"] = QPixmap("./assets/tree")
+                # cls.SPRITES["water"] = QPixmap("./assets/water")
+                # cls.SPRITES["food"] = QPixmap("./assets/food")
+                # cls.SPRITES["bread"] = QPixmap("./assets/bread")
+                # cls.SPRITES["long_sword"] = QPixmap("./assets/long_sword")
+                # cls.SPRITES["club"] = QPixmap("./assets/club")
+                # cls.SPRITES["sack"] = QPixmap("./assets/sack")
+                # cls.SPRITES["apple"] = QPixmap("./assets/apple")
+                # cls.SPRITES["fish"] = QPixmap("./assets/fish")
+            # except Exception as e:
+                # print(f"Failed to load sprites: {e}")
+                # for key in [
+                        # "grass",
+                        # "dirt",
+                        # "floor", 
+                        # "player", 
+                        # "enemy", 
+                        # "zombie", 
+                        # "wall", 
+                        # "tree", 
+                        # "water",
+                        # "food", 
+                        # "long_sword", 
+                        # "club", 
+                        # "sack",
+                        # "apple",
+                        # "fish"
+                    # ]:
+                    # cls.SPRITES[key] = QPixmap()
     
     def get_default_pixmap(self):
         return self.default_sprite
@@ -93,69 +173,247 @@ class Tile(Container):
         return False
 
 class Map:
-    def __init__(self, filename="default"):
+    def __init__(self, filename="default", width=100, height=100):
+        self.width = width
+        self.height = height
         self.filename = filename
         self.grid = []
         self.generate()
+        self.enemy_type = "default" # used for fill_enemies to know which type of enemies should spawn. 
+        self.path_cache = {}
         
-    def save_state(self, player):
-        # self.saved_player_pos = (player.x, player.y)
-        # self.saved_items = [[tile.items[:] for tile in row] for row in self.grid]
-        """Save the map's grid (tiles and items)."""
-        self.saved_grid = [
-            [
-                {
-                    "walkable": tile.walkable,
-                    "sprite_key": tile.default_sprite == Tile.SPRITES.get("grass") and "grass" or
-                                  tile.default_sprite == Tile.SPRITES.get("tree") and "tree" or
-                                  tile.default_sprite == Tile.SPRITES.get("water") and "water" or
-                                  tile.default_sprite == Tile.SPRITES.get("wall") and "wall" or "grass",
-                    "items": [
-                        {
-                            "name": item.name,
-                            "nutrition": getattr(item, "nutrition", 0),
-                            "weight": item.weight,
-                            "description": item.description,
-                            "sprite": item.sprite
-                        } for item in tile.items
-                    ]
-                } for tile in row
-            ] for row in self.grid
-        ]
+    def save_state(self, enemies, filename):
+        """Save the map's state to a JSON file."""
+        from living import Character, Player, Enemy, Zombie, Rogue
+        try:
+            # Ensure ./saves directory exists
+            saves_dir = "./saves"
+            if not os.path.exists(saves_dir):
+                os.makedirs(saves_dir)
 
-    def load_state(self, player):
-        # from living import Zombie  # Import here to avoid circular import
-        # if hasattr(self, 'saved_items'):
-            # for y, row in enumerate(self.grid):
-                # for x, tile in enumerate(row):
-                    # tile.items = self.saved_items[y][x][:]  # Deep copy to avoid reference issue   
-        """Load the map's grid (tiles and items) and clear enemies."""
-        from items import Food  # Import here to avoid circular import
-        if hasattr(self, 'saved_grid'):
+            state = {
+                "version": "1.0.0",
+                "filename": self.filename,
+                "width": self.width,
+                "height": self.height,
+                "grid": [
+                    [
+                        {
+                            "walkable": tile.walkable,
+                            "sprite_key": tile.default_sprite == Tile.SPRITES.get("grass") and "grass" or
+                                         tile.default_sprite == Tile.SPRITES.get("tree") and "tree" or
+                                         tile.default_sprite == Tile.SPRITES.get("water") and "water" or
+                                         tile.default_sprite == Tile.SPRITES.get("wall") and "wall" or "grass",
+                            "items": [
+                                {
+                                    "type": "food" if isinstance(item, Food) else "weapon" if isinstance(item, Weapon) else "repair_tool" if isinstance(item, WeaponRepairTool) else "armor",
+                                    "name": item.name,
+                                    "nutrition": getattr(item, "nutrition", 0),
+                                    "weight": item.weight,
+                                    "description": item.description,
+                                    "sprite": item.sprite,
+                                    "damage": getattr(item, "damage", 0),
+                                    "max_damage": getattr(item, "max_damage", 0),
+                                    "stamina_consumption": getattr(item, "stamina_consumption", 0),
+                                    "repairing_factor": getattr(item, "repairing_factor", 0),
+                                    "armor": getattr(item, "armor", 0),
+                                    "slot": getattr(item, "slot", None)
+                                } for item in tile.items
+                            ],
+                            "stair": tile.stair
+                        } for tile in row
+                    ] for row in self.grid
+                ],
+                "enemies": [
+                    {
+                        "type": enemy.type,
+                        "x": enemy.x,
+                        "y": enemy.y,
+                        "hp": enemy.hp,
+                        "max_hp": enemy.max_hp,
+                        "patrol_direction": list(enemy.patrol_direction),
+                        "stance": enemy.stance,
+                        "items": [
+                            {
+                                "type": "food" if isinstance(item, Food) else "weapon" if isinstance(item, Weapon) else "repair_tool" if isinstance(item, WeaponRepairTool) else "armor",
+                                "name": item.name,
+                                "nutrition": getattr(item, "nutrition", 0),
+                                "weight": item.weight,
+                                "description": item.description,
+                                "sprite": item.sprite,
+                                "damage": getattr(item, "damage", 0),
+                                "max_damage": getattr(item, "max_damage", 0),
+                                "stamina_consumption": getattr(item, "stamina_consumption", 0),
+                                "repairing_factor": getattr(item, "repairing_factor", 0),
+                                "armor": getattr(item, "armor", 0),
+                                "slot": getattr(item, "slot", None)
+                            } for item in enemy.items
+                        ],
+                        "equipped": {
+                            "primary_hand": {
+                                "type": "weapon",
+                                "name": enemy.primary_hand.name,
+                                "damage": enemy.primary_hand.damage,
+                                "max_damage": enemy.primary_hand.max_damage,
+                                "weight": enemy.primary_hand.weight,
+                                "description": enemy.primary_hand.description,
+                                "sprite": enemy.primary_hand.sprite,
+                                "stamina_consumption": enemy.primary_hand.stamina_consumption
+                            } if enemy.primary_hand else None
+                        }
+                    } for enemy in enemies
+                ]
+            }
+
+            # Backup existing map file
+            if os.path.exists(filename):
+                shutil.copy(filename, f"{filename}.bak")
+
+            # Write to temporary file in ./saves
+            temp_file_name = f"{filename}.tmp"
+            with open(temp_file_name, 'w') as temp_file:
+                json.dump(state, temp_file, indent=2)
+
+            # Atomically rename
+            os.replace(temp_file_name, filename)
+            print(f"Saved map state to {filename}")
+
+        except Exception as e:
+            print(f"Error saving map state to {filename}: {e}")
+            if os.path.exists(f"{filename}.bak"):
+                shutil.copy(f"{filename}.bak", filename)
+
+    def load_state(self, enemies, state):
+        """Load the map's state from a JSON state dictionary."""
+        from living import Character, Player, Enemy, Zombie, Rogue
+        try:
+            # Check version
+            save_version = state.get("version", "0.0.0")
+            if save_version != "1.0.0":
+                print(f"Warning: Map save version {save_version} may not be compatible")
+
+            # Initialize grid
+            self.filename = state["filename"]
+            self.width = state["width"]
+            self.height = state["height"]
             self.grid = [
                 [
                     Tile(
                         walkable=tile_data["walkable"],
                         sprite_key=tile_data["sprite_key"]
                     ) for tile_data in row
-                ] for row in self.saved_grid
+                ] for row in state["grid"]
             ]
+
             # Restore items
-            for y, row in enumerate(self.saved_grid):
+            for y, row in enumerate(state["grid"]):
                 for x, tile_data in enumerate(row):
                     for item_data in tile_data["items"]:
-                        if item_data["nutrition"] > 0:
+                        if item_data["type"] == "food":
                             item = Food(
                                 name=item_data["name"],
                                 nutrition=item_data["nutrition"],
                                 description=item_data.get("description", ""),
                                 weight=item_data.get("weight", 1)
                             )
-                            self.grid[y][x].add_item(item)
-        # Clear existing enemies from the map
-        # for enemy in enemies[:]:
-            # self.remove_character(enemy)
-            # enemies.remove(enemy)
+                        elif item_data["type"] == "weapon":
+                            item = Weapon(
+                                name=item_data["name"],
+                                damage=item_data["damage"],
+                                description=item_data.get("description", ""),
+                                weight=item_data.get("weight", 1),
+                                stamina_consumption=item_data["stamina_consumption"]
+                            )
+                            item.max_damage = item_data["max_damage"]
+                        elif item_data["type"] == "repair_tool":
+                            item = WeaponRepairTool(
+                                name=item_data["name"],
+                                repairing_factor=item_data["repairing_factor"],
+                                description=item_data.get("description", ""),
+                                weight=item_data.get("weight", 1)
+                            )
+                        elif item_data["type"] == "armor":
+                            item = Armor(
+                                name=item_data["name"],
+                                armor=item_data["armor"],
+                                description=item_data.get("description", ""),
+                                weight=item_data.get("weight", 1),
+                                slot=item_data["slot"]
+                            )
+                        self.grid[y][x].add_item(item)
+                    self.grid[y][x].stair = tile_data["stair"]
+
+            # Restore enemies
+            enemies.clear()
+            for enemy_data in state.get("enemies", []):
+                try:
+                    if not (0 <= enemy_data["x"] < self.width and 0 <= enemy_data["y"] < self.height):
+                        print(f"Warning: Invalid enemy position ({enemy_data['x']}, {enemy_data['y']})")
+                        continue
+                    # Use type as name since name field is not saved
+                    enemy_type = enemy_data.get("type", "Zombie")
+                    enemy_name = enemy_type  # Default to type as name
+                    if enemy_type == "Zombie":
+                        enemy = Zombie(enemy_name, enemy_data["hp"], enemy_data["x"], enemy_data["y"])
+                    elif enemy_type == "Rogue":
+                        enemy = Rogue(enemy_name, enemy_data["hp"], enemy_data["x"], enemy_data["y"])
+                    else:
+                        enemy = Zombie(enemy_name, enemy_data["hp"], enemy_data["x"], enemy_data["y"])
+                    enemy.max_hp = enemy_data.get("max_hp", enemy.hp)
+                    enemy.patrol_direction = tuple(enemy_data.get("patrol_direction", [random.choice([-1, 1]), 0]))
+                    enemy.stance = enemy_data.get("stance", "Aggressive")
+                    for item_data in enemy_data.get("items", []):
+                        if item_data["type"] == "food":
+                            item = Food(
+                                name=item_data["name"],
+                                nutrition=item_data["nutrition"],
+                                description=item_data.get("description", ""),
+                                weight=item_data.get("weight", 1)
+                            )
+                        elif item_data["type"] == "weapon":
+                            item = Weapon(
+                                name=item_data["name"],
+                                damage=item_data["damage"],
+                                description=item_data.get("description", ""),
+                                weight=item_data.get("weight", 1),
+                                stamina_consumption=item_data["stamina_consumption"]
+                            )
+                            item.max_damage = item_data["max_damage"]
+                        elif item_data["type"] == "repair_tool":
+                            item = WeaponRepairTool(
+                                name=item_data["name"],
+                                repairing_factor=item_data["repairing_factor"],
+                                description=item_data.get("description", ""),
+                                weight=item_data.get("weight", 1)
+                            )
+                        elif item_data["type"] == "armor":
+                            item = Armor(
+                                name=item_data["name"],
+                                armor=item_data["armor"],
+                                description=item_data.get("description", ""),
+                                weight=item_data.get("weight", 1),
+                                slot=item_data["slot"]
+                            )
+                        enemy.add_item(item)
+                    if enemy_data.get("equipped", {}).get("primary_hand"):
+                        weapon_data = enemy_data["equipped"]["primary_hand"]
+                        weapon = Weapon(
+                            name=weapon_data["name"],
+                            damage=weapon_data["damage"],
+                            description=weapon_data.get("description", ""),
+                            weight=weapon_data.get("weight", 1),
+                            stamina_consumption=weapon_data["stamina_consumption"]
+                        )
+                        weapon.max_damage = weapon_data["max_damage"]
+                        enemy.equip_item(weapon, "primary_hand")
+                    enemies.append(enemy)
+                except KeyError as ke:
+                    print(f"Error processing enemy data: missing field {ke}")
+                    continue
+            return enemies
+        except Exception as e:
+            print(f"Error loading map state: {e}")
+            raise  # Let caller handle the error instead of generating a new map    
     
     def line_of_sight(self, x1, y1, x2, y2):
         # Bresenham's line algorithm
