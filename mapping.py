@@ -34,7 +34,10 @@ class Tile(Container):
         "fish",
         "bread",
         "HUD_arrow",
-        "rogue"
+        "rogue",
+        "stair_up",
+        "stair_down",
+        "dungeon_entrance"
     ]
     
     def __init__(self, walkable=True, sprite_key="grass"):
@@ -43,24 +46,23 @@ class Tile(Container):
         self.walkable = walkable
         self.blocks_sight = not walkable
         self.default_sprite = self.SPRITES.get(sprite_key, QPixmap())
+        self.cosmetic_layer_sprite = None # to be used as a modifier for default_sprite
         self.current_char = None
         self.items = []
         self.combined_sprite = None
         self.stair = None # used to store a tuple map cooord to connect between maps 
+        self.stair_x = None # points to the stair tile from the map with coord self.stair
+        self.stair_y = None # points to the stair tile from the map with coord self.stair 
         
-    # def __init__(self, type_of_tile="grass", walkable=True):
-        # super().__init__()
-        # self.type = type_of_tile
-        # self.walkable = walkable
-        # self.stair = None    
-    
     def to_dict(self):
         """Serialize Tile to a dictionary."""
         data = super().to_dict()
         data.update({
             "type": self.type,
             "walkable": self.walkable,
-            "stair": self.stair
+            "stair": self.stair,
+            "stair_x": self.stair_x,
+            "stair_y": self.stair_y
         })
         return data
         
@@ -70,8 +72,10 @@ class Tile(Container):
         tile = cls(type_of_tile=data["type"], walkable=data["walkable"])
         tile.items = Container.from_dict(data, characters).items
         tile.current_char = Container.from_dict(data, characters).current_char
-        tile.stair = data.get("stair")
-        return tile    
+        tile.stair = tuple(data["stair"]) if isinstance(data.get("stair"), list) else data.get("stair")
+        tile.stair_x = data.get("stair_x")
+        tile.stair_y = data.get("stair_y")
+        return tile
     
     @classmethod
     def _try_load(cls, key):
@@ -85,45 +89,7 @@ class Tile(Container):
     def _load_sprites(cls):
         if not cls.SPRITES:
             for key in cls.list_sprites_names: cls._try_load(key)
-        # if not cls.SPRITES:
-            # try:
-                # cls.SPRITES["grass"] = QPixmap("./assets/grass")
-                # cls.SPRITES["dirt"] = QPixmap("./assets/dirt")
-                # cls.SPRITES["floor"] = QPixmap("./assets/floor")
-                # cls.SPRITES["player"] = QPixmap("./assets/player")
-                # cls.SPRITES["enemy"] = QPixmap("./assets/enemy")
-                # cls.SPRITES["zombie"] = QPixmap("./assets/zombie")
-                # cls.SPRITES["wall"] = QPixmap("./assets/wall")
-                # cls.SPRITES["tree"] = QPixmap("./assets/tree")
-                # cls.SPRITES["water"] = QPixmap("./assets/water")
-                # cls.SPRITES["food"] = QPixmap("./assets/food")
-                # cls.SPRITES["bread"] = QPixmap("./assets/bread")
-                # cls.SPRITES["long_sword"] = QPixmap("./assets/long_sword")
-                # cls.SPRITES["club"] = QPixmap("./assets/club")
-                # cls.SPRITES["sack"] = QPixmap("./assets/sack")
-                # cls.SPRITES["apple"] = QPixmap("./assets/apple")
-                # cls.SPRITES["fish"] = QPixmap("./assets/fish")
-            # except Exception as e:
-                # print(f"Failed to load sprites: {e}")
-                # for key in [
-                        # "grass",
-                        # "dirt",
-                        # "floor", 
-                        # "player", 
-                        # "enemy", 
-                        # "zombie", 
-                        # "wall", 
-                        # "tree", 
-                        # "water",
-                        # "food", 
-                        # "long_sword", 
-                        # "club", 
-                        # "sack",
-                        # "apple",
-                        # "fish"
-                    # ]:
-                    # cls.SPRITES[key] = QPixmap()
-    
+        
     def get_default_pixmap(self):
         return self.default_sprite
 
@@ -173,14 +139,22 @@ class Tile(Container):
         return False
 
 class Map:
-    def __init__(self, filename="default", width=100, height=100):
+    def __init__(self, filename="default", coords=(0, 0, 0), width=100, height=100, b_generate = True):
         self.width = width
         self.height = height
         self.filename = filename
         self.grid = []
-        self.generate()
+        if b_generate: self.generate()
         self.enemy_type = "default" # used for fill_enemies to know which type of enemies should spawn. 
         self.path_cache = {}
+        self.coords = coords # maybe would be necessary 
+        
+    def _get_sprite_key(self, tile):
+        """Return the sprite key for a tile's default_sprite."""
+        for key, sprite in Tile.SPRITES.items():
+            if tile.default_sprite == sprite:
+                return key
+        return "grass"  # Fallback if no match found    
         
     def save_state(self, enemies, filename):
         """Save the map's state to a JSON file."""
@@ -194,16 +168,14 @@ class Map:
             state = {
                 "version": "1.0.0",
                 "filename": self.filename,
+                "coords": self.coords,  # Save coordinates
                 "width": self.width,
                 "height": self.height,
                 "grid": [
                     [
                         {
                             "walkable": tile.walkable,
-                            "sprite_key": tile.default_sprite == Tile.SPRITES.get("grass") and "grass" or
-                                         tile.default_sprite == Tile.SPRITES.get("tree") and "tree" or
-                                         tile.default_sprite == Tile.SPRITES.get("water") and "water" or
-                                         tile.default_sprite == Tile.SPRITES.get("wall") and "wall" or "grass",
+                            "sprite_key": self._get_sprite_key(tile),  # Use helper method
                             "items": [
                                 {
                                     "type": "food" if isinstance(item, Food) else "weapon" if isinstance(item, Weapon) else "repair_tool" if isinstance(item, WeaponRepairTool) else "armor",
@@ -294,6 +266,7 @@ class Map:
 
             # Initialize grid
             self.filename = state["filename"]
+            self.coords = tuple(state.get("coords", (0, 0, 0)))  # Load coordinates
             self.width = state["width"]
             self.height = state["height"]
             self.grid = [
@@ -341,7 +314,13 @@ class Map:
                                 slot=item_data["slot"]
                             )
                         self.grid[y][x].add_item(item)
-                    self.grid[y][x].stair = tile_data["stair"]
+                    # Convert stair to tuple if it's a list
+                    stair_data = tile_data.get("stair")
+                    if isinstance(stair_data, list):
+                        self.grid[y][x].stair = tuple(stair_data)
+                    else:
+                        self.grid[y][x].stair = stair_data  # Handles None or already tuple
+                    
 
             # Restore enemies
             enemies.clear()
@@ -354,11 +333,11 @@ class Map:
                     enemy_type = enemy_data.get("type", "Zombie")
                     enemy_name = enemy_type  # Default to type as name
                     if enemy_type == "Zombie":
-                        enemy = Zombie(enemy_name, enemy_data["hp"], enemy_data["x"], enemy_data["y"])
+                        enemy = Zombie(enemy_name, enemy_data["hp"], enemy_data["x"], enemy_data["y"], False)
                     elif enemy_type == "Rogue":
-                        enemy = Rogue(enemy_name, enemy_data["hp"], enemy_data["x"], enemy_data["y"])
+                        enemy = Rogue(enemy_name, enemy_data["hp"], enemy_data["x"], enemy_data["y"], False)
                     else:
-                        enemy = Zombie(enemy_name, enemy_data["hp"], enemy_data["x"], enemy_data["y"])
+                        enemy = Zombie(enemy_name, enemy_data["hp"], enemy_data["x"], enemy_data["y"], False)
                     enemy.max_hp = enemy_data.get("max_hp", enemy.hp)
                     enemy.patrol_direction = tuple(enemy_data.get("patrol_direction", [random.choice([-1, 1]), 0]))
                     enemy.stance = enemy_data.get("stance", "Aggressive")
@@ -441,7 +420,10 @@ class Map:
         return True    
 
     def generate(self):
-        if self.filename == "procedural_field":
+        if self.filename == "procedural_dungeon":
+            # Default to descending from (0, 0, 0) if no previous coords provided
+            return self.generate_procedural_dungeon((0,0,0), 50, 50, False)
+        elif self.filename == "procedural_field":
             self.generate_procedural_field()
         elif self.filename == "procedural_road":
             self.generate_procedural_road()
@@ -470,6 +452,104 @@ class Map:
                 if random.random() < 0.2:  # 10% chance of wall
                     self.grid[i][j] = Tile(walkable=False, sprite_key="tree") 
 
+    def generate_procedural_dungeon(self, previous_map_coords, prev_x, prev_y, up=False):
+        """
+        Generate a multi-level RogueLike dungeon with rooms, corridors, and a stair_down.
+        
+        Args:
+            previous_map_coords (tuple): (x, y, z) coordinates from the previous map.
+            prev_x (int): x-coordinate of the stair/entrance on the previous map.
+            prev_y (int): y-coordinate of the stair/entrance on the previous map.
+            up (bool): True if ascending, False if descending.
+        
+        Returns:
+            tuple: (x, y, z) of the starting point (stair_up or stair_down position).
+        """
+        prev_x_map, prev_y_map, prev_z = previous_map_coords
+        new_z = prev_z + 1 if up else prev_z - 1
+        self.coords = (prev_x_map, prev_y_map, new_z)  # Update map coords, it's necessary? 
+        self.enemy_type = "dungeon"
+
+        # Initialize grid with walls
+        self.grid = [
+            [Tile(walkable=False, sprite_key="wall") for _ in range(self.width)]
+            for _ in range(self.height)
+        ]
+
+        # Generate rooms
+        rooms = []
+        num_rooms = random.randint(8, 15)
+        max_attempts = num_rooms * 10
+        attempts = 0
+        while len(rooms) < num_rooms and attempts < max_attempts:
+            room_w = random.randint(5, 10)
+            room_h = random.randint(5, 10)
+            room_x = random.randint(1, self.width - room_w - 1)
+            room_y = random.randint(1, self.height - room_h - 1)
+            overlap = False
+            for other_x, other_y, other_w, other_h in rooms:
+                if (room_x < other_x + other_w + 2 and
+                    room_x + room_w + 2 > other_x and
+                    room_y < other_y + other_h + 2 and
+                    room_y + room_h + 2 > other_y):
+                    overlap = True
+                    break
+            if not overlap:
+                rooms.append((room_x, room_y, room_w, room_h))
+                for y in range(room_y, room_y + room_h):
+                    for x in range(room_x, room_x + room_w):
+                        self.grid[y][x] = Tile(walkable=True, sprite_key="floor")
+            attempts += 1
+
+        if not rooms:
+            raise RuntimeError("Failed to generate any rooms for dungeon")
+
+        # Connect rooms with L-shaped corridors
+        for i in range(len(rooms) - 1):
+            x1, y1 = rooms[i][0] + rooms[i][2] // 2, rooms[i][1] + rooms[i][3] // 2
+            x2, y2 = rooms[i + 1][0] + rooms[i + 1][2] // 2, rooms[i + 1][1] + rooms[i + 1][3] // 2
+            if random.choice([True, False]):
+                for x in range(min(x1, x2), max(x1, x2) + 1):
+                    self.grid[y1][x] = Tile(walkable=True, sprite_key="floor")
+                for y in range(min(y1, y2), max(y1, y2) + 1):
+                    self.grid[y][x2] = Tile(walkable=True, sprite_key="floor")
+            else:
+                for y in range(min(y1, y2), max(y1, y2) + 1):
+                    self.grid[y][x1] = Tile(walkable=True, sprite_key="floor")
+                for x in range(min(x1, x2), max(x1, x2) + 1):
+                    self.grid[y2][x] = Tile(walkable=True, sprite_key="floor")
+
+        # Choose starting point (stair_up or stair_down to previous map)
+        start_room = random.choice(rooms)
+        room_x, room_y, room_w, room_h = start_room
+        new_x = room_x + room_w // 2
+        new_y = room_y + room_h // 2
+        stair_sprite = "stair_up" if up else "stair_down"
+        self.grid[new_y][new_x] = Tile(walkable=True, sprite_key=stair_sprite)
+        self.grid[new_y][new_x].stair = previous_map_coords
+        self.grid[new_y][new_x].stair_x = prev_x  # Point to the stair/entrance on previous map
+        self.grid[new_y][new_x].stair_y = prev_y
+        new_coords = (new_x, new_y, new_z)
+
+        # Add stair_down to deeper level with 50% probability (not on topmost level if up=True)
+        if not up and random.random() < 0.5:
+            available_rooms = [(rx, ry, rw, rh) for rx, ry, rw, rh in rooms
+                              if (rx + rw // 2, ry + rh // 2) != (new_x, new_y)]
+            if available_rooms:
+                down_room = random.choice(available_rooms)
+                down_x = down_room[0] + down_room[2] // 2
+                down_y = down_room[1] + down_room[3] // 2
+                target_map = (prev_x_map, prev_y_map, new_z - 1)
+                self.grid[down_y][down_x] = Tile(walkable=True, sprite_key="stair_down")
+                self.grid[down_y][down_x].stair = target_map
+                self.grid[down_y][down_x].stair_x = down_x  # Point to stair_up on next level
+                self.grid[down_y][down_x].stair_y = down_y
+                print(f"Placed stair_down at ({down_x}, {down_y}) linking to {target_map}")
+
+        print(f"generate_procedural_dungeon(): from {previous_map_coords} to ({prev_x_map}, {prev_y_map}, {new_z}), entry at ({new_x}, {new_y})")
+        return new_coords
+    
+    
     def generate_procedural_field(self):
         self.grid = [[Tile(walkable=True, sprite_key="grass") for _ in range(100)] for _ in range(100)]
         for i in range(100):
@@ -508,7 +588,20 @@ class Map:
                 elif random.random() < 0.1:
                     self.grid[i][j] = Tile(walkable=False, sprite_key="tree")
                 elif random.random() < 0.01:
-                    self.grid[i][j].add_item(Food("Fish", nutrition=20))
+                    self.grid[i][j].add_item(Food("Fish", nutrition=80))
+
+        # Add dungeon entrance with 30% probability
+        if random.random() < 0.3:
+            walkable_tiles = [(i, j) for i in range(100) for j in range(100)
+                             if self.grid[i][j].walkable and self.grid[i][j].default_sprite == Tile.SPRITES["grass"]]
+            if walkable_tiles:
+                entrance_x, entrance_y = random.choice(walkable_tiles)
+                target_map = (self.coords[0], self.coords[1], -1)
+                self.grid[entrance_y][entrance_x] = Tile(walkable=True, sprite_key="dungeon_entrance")
+                self.grid[entrance_y][entrance_x].stair = target_map
+                self.grid[entrance_y][entrance_x].stair_x = entrance_x
+                self.grid[entrance_y][entrance_x].stair_y = entrance_y
+                print(f"Placed dungeon_entrance at ({entrance_x}, {entrance_y}) linking to {target_map}")
                     
     def get_tile(self, x, y):
         try:
@@ -568,7 +661,7 @@ class Map:
         """A* pathfinding to find shortest path from (start_x, start_y) to (goal_x, goal_y)."""
         # Validate coordinates
         if not (0 <= start_x < 100 and 0 <= start_y < 100 and 0 <= goal_x < 100 and 0 <= goal_y < 100):
-            print(f"Invalid coordinates: start=({start_x}, {start_y}), goal=({goal_x}, {goal_y})")
+            #print(f"Invalid coordinates: start=({start_x}, {start_y}), goal=({goal_x}, {goal_y})")
             return []
 
         open_set = []
@@ -587,7 +680,7 @@ class Map:
                 while (x, y) in came_from:
                     path.append((x, y))
                     x, y = came_from[(x, y)]
-                print(f"Path found from ({start_x}, {start_y}) to ({goal_x}, {goal_y}): {path}")
+                #print(f"Path found from ({start_x}, {start_y}) to ({goal_x}, {goal_y}): {path}")
                 return path[::-1]  # Reverse path
 
             for dx, dy in [(0, 1), (0, -1), (1, 0), (-1, 0)]:
@@ -608,15 +701,7 @@ class Map:
                 else:
                     print(f"Invalid tile at ({next_x}, {next_y})")
 
-        print(f"No path found from ({start_x}, {start_y}) to ({goal_x}, {goal_y}): likely blocked by obstacles")
+        #print(f"No path found from ({start_x}, {start_y}) to ({goal_x}, {goal_y}): likely blocked by obstacles")
         return []  # No path found
-
-
-
-
-
-
-
-
 
 # --- END 

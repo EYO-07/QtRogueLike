@@ -23,7 +23,7 @@ class MessagePopup(QDialog):
         self.max_messages = 5  # Limit to prevent oversized pop-up
         self.setWindowTitle("Messages")
         self.hide()  # Hidden by default
-        print("MessagePopup initialized, hidden by default")
+        #print("MessagePopup initialized, hidden by default")
 
     def set_message(self, messages):
         """Display a list of messages, newest at the top."""
@@ -36,12 +36,12 @@ class MessagePopup(QDialog):
         # If no messages, hide the pop-up
         if not messages:
             self.hide()
-            print("MessagePopup hidden, no messages")
+            #print("MessagePopup hidden, no messages")
             return
 
         # Limit to max_messages
         messages = messages[-self.max_messages:]  # Take newest messages
-        print(f"MessagePopup displaying {len(messages)} messages: {messages}")
+        #print(f"MessagePopup displaying {len(messages)} messages: {messages}")
 
         # Create a QLabel for each message (newest first)
         for message in reversed(messages):  # Reverse to show newest at top
@@ -69,13 +69,13 @@ class MessagePopup(QDialog):
             target_x = parent_geo.x() + (parent_geo.width() - self.width()) // 2
             target_y = parent_geo.y() + parent_geo.height() + 10
             self.move(target_x, target_y)
-            print(f"MessagePopup positioned at ({target_x}, {target_y}), parent at ({parent_geo.x()}, {parent_geo.y()}), size {parent_geo.width()}x{parent_geo.height()}, popup height={height}")
+            #print(f"MessagePopup positioned at ({target_x}, {target_y}), parent at ({parent_geo.x()}, {parent_geo.y()}), size {parent_geo.width()}x{parent_geo.height()}, popup height={height}")
         else:
             self.move(100, 300)
-            print(f"MessagePopup positioned at (100, 300), no parent")
+            #print(f"MessagePopup positioned at (100, 300), no parent")
 
         # Show and ensure main window retains focus
         self.show()
         if self.parent():
             self.parent().setFocus()
-            print("Focus restored to main window")
+            #print("Focus restored to main window")

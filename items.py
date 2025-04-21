@@ -19,10 +19,17 @@ class Container:
         self.items = []
         self.current_char = current_char
 
+    def getItemIndex(self, item):
+        for index, i in enumerate(self.items):
+            if item is i:
+                return index
+        return -1
+
     def add_item(self, item):
         if isinstance(item, Item):
-            self.items.append(item)
-            return True
+            index = self.getItemIndex(item)
+            if index == -1: self.items.append(item)
+            return True # either the item is already there or add the item 
         return False
 
     def remove_item(self, item):
@@ -64,40 +71,6 @@ class Equippable(Item):
         super().__init__(name, description, weight, sprite=name.lower())
         self.slot = slot
         
-    def unequip(self, char):
-        if self == char.primary_hand:
-            char.primary_hand = None
-            char.items.append(self)
-            return 
-        if self == char.secondary_hand:
-            char.secondary_hand = None
-            char.items.append(self)
-            return 
-        if self == char.head: 
-            char.head = None
-            char.items.append(self)
-            return 
-        if self == char.neck:
-            char.neck = None
-            char.items.append(self)
-            return 
-        if self == char.torso:
-            char.torso = None
-            char.items.append(self)
-            return 
-        if self == char.waist: 
-            char.waist = None
-            char.items.append(self)
-            return 
-        if self == char.legs:
-            char.legs = None
-            char.items.append(self)
-            return 
-        if self == char.foot:
-            char.foot = None
-            char.items.append(self)
-            return 
-
     def get_slot(self, char):
         if self == char.primary_hand:
             return "primary_hand"
@@ -133,6 +106,7 @@ class Food(Item):
         if hasattr(character, 'hunger') and hasattr(character, 'max_hunger'):
             character.hunger = min(character.hunger + self.nutrition, character.max_hunger)
             character.hp = min(character.hp + self.nutrition/20.0, character.max_hp)
+            character.stamina = min(character.stamina + self.nutrition/10.0, character.max_stamina)
             return True
         return False
         
@@ -152,23 +126,5 @@ class Armor(Equippable):
     def __init__(self, name, armor, description="", weight=1, slot="torso"):
         super().__init__(name, description, weight, slot)
         self.armor = armor
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 # --- END 

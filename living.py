@@ -24,17 +24,23 @@ class Character(Container):
         self.foot = None
         self.items = []
     
-    def equip_item(self, item, slot):
+    def equip_item(self, item, slot): 
         if isinstance(item, Equippable) and item.slot == slot:
-            if slot == "primary_hand" and self.add_item(item):
-                self.items.remove(item)
-                self.primary_hand = item
-                return True
-        return False
+            if self.add_item(item): # add item to inventory or verify if its already there 
+                if slot == "primary_hand":
+                    if self.primary_hand: # removes any form primary hand 
+                        self.items.append(self.primary_hand)
+                        self.primary_hand = None
+                    index = self.getItemIndex(item)
+                    if index != -1: self.items.pop(index) # remove from inventory
+                    self.primary_hand = item # put in the hand 
+                    return True
+        return False # not equipped
 
     def unequip_item(self, slot):
         if slot == "primary_hand" and self.primary_hand:
-            self.items.append(self.primary_hand)
+            index = self.getItemIndex(self.primary_hand)
+            if index == -1: self.items.append(self.primary_hand)
             self.primary_hand = None
             return True
         return False
@@ -75,14 +81,14 @@ class Character(Container):
         pass    
 
 class Player(Character):
-    def __init__(self, name, hp, x, y):
+    def __init__(self, name, hp, x, y, b_generate_items = True):
         super().__init__(name, hp, x, y)
         self.class_name = "Adventurer"
         self.stamina = 100
         self.max_stamina = 100
         self.hunger = 100
         self.max_hunger = 1000
-        self.generate_initial_items()
+        if b_generate_items: self.generate_initial_items()
     
     def move(self, dx, dy, game_map):
         if self.stamina >= 10:
@@ -103,7 +109,7 @@ class Player(Character):
         damage = 1
         if self.primary_hand and hasattr(self.primary_hand, 'damage'):
             damage += random.uniform(self.primary_hand.damage/3.0, self.primary_hand.damage)
-            print(damage, self.primary_hand.damage)
+            #print(damage, self.primary_hand.damage)
         return max(1, damage)
 
     def regenerate_stamina(self):
@@ -117,15 +123,17 @@ class Player(Character):
         #self.equip_item(Weapon("Long_Sword", damage=10), "primary_hand")
         self.add_item(Food("Apple", nutrition=50))
         self.add_item(Food("Apple", nutrition=50))
+        self.add_item(Food("Apple", nutrition=50))
+        self.add_item(Food("Bread", nutrition=100))
 
 class Enemy(Character):
-    def __init__(self, name, hp, x, y):
+    def __init__(self, name, hp, x, y, b_generate_items = True):
         super().__init__(name, hp, x, y)
         self.type = "Generic"
         self.stance = "Aggressive"
         self.canSeeCharacter = False
         self.patrol_direction = (random.choice([-1, 1]), 0)
-        self.generate_initial_items()
+        if b_generate_items: self.generate_initial_items()
     
     def can_see_character(self, player, game_map):
         distance = abs(self.x - player.x) + abs(self.y - player.y)
@@ -146,7 +154,7 @@ class Enemy(Character):
         #print(f"Updating enemy {self.name} at ({self.x}, {self.y}), can_see={self.can_see_character(player, map)}")
         if self.can_see_character(player, map):
             path = map.find_path(self.x, self.y, player.x, player.y)
-            print(path)
+            #print(path)
             if path:
                 next_x, next_y = path[0]
                 dx, dy = next_x - self.x, next_y - self.y
@@ -154,29 +162,12 @@ class Enemy(Character):
                 if tile:
                     if tile.walkable and not tile.current_char:
                         if self.move(dx, dy, map):
-                            print(f"Enemy {self.name} moved to ({self.x}, {self.y}) via pathfinding")
+                            pass #print(f"Enemy {self.name} moved to ({self.x}, {self.y}) via pathfinding")
                     elif tile.current_char is player:
                         game.events.append(AttackEvent(self, player, self.calculate_damage_done()))
                         print(f"Enemy {self.name} attacking player")
             else:
                 print(f"No path found to player from ({self.x}, {self.y})")            
-            # -------------------------------------------------------------------------------------------------    
-            #dx = 1 if player.x > self.x else -1 if player.x < self.x else 0
-            #dy = 1 if player.y > self.y else -1 if player.y < self.y else 0
-            #target_x, target_y = self.x + dx, self.y + dy
-            #tile = map.get_tile(target_x, target_y)
-            #if tile:
-            #    print(f"Target tile ({target_x}, {target_y}): walkable={tile.walkable}, occupied={tile.current_char is not None}")
-            #    if tile.walkable and not tile.current_char:
-            #        if self.move(dx, dy, map):
-            #            print(f"Enemy {self.name} moved to ({self.x}, {self.y})")
-            #        else:
-            #            print(f"Enemy {self.name} failed to move to ({target_x}, {target_y})")
-            #    elif tile.current_char is player:
-            #        game.events.append(AttackEvent(self, player, self.calculate_damage_done()))
-            #        print(f"Enemy {self.name} attacking player")
-            #else:
-            #    print(f"Invalid target tile ({target_x}, {target_y})")
         else:
             # Random movement
             if random.random() < 0.3:
@@ -205,15 +196,15 @@ class Enemy(Character):
             return QPixmap()  # Fallback
 
 class Zombie(Enemy):
-    def __init__(self, name, hp, x, y):
-        super().__init__(name, hp, x, y)
+    def __init__(self, name, hp, x, y, b_generate_items = True):
+        super().__init__(name, hp, x, y, b_generate_items)
         self.type = "Zombie"
         
     def calculate_damage_done(self):
         return random.randint(0, 15)
 
     def generate_initial_items(self):
-        if random.random() < 0.5:
+        if random.random() < 0.7:
             self.add_item(Food("bread", nutrition=random.randint(50, 100)))
 
     def get_sprite(self):
@@ -224,8 +215,8 @@ class Zombie(Enemy):
             return QPixmap()
 
 class Rogue(Enemy):
-    def __init__(self, name, hp , x, y):
-        super().__init__(name, hp, x, y)
+    def __init__(self, name, hp , x, y, b_generate_items = True):
+        super().__init__(name, hp, x, y, b_generate_items)
         self.type = "Rogue"
         
     def calculate_damage_done(self):
@@ -236,6 +227,8 @@ class Rogue(Enemy):
 
     def generate_initial_items(self):
         self.equip_item(Weapon("Long_Sword", damage=10), "primary_hand")
+        if random.random() < 0.3:
+            self.add_item(Food("bread", nutrition=random.randint(50, 100)))
 
     def get_sprite(self):
         try:
