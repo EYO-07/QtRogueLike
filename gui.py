@@ -1,0 +1,499 @@
+# gui.py
+
+# project
+from reality import *
+
+# built-in
+import os
+from datetime import datetime
+
+# third-party
+from PyQt5.QtWidgets import QWidget, QListWidget, QVBoxLayout, QPushButton, QHBoxLayout, QMenu, QDialog, QLabel, QTextEdit
+from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QTextCursor
+
+class JournalWindow(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setWindowOpacity(0.8)  # Match InventoryWindow
+        self.setFocusPolicy(Qt.NoFocus)  # Prevent stealing focus
+        self.setModal(False)  # Non-blocking
+        self.setWindowTitle("Journal")
+
+        # Layout
+        self.layout = QVBoxLayout()
+        self.layout.setContentsMargins(10, 10, 10, 10)
+        self.layout.setSpacing(5)
+
+        # Text editor
+        self.text_edit = QTextEdit()
+        self.text_edit.setStyleSheet("""
+            QTextEdit {
+                background-color: rgba(0, 0, 0, 150);
+                color: yellow;
+                border: 1px solid rgba(255, 255, 255, 50);
+                border-radius: 5px;
+                padding: 5px;
+                font-size: 11px;
+            }
+        """)
+        self.text_edit.setFocusPolicy(Qt.StrongFocus)  # Allow text input
+        self.layout.addWidget(self.text_edit)
+
+        # Buttons
+        button_layout = QHBoxLayout()
+        self.save_button = QPushButton("Save")
+        self.save_button.setStyleSheet("""
+            QPushButton {
+                background-color: rgba(0, 0, 0, 150);
+                color: white;
+                border: 1px solid rgba(255, 255, 255, 50);
+                border-radius: 5px;
+                padding: 5px;
+            }
+            QPushButton:hover {
+                background-color: rgba(255, 255, 255, 20);
+            }
+        """)
+        self.save_button.clicked.connect(self.save_journal)
+        button_layout.addWidget(self.save_button)
+        self.layout.addLayout(button_layout)
+
+        self.log_button = QPushButton("Log Entry")
+        self.log_button.setStyleSheet(self.save_button.styleSheet())
+        self.log_button.clicked.connect(self.log_diary_entry)
+        button_layout.addWidget(self.log_button)
+
+        self.setLayout(self.layout)
+        self.setFixedSize(300, 400)  # Similar size to InventoryWindow
+        self.hide()  # Hidden by default
+        self.update_position()
+        if self.parent():
+            self.parent().setFocus()
+
+    def update_position(self):
+        """Position the journal window to the right of the parent window, vertically centered."""
+        if self.parent():
+            parent_pos = self.parent().mapToGlobal(self.parent().rect().topLeft())
+            parent_width = self.parent().width()
+            parent_height = self.parent().height()
+            journal_width = self.width()
+            journal_height = self.height()
+            x = parent_pos.x() + parent_width + 10  # 10px gap to the right
+            y = parent_pos.y() + (parent_height - journal_height) // 2  # Vertical centering
+            self.move(x, y)
+
+    def save_journal(self):
+        """Save journal contents to the current slot's journal file."""
+        if not self.parent():
+            return
+        slot = self.parent().current_slot if hasattr(self.parent(), 'current_slot') else 1
+        saves_dir = "./saves"
+        journal_file = os.path.join(saves_dir, f"journal_{slot}.txt")
+        try:
+            os.makedirs(saves_dir, exist_ok=True)
+            with open(journal_file, "w", encoding="utf-8") as f:
+                f.write(self.text_edit.toPlainText())
+            self.parent().add_message("Journal saved")
+        except Exception as e:
+            self.parent().add_message(f"Failed to save journal: {e}")
+            print(f"Error saving journal to {journal_file}: {e}")
+            
+    def log_diary_entry(self):
+        """Create a formatted diary entry with day, map coordinates, and special event text."""
+        if not self.parent():
+            return
+        # Calculate day (1 day = 1000 turns)
+        day = self.parent().turn // 1000 + 1
+        map_coords = self.parent().current_map
+        # Collect special event texts based on flags
+        special_texts = []
+        if getattr(self.parent(), 'low_hp_triggered', False):
+            special_texts.append("I almost died, that enemy was tough, bastard.")
+            self.parent().low_hp_triggered = False  # Reset flag
+        if getattr(self.parent(), 'low_hunger_triggered', False):
+            special_texts.append("I’m hungry, I need food right now, I could eat a horse.")
+            self.parent().low_hunger_triggered = False  # Reset flag
+        special_text = "\n".join(special_texts) if special_texts else "All is calm for now."
+        # Format entry
+        # timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        entry = (
+            f"Day {day}, Map {map_coords}, Position ({self.parent().player.x},{self.parent().player.y})\n"
+            f"{special_text}\n"
+            f"\n\n"
+        )
+        self.append_text(entry)
+        self.parent().add_message("Diary entry logged")
+    
+    def keyPressEvent(self, event):
+        """Handle key presses, e.g., Escape to close."""
+        if event.key() == Qt.Key_Escape:
+            self.hide()
+            if self.parent():
+                self.parent().setFocus()
+        elif event.key() == Qt.Key_J:
+            self.hide()
+            if self.parent():
+                self.parent().setFocus()
+        else:
+            super().keyPressEvent(event)
+
+    def showEvent(self, event):
+        """Ensure the text is scrolled to the end when the journal is shown."""
+        cursor = self.text_edit.textCursor()
+        cursor.movePosition(QTextCursor.End)
+        self.text_edit.setTextCursor(cursor)
+        self.text_edit.ensureCursorVisible()
+        super().showEvent(event)
+        if self.parent():
+            self.parent().setFocus()
+    
+    def append_text(self, text):
+        """Append text to the journal with a timestamp and scroll to end."""
+        #timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        current_text = self.text_edit.toPlainText()
+        new_text = f"{text}\n" if current_text else f"{text}"
+        self.text_edit.setPlainText(current_text + new_text)
+        cursor = self.text_edit.textCursor()
+        cursor.movePosition(QTextCursor.End)
+        self.text_edit.setTextCursor(cursor)
+        self.text_edit.ensureCursorVisible()
+        self.save_journal()  # Autosave after appending
+
+    def load_journal(self, slot=1):
+        """Load journal contents from the current slot's journal file."""
+        saves_dir = "./saves"
+        journal_file = os.path.join(saves_dir, f"journal_{slot}.txt")
+        try:
+            with open(journal_file, "r", encoding="utf-8") as f:
+                self.text_edit.setPlainText(f.read())
+        except FileNotFoundError:
+            self.text_edit.setPlainText("")  # Empty journal if file doesn't exist
+        except Exception as e:
+            self.parent().add_message(f"Failed to load journal: {e}")
+            print(f"Error loading journal from {journal_file}: {e}")
+            self.text_edit.setPlainText("")
+        # Move cursor to end and scroll
+        cursor = self.text_edit.textCursor()
+        cursor.movePosition(QTextCursor.End)
+        self.text_edit.setTextCursor(cursor)
+        self.text_edit.ensureCursorVisible()
+
+    def keyPressEvent(self, event):
+        """Handle key presses, e.g., Escape to close."""
+        if event.key() == Qt.Key_Escape:
+            self.hide()
+            if self.parent():
+                self.parent().setFocus()
+        else:
+            super().keyPressEvent(event)
+
+class MessagePopup(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        # Non-modal dialog with translucency
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setAttribute(Qt.WA_ShowWithoutActivating)  # Show without taking focus
+        self.setWindowOpacity(0.7)  # 70% opaque
+        self.setModal(False)  # Non-blocking
+        self.setFocusPolicy(Qt.NoFocus)  # Prevent keyboard focus
+
+        # Layout
+        self.layout = QVBoxLayout()
+        # self.layout.setSpacing(2)  # Small gap between messages
+        #self.layout.setContentsMargins(0, 0, 0, 0)  # Padding around messages
+        self.labels = []  # List to store QLabel widgets for messages
+        self.setLayout(self.layout)
+
+        # Base size (updated in set_message)
+        self.base_height = 31  # Height per message
+        self.max_messages = 5  # Limit to prevent oversized pop-up
+        self.setWindowTitle("Messages")
+        self.hide()  # Hidden by default
+        #print("MessagePopup initialized, hidden by default")
+
+    def set_message(self, messages):
+        """Display a list of messages, newest at the top."""
+        # Clear existing labels
+        for label in self.labels:
+            self.layout.removeWidget(label)
+            label.deleteLater()
+        self.labels.clear()
+
+        # If no messages, hide the pop-up
+        if not messages:
+            self.hide()
+            #print("MessagePopup hidden, no messages")
+            return
+
+        # Limit to max_messages
+        messages = messages[-self.max_messages:]  # Take newest messages
+        #print(f"MessagePopup displaying {len(messages)} messages: {messages}")
+
+        # Create a QLabel for each message (newest first)
+        for message in reversed(messages):  # Reverse to show newest at top
+            label = QLabel(message, self)
+            label.setStyleSheet("""
+                background-color: rgba(0, 0, 0, 150);  /* Semi-transparent black */
+                color: white;
+                padding: 0px;
+                border-radius: 0px;
+                font-size: 10px;
+                font-weight: bold;
+            """)
+            label.setWordWrap(True)
+            label.setFocusPolicy(Qt.NoFocus)
+            self.layout.addWidget(label)
+            self.labels.append(label)
+
+        # Resize pop-up based on number of messages
+        height = len(messages) * self.base_height
+        self.setFixedSize(500, height+3)
+
+        # Position below the main window
+        if self.parent():
+            parent_geo = self.parent().geometry()
+            target_x = parent_geo.x() + (parent_geo.width() - self.width()) // 2
+            target_y = parent_geo.y() + parent_geo.height() + 10
+            self.move(target_x, target_y)
+            #print(f"MessagePopup positioned at ({target_x}, {target_y}), parent at ({parent_geo.x()}, {parent_geo.y()}), size {parent_geo.width()}x{parent_geo.height()}, popup height={height}")
+        else:
+            self.move(100, 300)
+            #print(f"MessagePopup positioned at (100, 300), no parent")
+
+        # Show and ensure main window retains focus
+        self.show()
+        if self.parent():
+            self.parent().setFocus()
+            
+class InventoryWindow(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setWindowOpacity(0.8)  # 70% opaque, like MessagePopup
+        self.setFocusPolicy(Qt.NoFocus)  # Prevent stealing focus
+        self.setModal(False)  # Non-blocking
+        # Layout
+        self.layout = QVBoxLayout()
+        self.layout.setContentsMargins(10, 10, 10, 10)
+        self.layout.setSpacing(5)
+        # Item list
+        self.list_widget_objects = []
+        self.list_widget = QListWidget()
+        self.list_widget.setStyleSheet("""
+            QListWidget {
+                background-color: rgba(0, 0, 0, 150);
+                color: white;
+                border: 1px solid rgba(255, 255, 255, 50);
+                border-radius: 5px;
+                padding: 5px;
+            }
+            QListWidget::item:selected {
+                background-color: rgba(255, 255, 255, 20);
+            }
+        """)
+        self.list_widget.setSelectionMode(QListWidget.SingleSelection)
+        self.list_widget.itemDoubleClicked.connect(self.item_double_click)  # Double-click to equip
+        self.list_widget.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.list_widget.customContextMenuRequested.connect(self.show_context_menu)
+        self.layout.addWidget(self.list_widget)
+        # Buttons
+        button_layout = QHBoxLayout()
+        self.equip_button = QPushButton("Equip/Use")
+        self.equip_button.setStyleSheet("""
+            QPushButton {
+                background-color: rgba(0, 0, 0, 150);
+                color: white;
+                border: 1px solid rgba(255, 255, 255, 50);
+                border-radius: 5px;
+                padding: 5px;
+            }
+            QPushButton:hover {
+                background-color: rgba(255, 255, 255, 20);
+            }
+        """)
+        self.equip_button.clicked.connect(self.item_double_click)
+        button_layout.addWidget(self.equip_button)
+        self.drop_button = QPushButton("Drop")
+        self.drop_button.setStyleSheet(self.equip_button.styleSheet())
+        self.drop_button.clicked.connect(self.drop_item)
+        button_layout.addWidget(self.drop_button)
+        self.layout.addLayout(button_layout)
+        self.setLayout(self.layout)
+        # Initial size
+        self.setFixedSize(280, 400)
+        self.setWindowTitle("Inventory")
+        self.hide()  # Hidden by default
+        self.parent().setFocus()
+        
+    def keyPressEvent(self, event):
+        if self.parent():
+            self.parent().setFocus()
+
+    def update_inventory(self, player):
+        """Update the list with the player's current items."""
+        self.player = player  # Store player reference
+        self.list_widget_objects.clear()
+        self.list_widget.clear()
+        for item in player.items:            
+            self.list_widget.addItem(f"{item.name} ({item.weight}kg)")
+            self.list_widget_objects.append(item)
+        # equipped 
+        b_equipped = False
+        if player.primary_hand:
+            self.list_widget.addItem(f"* {player.primary_hand.name} ({player.primary_hand.damage}damage)")  
+            self.list_widget_objects.append(player.primary_hand)
+            b_equipped = True
+        if player.secondary_hand:            
+            self.list_widget.addItem(f"* {player.secondary_hand.name} ({player.secondary_hand.weight}kg)")  
+            self.list_widget_objects.append(player.secondary_hand)
+            b_equipped = True
+        if player.head:            
+            self.list_widget.addItem(f"* {player.head.name} ({player.head.weight}kg)")  
+            self.list_widget_objects.append(player.head)
+            b_equipped = True
+        if player.neck:            
+            self.list_widget.addItem(f"* {player.neck.name} ({player.neck.weight}kg)")  
+            self.list_widget_objects.append(player.neck)
+            b_equipped = True
+        if player.torso:
+            self.list_widget.addItem(f"* {player.torso.name} ({player.torso.weight}kg)")  
+            self.list_widget_objects.append(player.torso)
+            b_equipped = True
+        if player.waist:
+            self.list_widget.addItem(f"* {player.waist.name} ({player.waist.weight}kg)")  
+            self.list_widget_objects.append(player.waist)
+            b_equipped = True
+        if player.legs:
+            self.list_widget.addItem(f"* {player.legs.name} ({player.legs.weight}kg)")  
+            self.list_widget_objects.append(player.legs)
+            b_equipped = True
+        if player.foot:            
+            self.list_widget.addItem(f"* {player.foot.name} ({player.foot.weight}kg)")  
+            self.list_widget_objects.append(player.foot)
+            b_equipped = True
+        
+        if player.items or b_equipped:
+            self.show()
+            self.update_position()
+            self.parent().setFocus()
+        else:
+            self.hide()
+            
+    def update_position(self):
+        """Position the inventory window to the left of the parent window, vertically centered."""
+        if self.parent():
+            # Get top-left global position of the parent window
+            parent_pos = self.parent().mapToGlobal(self.parent().rect().topLeft())
+            parent_width = self.parent().width()
+            parent_height = self.parent().height()
+
+            # Inventory window size
+            inv_width = self.width()
+            inv_height = self.height()
+
+            # New x and y positions
+            x = parent_pos.x() - inv_width - 10  # 10 px gap to the left
+            y = parent_pos.y() + (parent_height - inv_height) // 2  # Vertical centering
+
+            self.move(x, y)
+                
+    def show_context_menu(self, pos):
+        """Show a context menu for equip and drop actions."""
+        item = self.list_widget.itemAt(pos)
+        if item:
+            menu = QMenu(self)
+            equip_action = menu.addAction("Equip")
+            drop_action = menu.addAction("Drop")
+            action = menu.exec_(self.list_widget.mapToGlobal(pos))
+            if action == equip_action:
+                self.equip_item(item)
+            elif action == drop_action:
+                self.drop_item(item)
+
+    def item_double_click(self, item=None):
+        """Equip the selected or provided item."""
+        # print("equip_item ()* || ",self.player.primary_hand, self.player.items)
+        if not item: 
+            item = self.list_widget.currentItem()
+        if item:
+            wdg_index = self.list_widget.row(item)
+            game_item = self.list_widget_objects[wdg_index]
+            ply_index = self.player.getItemIndex(game_item)           
+            # print("equip_item()* || ... |", ply_index, wdg_index)
+            if ply_index == wdg_index: # not equipped 
+                if isinstance(game_item, Equippable):
+                    if self.player.equip_item(game_item, game_item.slot):
+                        self.parent().add_message(f"Equipped {game_item.name}")
+                        self.parent().draw_hud()  # Update HUD if needed
+                    else:
+                        self.parent().add_message(f"Cannot equip {game_item.name}")
+                    self.update_inventory(self.player)  # Refresh list
+                elif isinstance(game_item, Item):
+                    if game_item.use(self.player):
+                        self.player.items.pop( self.player.getItemIndex(game_item) )
+                        self.parent().add_message(f"{game_item.name} used")
+                else:
+                    self.parent().add_message(f"{game_item.name} is not equippable or usable")
+            else: # equipped
+                if isinstance(game_item, Equippable):
+                    self.parent().add_message(f"Unequipped")
+                    self.player.unequip_item(game_item.slot)
+        self.update_inventory(self.player) # Refresh list            
+        self.parent().setFocus()  # Return focus to game
+
+    def drop_item(self, item=None):
+        """Drop the selected or provided item to the current tile."""
+        if not item:
+            item = self.list_widget.currentItem()
+        if item:            
+            index = self.list_widget.row(item)
+            if index>=len(self.player.items): 
+                self.parent().add_message(f"Can't drop equipped item")
+                return 
+            game_item = self.player.items[index]
+            if game_item == self.player.primary_hand: 
+                self.parent().add_message(f"Can't drop equipped item: {game_item.name}")
+                return 
+            if game_item == self.player.torso: 
+                self.parent().add_message(f"Can't drop equipped item: {game_item.name}")
+                return
+            tile = self.parent().map.get_tile(self.player.x, self.player.y)
+            if tile:
+                tile.add_item(game_item)
+                self.player.remove_item(game_item)
+                self.parent().add_message(f"Dropped {game_item.name}")
+                self.update_inventory(self.player)  # Refresh list
+                self.parent().dirty_tiles.add((self.player.x, self.player.y))  # Redraw tile
+                self.parent().draw_grid()  # Update grid
+            else:
+                self.parent().add_message("Cannot drop item: invalid tile")
+        self.parent().setFocus()  # Return focus to game    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        

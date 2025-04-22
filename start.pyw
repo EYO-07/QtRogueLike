@@ -1,40 +1,57 @@
 # this is the entry point: start.pyw 
 # other files: 
-# items.py 
-# living.py
-# mapping.py 
-# events.py 
-# message_window.py 
-# inventory_window.py
+# start.pyw 
+# -> gui.py
+# -----> reality.py
+# ---------> events.py 
+# ---------> serialization.py 
 
+# project
+from serialization import *
+from reality import *
+from gui import *
+from events import * 
+
+# built-in
 import shutil
 import tempfile
+import json
 import os
 import sys
-import json
+import math 
 import random
+
+# third-party
 from PyQt5.QtMultimedia import QMediaPlayer, QMediaContent
 from PyQt5.QtWidgets import QApplication, QGraphicsView, QGraphicsScene, QGraphicsRectItem
 from PyQt5.QtCore import Qt, QRectF, QUrl
 from PyQt5.QtGui import QColor, QTransform
-from mapping import *
-from living import *
-from items import *
-from events import *
-import random  # Add for random enemy placement
-from message_window import MessagePopup  # Import the new MessagePopup
-from inventory_window import InventoryWindow
-from journal_window import JournalWindow
-import math 
 
 # Set working directory to the script's directory
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 print(f"Working directory set to: {os.getcwd()}")
 
-class Game(QGraphicsView):
+class Game(QGraphicsView, Serializable):
+    # -- class variables
     instance = None  # Temporary singleton for Enemy access
+    
+    __serialize_only__ = [
+        "version",
+        "rotation",
+        "player",
+        "current_map", # map coords
+        "turn",
+        "current_slot",
+        "low_hp_triggered",
+        "low_hunger_triggered",
+        "current_day",
+        "is_music_muted",
+    ]
+    
+    # -- 
     def __init__(self):
         super().__init__()
+        self.version = "1.0.0"
         self.setFocusPolicy(Qt.StrongFocus)  # Ensure Game accepts focus
         self.rotation = 0  # degrees: 0, 90, 180, 270
         self.view_width = 7
@@ -45,11 +62,11 @@ class Game(QGraphicsView):
         self.tile_size = 70
         self.grid_width = 100
         self.grid_height = 100
-        self.player = None
+        self.player = Player()
         #self.player = Player("Adventurer", 100, 50, 50, False)
-        self.maps = {(0,0,0):None}  # Store Map objects with coordinate keys
         self.current_map = (0,0,0) # Current map coordinates
-        self.map = self.maps[self.current_map]
+        self.map = Map()
+        self.maps = {(0,0,0):self.map}  # Store Map objects with coordinate keys
         # Create and place characters
         self.events = []  # Initialize events list
         self.enemies = {(0, 0, 0): []}  # Dictionary with map coords as keys, enemy lists as values
@@ -100,15 +117,14 @@ class Game(QGraphicsView):
             self.add_message(f"Music file {music_path} not found")
             print(f"Music file {music_path} not found")
         
-        # Attempt to load saved game
-        try:
-            self.load_current_game()
-        except FileNotFoundError:
-            self.start_new_game()
-            self.add_message("No save file found, starting new game") 
-        except Exception as e:
-            self.add_message(f"Error loading game on startup: {e}, starting new game") 
-            print(f"Error loading game on startup: {e}, starting new game")
+        self.load_current_game()
+        
+    def from_dict(self, dictionary):
+        if not super().from_dict(dictionary):
+            return False
+        if self.current_map in self.maps and self.player:
+            self.maps[self.current_map].place_character(self.player)
+        return True
     
     def handle_media_status(self, status):
         """Handle media status changes to start playback when loaded."""
@@ -168,67 +184,68 @@ class Game(QGraphicsView):
             self.inventory_window.close()
         event.accept()
 
-    def check_map_transition(self,x,y):
+    def player_new_x_y_horizontal(self, out_of_bounds_x, out_of_bounds_y):
         new_map_coord = None
-        new_x = self.player.x 
-        new_y = self.player.y 
-        if x < 0:
+        new_x = out_of_bounds_x
+        new_y = out_of_bounds_y
+        if out_of_bounds_x < 0:
             new_map_coord = (self.current_map[0] - 1, self.current_map[1], self.current_map[2])
             new_x = self.grid_width - 1
-        elif x >= self.grid_width:
+        elif out_of_bounds_x >= self.grid_width:
             new_map_coord = (self.current_map[0] + 1, self.current_map[1], self.current_map[2])
             new_x = 0
-        elif y < 0:
+        elif out_of_bounds_y < 0:
             new_map_coord = (self.current_map[0], self.current_map[1] - 1, self.current_map[2])
             new_y = self.grid_height - 1
-        elif y >= self.grid_height:
+        elif out_of_bounds_y >= self.grid_height:
             new_map_coord = (self.current_map[0], self.current_map[1] + 1, self.current_map[2])
             new_y = 0
+        return new_x, new_y, new_map_coord
 
-        if new_map_coord:
-            saves_dir = "./saves"
-            map_file = os.path.join(saves_dir, f"map_{'_'.join(map(str, self.current_map))}_1.json")
-            current_enemies = list(self.enemies.get(self.current_map, []))
-            self.enemies[self.current_map] = []
-            self.map.save_state(current_enemies, map_file)
-            self.map.remove_character(self.player)
-            self.player.x = new_x
-            self.player.y = new_y
-            if new_map_coord not in self.maps:
-                print(f"Creating new map at {new_map_coord}")
-                map_type = random.choice(["procedural_lake", "procedural_field", "procedural_road"])
-                self.maps[new_map_coord] = Map(map_type, coords=new_map_coord)
-            self.current_map = new_map_coord
+    def map_transition(self, new_map_file, new_map_coord, map_type, prv_coords = None, going_up = False):
+        self.current_map = new_map_coord
+        if new_map_coord not in self.maps: 
+            self.maps[self.current_map] = Map(coords=self.current_map)
             self.map = self.maps[self.current_map]
-            map_file = os.path.join(saves_dir, f"map_{'_'.join(map(str, self.current_map))}_1.json")
-            try:
-                with open(map_file, "r") as f:
-                    map_state = json.load(f)
-                    fill_list = []
-                    self.map.load_state(fill_list, map_state)
-                    self.enemies[self.current_map] = fill_list
-            except FileNotFoundError:
-                self.add_message(f"No map file found for {self.current_map}, using generated map")
-            except Exception as e:
-                self.add_message(f"Failed to load map for {self.current_map}: {e}")
-                print(f"Error loading map {map_file}: {e}")
-            if not self.map.place_character(self.player):
-                print(f"Error: Failed to place player at ({self.player.x}, {self.player.y})")
-                self.player.x, self.player.y = self.map.width // 2, self.map.height // 2
-                self.map.place_character(self.player)
-            for enemy in self.enemies.get(self.current_map, []):
-                if not self.map.place_character(enemy):
-                    print(f"Warning: Failed to place enemy {enemy.name} at ({enemy.x}, {enemy.y})")
-            if not self.enemies.get(self.current_map):
-                self.enemies[self.current_map] = []
-                self.fill_enemies(100)
-            elif len(self.enemies[self.current_map]) < 5:
-                self.fill_enemies(50)
-            self.save_current_game(slot=1)
-            self.scene.clear()
-            self.dirty_tiles.clear()
-            self.draw_grid()
-            self.draw_hud()
+            if not self.map.Load_JSON(new_map_file):
+                print(f"Creating new map at {new_map_coord}")
+                return self.new_map_from_current_coords(map_type, prev_coords = prv_coords, up = going_up)
+            else:
+                print(f"Loading Map from Saved File {self.current_map}")
+                self.add_message(f"Loading Map {self.current_map}")
+        else:
+            print(f"Loading Map from Cache {self.current_map}")
+            self.add_message(f"Loading Map {self.current_map}")
+            self.map = self.maps[self.current_map]
+        self.enemies[self.current_map] = self.map.enemies 
+        return None, None
+    
+    def check_horizontal_map_transition(self,x,y):
+        new_x, new_y, new_map_coord = self.player_new_x_y_horizontal(x,y)
+        if not new_map_coord: return 
+        saves_dir = "./saves"
+        previous_map_file = os.path.join(saves_dir, f"map_{'_'.join(map(str, self.current_map))}_1.json")
+        new_map_file = os.path.join(saves_dir, f"map_{'_'.join(map(str, new_map_coord))}_1.json")
+        # removes the character from previous map
+        self.map.remove_character(self.player)
+        # save the previous map 
+        self.map.Save_JSON(previous_map_file)
+        # update player
+        self.player.x = new_x
+        self.player.y = new_y
+        # check if the map already in self.maps
+        map_type = random.choice(["procedural_lake", "procedural_field", "procedural_road"])
+        self.map_transition(new_map_file, new_map_coord, map_type)
+        # placing character to the new map 
+        if not self.map.place_character(self.player):
+            print(f"Error: Failed to place player at ({self.player.x}, {self.player.y})")
+            self.player.x, self.player.y = self.map.width // 2, self.map.height // 2
+            self.map.place_character(self.player)
+        self.save_current_game(slot=1)
+        self.scene.clear()
+        self.dirty_tiles.clear()
+        self.draw_grid()
+        self.draw_hud()
     
     def find_stair_tile(self, map_obj, target_stair_coords):
         """Find a tile in map_obj with a stair attribute matching target_stair_coords."""
@@ -239,83 +256,47 @@ class Game(QGraphicsView):
                     return (tile.stair_x or x, tile.stair_y or y)
         return None
     
-    def handle_stair_transition(self, target_map, up):
+    def handle_stair_transition(self, target_map_coords, up):
         """Handle vertical map transition via stairs."""
-        if not isinstance(target_map, tuple):
-            print(f"Error: target_map {target_map} is not a tuple")
-            self.add_message("Cannot use stair: Invalid map coordinates")
-            return
-
-        self.add_message(f"Using stairs to map {target_map}")
+        # variables
+        previous_map_coords = self.current_map
         saves_dir = "./saves"
+        previous_map_file = os.path.join(saves_dir, f"map_{'_'.join(map(str, previous_map_coords))}_1.json")
         current_tile = self.map.get_tile(self.player.x, self.player.y)
         prev_x, prev_y = self.player.x, self.player.y
-
-        # Save current map
-        map_file = os.path.join(saves_dir, f"map_{'_'.join(map(str, self.current_map))}_1.json")
-        current_enemies = list(self.enemies.get(self.current_map, []))
-        self.enemies[self.current_map] = []
-        self.map.save_state(current_enemies, map_file)
+        
+        # check coords if is a tuple 
+        if not isinstance(target_map_coords, tuple):
+            print(f"Error: target_map {target_map_coords} is not a tuple")
+            self.add_message("Cannot use stair: Invalid map coordinates")
+            return
+        self.add_message(f"Using stairs to map {target_map_coords}")
+        
+        # removes the character from previous map
         self.map.remove_character(self.player)
 
-        previous_map = self.current_map
-        self.current_map = target_map
-        self.enemies[target_map] = []
-        if target_map not in self.maps:
-            self.maps[target_map] = Map("procedural_dungeon", coords=target_map, b_generate=False)
-        self.map = self.maps[self.current_map]
-
-        map_file = os.path.join(saves_dir, f"map_{'_'.join(map(str, self.current_map))}_1.json")
-        try:
-            with open(map_file, "r") as f:
-                map_state = json.load(f)
-                fill_list = []
-                self.map.load_state(fill_list, map_state)
-                self.enemies[self.current_map] = fill_list
-                stair_pos = self.find_stair_tile(self.map, previous_map)
-                if stair_pos:
-                    self.player.x, self.player.y = stair_pos
-                else:
-                    print(f"Warning: No stair tile found on map {self.current_map} linking to {previous_map}")
-                    self.player.x, self.player.y = self.map.width // 2, self.map.height // 2
-        except FileNotFoundError:
-            self.add_message(f"No map file found for {self.current_map}, generating new dungeon")
-            new_coords = self.map.generate_procedural_dungeon(previous_map, prev_x, prev_y, up)
+        # Save Previous Map 
+        self.map.Save_JSON(previous_map_file)
+        
+        # update 
+        self.current_map = target_map_coords
+        new_map_file = os.path.join(saves_dir, f"map_{'_'.join(map(str, self.current_map))}_1.json")
+        new_coords = self.map_transition(new_map_file, target_map_coords, "procedural_dungeon", previous_map_coords, up)
+        # Find the stair tile linking back to the previous map
+        stair_pos = self.find_stair_tile(self.map, previous_map_coords)
+        if stair_pos:
+            self.player.x, self.player.y = stair_pos
+        else:
+            print(f"Warning: No stair tile found on map {self.current_map} linking to {previous_map_coords}")
+            self.player.x, self.player.y = self.map.width // 2, self.map.height // 2
+            
+        if new_coords[0]:
             self.player.x, self.player.y = new_coords[0], new_coords[1]
-            prev_map = self.maps.get(previous_map)
-            if prev_map and current_tile:
-                current_tile.stair_x = self.player.x
-                current_tile.stair_y = self.player.y
-                prev_map_file = os.path.join(saves_dir, f"map_{'_'.join(map(str, previous_map))}_1.json")
-                prev_map.save_state(current_enemies, prev_map_file)
-                print(f"Updated previous map {previous_map} stair at ({prev_x}, {prev_y}) to point to ({self.player.x}, {self.player.y})")
-        except Exception as e:
-            self.add_message(f"Failed to load map for {self.current_map}: {e}")
-            print(f"Error loading map {map_file}: {e}")
-            new_coords = self.map.generate_procedural_dungeon(previous_map, prev_x, prev_y, up)
-            self.player.x, self.player.y = new_coords[0], new_coords[1]
-            prev_map = self.maps.get(previous_map)
-            if prev_map and current_tile:
-                current_tile.stair_x = self.player.x
-                current_tile.stair_y = self.player.y
-                prev_map_file = os.path.join(saves_dir, f"map_{'_'.join(map(str, previous_map))}_1.json")
-                prev_map.save_state(current_enemies, prev_map_file)
-                print(f"Updated previous map {previous_map} stair at ({prev_x}, {prev_y}) to point to ({self.player.x}, {self.player.y})")
-
+        # placing the character
         if not self.map.place_character(self.player):
             print(f"Error: Failed to place player at ({self.player.x}, {self.player.y}) on map {self.current_map}")
             self.player.x, self.player.y = self.map.width // 2, self.map.height // 2
             self.map.place_character(self.player)
-
-        for enemy in self.enemies.get(self.current_map, []):
-            if not self.map.place_character(enemy):
-                print(f"Warning: Failed to place enemy {enemy.name} at ({enemy.x}, {enemy.y})")
-
-        if not self.enemies[self.current_map]:
-            self.fill_enemies(100)
-        elif len(self.enemies[self.current_map]) < 5:
-            self.fill_enemies(50)
-
         self.save_current_game(slot=1)
         print(f"handle_stair_transition(): Current Map Coords: {self.current_map}")
         self.scene.clear()
@@ -323,6 +304,14 @@ class Game(QGraphicsView):
         self.draw_grid()
         self.draw_hud()
 
+    def new_map_from_current_coords(self, filename_or_procedural_type = "default", prev_coords = None, up = False):
+        self.scene.clear()
+        self.tile_items.clear()
+        self.events = []
+        self.map = Map(filename_or_procedural_type, coords=self.current_map, previous_coords = prev_coords, going_up = up)
+        self.fill_enemies(100)
+        return self.map.starting_x, self.map.starting_y 
+        
     def start_new_game(self):
         """Reset the game to a new state."""
         self.scene.clear()
@@ -336,12 +325,9 @@ class Game(QGraphicsView):
         self.events = []
         self.enemies = {(0, 0, 0): []}
         self.map.place_character(self.player)
-        self.fill_enemies(20)
+        self.fill_enemies(50)
         self.turn = 0
-        self.dirty_tiles = set()
-        self.draw_grid()
-        self.draw_hud()
-        self.dirty_tiles.clear()    
+        
         self.add_message("Starting new game") 
         if self.inventory_window: self.inventory_window.update_inventory(self.player)
         # Initialize and clear journal
@@ -361,98 +347,29 @@ class Game(QGraphicsView):
             else:
                 print("Music not ready in start_new_game, waiting for LoadedMedia")
         
+        self.dirty_tiles = set()
+        self.draw_grid()
+        self.draw_hud()
+        self.dirty_tiles.clear()    
+        
     def save_current_game(self, slot=1):
         """Save the current map to its JSON file and player state to a central file."""
         try:
             # Ensure ./saves directory exists
             self.current_slot = slot  # Update current slot
             saves_dir = "./saves"
-            if not os.path.exists(saves_dir):
-                os.makedirs(saves_dir)
-
+            if not os.path.exists(saves_dir): os.makedirs(saves_dir)
             # Save current map state
             map_file = os.path.join(saves_dir, f"map_{'_'.join(map(str, self.current_map))}_{slot}.json")
-            self.map.save_state(self.enemies.get(self.current_map, []), map_file)
-
-            # Save player state
-            player_state = {
-                "version": "1.0.0",
-                "slot": slot,
-                "turn": self.turn,
-                "current_map": list(self.current_map),
-                "player": {
-                    "x": self.player.x,
-                    "y": self.player.y,
-                    "hp": self.player.hp,
-                    "max_hp": self.player.max_hp,
-                    "stamina": self.player.stamina,
-                    "max_stamina": self.player.max_stamina,
-                    "hunger": self.player.hunger,
-                    "max_hunger": self.player.max_hunger,
-                    "items": [
-                        {
-                            "type": "food" if isinstance(item, Food) else "weapon" if isinstance(item, Weapon) else "repair_tool" if isinstance(item, WeaponRepairTool) else "armor",
-                            "name": item.name,
-                            "nutrition": getattr(item, "nutrition", 0),
-                            "weight": item.weight,
-                            "description": item.description,
-                            "sprite": item.sprite,
-                            "damage": getattr(item, "damage", 0),
-                            "max_damage": getattr(item, "max_damage", 0),
-                            "stamina_consumption": getattr(item, "stamina_consumption", 0),
-                            "repairing_factor": getattr(item, "repairing_factor", 0),
-                            "armor": getattr(item, "armor", 0),
-                            "slot": getattr(item, "slot", None)
-                        } for item in self.player.items
-                    ],
-                    "equipped": {
-                        "primary_hand": {
-                            "type": "weapon",
-                            "name": self.player.primary_hand.name,
-                            "damage": self.player.primary_hand.damage,
-                            "max_damage": self.player.primary_hand.max_damage,
-                            "weight": self.player.primary_hand.weight,
-                            "description": self.player.primary_hand.description,
-                            "sprite": self.player.primary_hand.sprite,
-                            "stamina_consumption": self.player.primary_hand.stamina_consumption
-                        } if self.player.primary_hand else None,
-                        "torso": {
-                            "type": "armor",
-                            "name": self.player.torso.name,
-                            "armor": self.player.torso.armor,
-                            "weight": self.player.torso.weight,
-                            "description": self.player.torso.description,
-                            "sprite": self.player.torso.sprite
-                        } if self.player.torso else None
-                        # Add other slots (secondary_hand, head, etc.) as needed
-                    }
-                },
-                "music_muted": self.is_music_muted,
-                "low_hp_triggered": self.low_hp_triggered,
-                "low_hunger_triggered": self.low_hunger_triggered,
-                "current_day": self.current_day
-            }
-
-            # Backup player state
+            self.map.Save_JSON(map_file)
+            # save the player_file 
             player_file = os.path.join(saves_dir, f"player_state_{slot}.json")
-            if os.path.exists(player_file):
-                shutil.copy(player_file, os.path.join(saves_dir, f"player_state_{slot}.json.bak"))
-
-            # Write player state to temporary file in ./saves
-            temp_file_name = os.path.join(saves_dir, f"player_state_{slot}.tmp")
-            with open(temp_file_name, 'w') as temp_file:
-                json.dump(player_state, temp_file, indent=2)
-
-            # Atomically rename temporary file
-            os.replace(temp_file_name, player_file)
-            
+            self.Save_JSON( player_file )
+            # Backup player state
+            if os.path.exists(player_file): shutil.copy(player_file, os.path.join(saves_dir, f"player_state_{slot}.json.bak"))
             # Save journal
-            if self.journal_window:
-                self.journal_window.save_journal()
+            if self.journal_window: self.journal_window.save_journal()
             self.add_message(f"Game saved to slot {slot}!")
-            
-            self.add_message(f"Game saved to slot {slot}!")
-
         except Exception as e:
             self.add_message(f"Failed to save game: {e}")
             print(f"Error saving game: {e}")
@@ -463,142 +380,41 @@ class Game(QGraphicsView):
         """Load player state and current map from their respective JSON files."""
         saves_dir = "./saves"
         player_file = os.path.join(saves_dir, f"player_state_{slot}.json")
-        self.player = Player("Adventurer",100,50,50, False) # testing if solves the issue 
-        try:
-            # Load player state
-            with open(player_file, "r") as f:
-                state = json.load(f)
-
-            self.current_slot = slot  # Update current slot
-            # Check version
-            save_version = state.get("version", "0.0.0")
-            if save_version != "1.0.0":
-                self.add_message(f"Warning: Save version {save_version} may not be compatible")
-
-            # Clear current state
-            self.scene.clear()
-            self.tile_items.clear()
-            self.events.clear()
-            self.enemies.clear()
-            self.maps.clear()
-
-            # Load player
-            player_data = state["player"]
-            self.player.x = player_data["x"]
-            self.player.y = player_data["y"]
-            self.player.hp = player_data["hp"]
-            self.player.max_hp = player_data["max_hp"]
-            self.player.stamina = player_data["stamina"]
-            self.player.max_stamina = player_data["max_stamina"]
-            self.player.hunger = player_data["hunger"]
-            self.player.max_hunger = player_data["max_hunger"]
-            self.player.items = []
-            for item_data in player_data["items"]:
-                if item_data["type"] == "food":
-                    item = Food(
-                        name=item_data["name"],
-                        nutrition=item_data["nutrition"],
-                        description=item_data.get("description", ""),
-                        weight=item_data.get("weight", 1)
-                    )
-                elif item_data["type"] == "weapon":
-                    item = Weapon(
-                        name=item_data["name"],
-                        damage=item_data["damage"],
-                        description=item_data.get("description", ""),
-                        weight=item_data.get("weight", 1),
-                        stamina_consumption=item_data["stamina_consumption"]
-                    )
-                    item.max_damage = item_data["max_damage"]
-                elif item_data["type"] == "repair_tool":
-                    item = WeaponRepairTool(
-                        name=item_data["name"],
-                        repairing_factor=item_data["repairing_factor"],
-                        description=item_data.get("description", ""),
-                        weight=item_data.get("weight", 1)
-                    )
-                elif item_data["type"] == "armor":
-                    item = Armor(
-                        name=item_data["name"],
-                        armor=item_data["armor"],
-                        description=item_data.get("description", ""),
-                        weight=item_data.get("weight", 1),
-                        slot=item_data["slot"]
-                    )
-                self.player.add_item(item)
-            equipped = player_data["equipped"]
-            if equipped["primary_hand"]:
-                weapon = Weapon(
-                    name=equipped["primary_hand"]["name"],
-                    damage=equipped["primary_hand"]["damage"],
-                    description=equipped["primary_hand"].get("description", ""),
-                    weight=equipped["primary_hand"].get("weight", 1),
-                    stamina_consumption=equipped["primary_hand"]["stamina_consumption"]
-                )
-                weapon.max_damage = equipped["primary_hand"]["max_damage"]
-                self.player.equip_item(weapon, "primary_hand") 
-                #self.player.items.remove(weapon) 
-            if equipped["torso"]:
-                self.player.equip_item(Armor(
-                    name=equipped["torso"]["name"],
-                    armor=equipped["torso"]["armor"],
-                    description=equipped["torso"].get("description", ""),
-                    weight=equipped["torso"].get("weight", 1),
-                    slot="torso"
-                ), "torso")
-
-            # Load current map
-            self.current_map = tuple(state["current_map"])
-            map_file = os.path.join(saves_dir, f"map_{'_'.join(map(str, self.current_map))}_{slot}.json")
-            self.maps[self.current_map] = Map(state.get("filename", "default"))
-            self.map = self.maps[self.current_map]
-            self.enemies[self.current_map] = []
-            try:
-                with open(map_file, "r") as f:
-                    map_state = json.load(f)
-                    self.map.load_state(self.enemies[self.current_map], map_state)
-                    print("Load from Load Current State:", len(self.enemies[self.current_map]) )
-            except FileNotFoundError:
-                self.add_message(f"No map file found for {self.current_map}, generating new map")
-                self.map.generate()
-            except Exception as e:
-                self.add_message(f"Failed to load map for {self.current_map}: {e}")
-                print(f"Error loading map {map_file}: {e}")
-                self.map.generate()
-
-            # Place characters
-            if not self.map.place_character(self.player):
-                self.add_message(f"Warning: Could not place player at ({self.player.x}, {self.player.y})")
-                self.player.x, self.player.y = self.grid_width // 2, self.grid_height // 2
-                self.map.place_character(self.player)
-            for enemy in self.enemies[self.current_map]:
-                if not self.map.place_character(enemy):
-                    print(f"Warning: Could not place enemy at ({enemy.x}, {enemy.y})")
-
-            # Load turn
-            self.turn = state.get("turn", 0)
-            self.low_hp_triggered = state.get("low_hp_triggered", False)
-            self.low_hunger_triggered = state.get("low_hunger_triggered", False)
-            self.current_day = state.get("current_day", 1)
-
-            # Redraw
-            self.draw_grid()
-            self.draw_hud()
-            self.add_message(f"Game loaded from slot {slot}!")
-
-            # Initialize and load journal
-            if not self.journal_window:
-                self.journal_window = JournalWindow(self)
-            self.journal_window.load_journal(slot)
-
-        except FileNotFoundError:
-            self.add_message(f"No save file found for slot {slot}")
-            print(f"No save file found: {player_file}")
+        if not self.Load_JSON(player_file):
+            print("here")
+            print(f"Failed to Load or no File Found: {player_file}")
             self.start_new_game()
-        except Exception as e:
-            self.add_message(f"Failed to load game from slot {slot}: {e}")
-            print(f"Error loading game: {e}")
-            self.start_new_game()
+            return 
+        # Clear current state
+        self.scene.clear()
+        self.tile_items.clear()
+        self.events.clear()
+        self.enemies.clear()
+        self.maps.clear()
+        # Load current map and update enemies
+        map_file = os.path.join(saves_dir, f"map_{'_'.join(map(str, self.current_map))}_{slot}.json")
+        self.map = Map("default", coords=self.current_map)
+        if not self.map.Load_JSON(map_file):
+            self.add_message(f"No map save file found for slot {slot}")
+            print(f"No map save file found: {map_file}")
+            self.new_map_from_current_coords()
+        else:
+            self.enemies[self.current_map] = self.map.enemies
+        self.maps[self.current_map] = self.map
+        
+        # Place characters
+        if not self.map.place_character(self.player):
+            self.add_message(f"Warning: Could not place player at ({self.player.x}, {self.player.y})")
+            self.player.x, self.player.y = self.grid_width // 2, self.grid_height // 2
+            self.map.place_character(self.player)
+        # Redraw
+        self.draw_grid()
+        self.draw_hud()
+        self.add_message(f"Game loaded from slot {slot}!")
+        # Initialize and load journal
+        if not self.journal_window:
+            self.journal_window = JournalWindow(self)
+        self.journal_window.load_journal(slot)
            
     def draw_hud(self):
         hud_width = self.view_width * self.tile_size
@@ -688,7 +504,7 @@ class Game(QGraphicsView):
         else:
             print("Warning: Arrow sprite not found")    
         
-    def fill_enemies(self, num_enemies):
+    def fill_enemies(self, num_enemies=100):
         #print(f"Filling enemies for map {self.current_map}")
         if self.current_map not in self.enemies:
             self.enemies[self.current_map] = []
@@ -742,6 +558,7 @@ class Game(QGraphicsView):
             attempts += 1
         if placed < num_enemies:
             print(f"Warning: Only placed {placed} of {num_enemies} enemies due to limited valid tiles")
+        self.map.enemies = self.enemies[self.current_map] 
         print(f"Added {len(self.enemies[self.current_map])} enemies for map {self.current_map}")
             
     # gM := Member Methods
@@ -965,7 +782,10 @@ class Game(QGraphicsView):
         elif key == Qt.Key_C:  # Interact with stair
             tile = self.map.get_tile(self.player.x, self.player.y)
             if tile and tile.stair:
-                self.handle_stair_transition(tile.stair, tile.default_sprite == Tile.SPRITES.get("stair_up"))
+                if tile.default_sprite == Tile.SPRITES.get("dungeon_entrance"):
+                    self.handle_stair_transition(tile.stair, False)
+                else:
+                    self.handle_stair_transition(tile.stair, tile.default_sprite == Tile.SPRITES.get("stair_up"))
                 return
         elif key in (Qt.Key_Up, Qt.Key_W):
             dx, dy = self.rotated_direction(0, -1)
@@ -990,7 +810,7 @@ class Game(QGraphicsView):
             return
         elif key == Qt.Key_E:  # Use first food item
             #print(self.player.items)
-            from items import Food  # Import here to avoid circular import
+            #from items import Food  # Import here to avoid circular import
             for item in self.player.items:
                 if isinstance(item, Food):
                     self.events.append(UseItemEvent(self.player, item))
@@ -1052,21 +872,22 @@ class Game(QGraphicsView):
                 tile.items.clear()
                 # Set stair properties
                 tile.walkable = True
-                tile.default_sprite = Tile.SPRITES.get("dungeon_entrance", Tile.SPRITES.get("floor"))
+                tile.default_sprite_key = "dungeon_entrance"
+                tile.get_default_pixmap()
                 tile.stair = target_map
                 # Place player back
                 tile.current_char = self.player
                 self.player.current_tile = tile
+                # Save the map to persist the stair
+                saves_dir = "./saves"
+                map_file = os.path.join(saves_dir, f"map_{'_'.join(map(str, self.current_map))}_1.json")
+                self.map.Save_JSON(map_file)
+                self.add_message(f"Placed stair_down at ({self.player.x}, {self.player.y}) leading to {target_map}")
                 # Mark tile for redraw
                 self.dirty_tiles.add((self.player.x, self.player.y))
                 self.scene.clear()
                 self.draw_grid()
                 self.draw_hud()
-                # Save the map to persist the stair
-                saves_dir = "./saves"
-                map_file = os.path.join(saves_dir, f"map_{'_'.join(map(str, self.current_map))}_1.json")
-                self.map.save_state(self.enemies.get(self.current_map, []), map_file)
-                self.add_message(f"Placed stair_down at ({self.player.x}, {self.player.y}) leading to {target_map}")
                 return
 
         else:
@@ -1077,7 +898,7 @@ class Game(QGraphicsView):
             target_x, target_y = self.player.x + dx, self.player.y + dy
             tile = self.map.get_tile(target_x, target_y)
             if target_x <0 or target_x > self.grid_width-1 or target_y<0 or target_y> self.grid_height-1:
-                self.check_map_transition(target_x, target_y)  # Add this
+                self.check_horizontal_map_transition(target_x, target_y)  # Add this
                 return
             if tile and tile.walkable:
                 if tile.current_char:
