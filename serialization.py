@@ -98,6 +98,9 @@ class Serializable:
                 return False
     
     def Load_JSON(self, filename):
+        if not os.path.exists(filename):
+            print(f"File not found: {filename}")
+            return False
         try:
             with open(filename, 'r', encoding='utf-8') as f:
                 data = json.load(f)

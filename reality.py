@@ -392,7 +392,8 @@ class Tile(Container):
         "rogue",
         "stair_up",
         "stair_down",
-        "dungeon_entrance"
+        "dungeon_entrance",
+        "rock"
     ]
     __serialize_only__ = ["items", "walkable", "blocks_sight", "default_sprite_key", "stair", "stair_x", "stair_y"]
     def __init__(self, walkable=True, sprite_key="grass"):
@@ -556,13 +557,44 @@ class Map(Serializable):
                     print(f"Map file {self.filename}.txt not found, using default map")
                     self._generate_default()
             
+    def add_dirt_patches(self):
+        # Generate dirt patches using Perlin noise or random clusters
+        for i in range(100):
+            for j in range(100):
+                # Option 1: Perlin noise for smooth, natural dirt patches
+                noise_value = noise.snoise2(i * 0.1, j * 0.1, octaves=1)  # Adjust scale (0.1) for patch size
+                if noise_value > 0.2:  # Threshold for dirt
+                    self.grid[i][j] = Tile(walkable=True, sprite_key="dirt")
+                    
+    def add_trees(self):
+        # Add trees with slight clustering
+        for i in range(1, 99):
+            for j in range(1, 99):
+                # Base chance for a tree
+                tree_chance = 0.15
+                # Increase chance if neighboring tiles have trees (clustering)
+                for di, dj in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+                    if 0 <= i + di < 100 and 0 <= j + dj < 100:
+                        if self.grid[i + di][j + dj].default_sprite_key == "tree":
+                            tree_chance += 0.1
+                if random.random() < tree_chance:
+                    self.grid[i][j] = Tile(walkable=False, sprite_key="tree")
+    
+    def add_rocks(self):
+        for i in range(1, 99):
+            for j in range(1, 99):
+                if random.random() < 0.001:  # 2% chance for water
+                    self.grid[i][j] = Tile(walkable=False, sprite_key="water")
+                elif random.random() < 0.05:  # 5% chance for rocks
+                    self.grid[i][j] = Tile(walkable=False, sprite_key="rock")
+            
     def _generate_default(self):
         # inner floors, random trees
         self.grid = [ [Tile(walkable=True, sprite_key="grass") for j in range(100)] for i in range(100) ]
-        for i in range(1, 99):
-            for j in range(1, 99):
-                if random.random() < 0.2:  # 10% chance of wall
-                    self.grid[i][j] = Tile(walkable=False, sprite_key="tree") 
+        
+        self.add_dirt_patches()
+        self.add_trees()
+        self.add_rocks()
 
     def generate_procedural_dungeon(self, previous_map_coords, prev_x, prev_y, up=False):
         """
@@ -665,6 +697,8 @@ class Map(Serializable):
     
     def generate_procedural_field(self):
         self.grid = [[Tile(walkable=True, sprite_key="grass") for _ in range(100)] for _ in range(100)]
+        self.add_dirt_patches()
+        self.add_rocks()
         for i in range(100):
             for j in range(100):
                 n = noise.pnoise2(i * 0.1, j * 0.1, octaves=1, persistence=0.5, lacunarity=2.0)
@@ -675,6 +709,7 @@ class Map(Serializable):
                     
     def generate_procedural_road(self):
         self.grid = [[Tile(walkable=True, sprite_key="grass") for _ in range(100)] for _ in range(100)]
+        self.add_dirt_patches()
         # Vertical road with noise
         road_x = 50
         for y in range(100):
@@ -691,6 +726,7 @@ class Map(Serializable):
     
     def generate_procedural_lake(self):
         self.grid = [[Tile(walkable=True, sprite_key="grass") for _ in range(100)] for _ in range(100)]
+        self.add_dirt_patches()
         center_x, center_y = 50, 50
         for i in range(100):
             for j in range(100):
@@ -703,8 +739,8 @@ class Map(Serializable):
                 elif random.random() < 0.01:
                     self.grid[i][j].add_item(Food("Fish", nutrition=80))
 
-        # Add dungeon entrance with 30% probability
-        if random.random() < 0.3:
+        # Add dungeon entrance with 70% probability
+        if random.random() < 0.7:
             walkable_tiles = [(i, j) for i in range(100) for j in range(100)
                              if self.grid[i][j].walkable and self.grid[i][j].default_sprite == Tile.SPRITES["grass"]]
             if walkable_tiles:

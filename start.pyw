@@ -23,9 +23,9 @@ import random
 
 # third-party
 from PyQt5.QtMultimedia import QMediaPlayer, QMediaContent
-from PyQt5.QtWidgets import QApplication, QGraphicsView, QGraphicsScene, QGraphicsRectItem
-from PyQt5.QtCore import Qt, QRectF, QUrl
-from PyQt5.QtGui import QColor, QTransform
+from PyQt5.QtWidgets import QApplication, QGraphicsView, QGraphicsScene, QGraphicsRectItem, QGraphicsTextItem, QGraphicsOpacityEffect  
+from PyQt5.QtCore import Qt, QRectF, QUrl, QPropertyAnimation, QTimer
+from PyQt5.QtGui import QColor, QTransform, QFont
 
 # Set working directory to the script's directory
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
@@ -56,6 +56,13 @@ class Game(QGraphicsView, Serializable):
         self.rotation = 0  # degrees: 0, 90, 180, 270
         self.view_width = 7
         self.view_height = 7
+        
+        # Overlay for loading/transition indication
+        self.overlay_item = None
+        self.overlay_text = None
+        self.overlay_animation = None
+        self.is_processing = False  # Flag to prevent overlapping operations
+        
         # gV := Member Variables
         self.scene = QGraphicsScene()
         self.setScene(self.scene)
@@ -118,7 +125,7 @@ class Game(QGraphicsView, Serializable):
             print(f"Music file {music_path} not found")
         
         self.load_current_game()
-        
+         
     def from_dict(self, dictionary):
         if not super().from_dict(dictionary):
             return False
@@ -258,6 +265,8 @@ class Game(QGraphicsView, Serializable):
     
     def handle_stair_transition(self, target_map_coords, up):
         """Handle vertical map transition via stairs."""
+        self.show_processing_overlay("Transitioning...")
+        
         # variables
         previous_map_coords = self.current_map
         saves_dir = "./saves"
@@ -303,7 +312,7 @@ class Game(QGraphicsView, Serializable):
         self.dirty_tiles.clear()
         self.draw_grid()
         self.draw_hud()
-
+        
     def new_map_from_current_coords(self, filename_or_procedural_type = "default", prev_coords = None, up = False):
         self.scene.clear()
         self.tile_items.clear()
@@ -354,6 +363,7 @@ class Game(QGraphicsView, Serializable):
         
     def save_current_game(self, slot=1):
         """Save the current map to its JSON file and player state to a central file."""
+        # Delay the save operation slightly to allow fade-in
         try:
             # Ensure ./saves directory exists
             self.current_slot = slot  # Update current slot
@@ -375,7 +385,7 @@ class Game(QGraphicsView, Serializable):
             print(f"Error saving game: {e}")
             if os.path.exists(os.path.join(saves_dir, f"player_state_{slot}.json.bak")):
                 shutil.copy(os.path.join(saves_dir, f"player_state_{slot}.json.bak"), player_file)  # Restore backup
-            
+                
     def load_current_game(self, slot=1):
         """Load player state and current map from their respective JSON files."""
         saves_dir = "./saves"
