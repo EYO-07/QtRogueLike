@@ -32,47 +32,47 @@ from PyQt5.QtGui import QColor, QTransform, QFont
 # Set working directory to the script's directory
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
-class Game_Component__React:
-    def __init__(self):
-        self._current_day = 0  # Track current day for flag reset 
-        self._turn = 0  # Track turns
-    # .turn
-    @property
-    def turn(self):
-        return self._turn
-    @turn.setter
-    def turn(self, value):
-        self._turn = value
-        self.Event_NewTurn()
+# class Game_Component__React:
+    # def __init__(self):
+        # self._current_day = 0  # Track current day for flag reset 
+        # self._turn = 0  # Track turns
+    #.turn
+    # @property
+    # def turn(self):
+        # return self._turn
+    # @turn.setter
+    # def turn(self, value):
+        # self._turn = value
+        # self.Event_NewTurn()
     
-    # .current_day
-    @property
-    def current_day(self):
-        return self._current_day
-    @current_day.setter
-    def current_day(self, value):
-        self._current_day = value
-        self.Event_NewDay()
+    #.current_day
+    # @property
+    # def current_day(self):
+        # return self._current_day
+    # @current_day.setter
+    # def current_day(self, value):
+        # self._current_day = value
+        # self.Event_NewDay()
     
-    # Event Handlers 
-    def Event_NewTurn(self):
-        pass
+    #Event Handlers 
+    # def Event_NewTurn(self):
+        # pass
             
-    def Event_NewDay(self):
-        pass
+    # def Event_NewDay(self):
+        # pass
 
-class Game(QGraphicsView, Serializable, Game_Component__React):
+class Game(QGraphicsView, Serializable): #Game_Component__React):
     # -- class variables
     __serialize_only__ = [
         "version",
         "rotation",
         "player",
         "current_map", # map coords
-        "_turn",
+        "turn",
         "current_slot",
         "low_hp_triggered",
         "low_hunger_triggered",
-        "_current_day",
+        "current_day",
         "is_music_muted",
     ]
     
@@ -81,6 +81,8 @@ class Game(QGraphicsView, Serializable, Game_Component__React):
         super().__init__()
         self.version = "1.0.0"
         # --
+        self.turn = 0
+        self.current_day = 0
         self.turns_per_day = 2000
         self.low_hp_triggered = False  # Flag for low HP event
         self.low_hunger_triggered = False  # Flag for low hunger event
@@ -607,6 +609,7 @@ class Game(QGraphicsView, Serializable, Game_Component__React):
     def game_iteration(self):
         self.update_player()
         self.turn += 1
+        self.Event_NewTurn()
         self.process_events()
         self.update_enemies()
         self.update_messages()  # Critical: Update message window 
@@ -841,20 +844,14 @@ class Game(QGraphicsView, Serializable, Game_Component__React):
     # -- Reactive Events Handlers
     def Event_NewTurn(self):
         # triggers the new day
-        try:
-            if self.turn // self.turns_per_day + 1 > self.current_day:
-                self.current_day += 1
-        except:
-            pass 
+        print(f"Turn {self.turn}")
+        if self.turn // self.turns_per_day + 1 > self.current_day:
+            self.current_day += 1
+            self.Event_NewDay()
+        
     def Event_NewDay(self):
-        try:
-            self.low_hp_triggered = False
-            self.low_hunger_triggered = False
-            self.current_day = new_day
-            self.add_message(f"Day {self.current_day} begins")
-        except:
-            pass
-            
+        print(f"Day {self.current_day}")
+        
     def Event_PlayerDeath(self):
         print("Game Over!")
         try:
