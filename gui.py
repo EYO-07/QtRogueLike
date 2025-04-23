@@ -2,7 +2,7 @@
 
 # project
 from reality import *
-from config import *
+from globals_variables import *
 from events import *
 
 # built-in

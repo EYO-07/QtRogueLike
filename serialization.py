@@ -1,29 +1,60 @@
 # serialization.py 
 
-# WARNING !!! This class could cause infinite recursion !!! 
-
-# A.I. ChatGPT assisted !
-
-# DSL Logic [ Serializable Class ]
-# vS := Member Variables
-# mS := Member Methods 
-# 1. Serializable {}? || vS | mS
-# -> vS || $ (string) class_name | $ (set) _ignored_keys 
-# 2. mS || toData() | fromData() | Save_JSON() | Load_JSON() | _serialize() | _deserialize() | (static method) _get_class_by_name()
-# -> mS || toData() || Returns a Serialized Dictionary of self 
-# -> mS || ... | fromData(dictionary) || Reconstruct a Object from Serialized Dictionary
-# -> mS || ... | Save_JSON(filename) || Save a Serialized Dictionary of Self in JSON format 
-# -> mS || ... | Load_JSON(filename) || Load a JSON file | Reconstruct a Object from Serialized JSON file 
-# -> mS || ... | _serialize(value) || Helper Function to Address Nested, Listed or Dicted values
-# -> mS || ... | _deserialize(value,target) || Helper Function to Address Nested Complex Objects 
-# -> mS || ... | _get_class_by_name(name) || Helper Function to Create a Object by name 
-
 from pathlib import Path
 import tempfile, shutil, os, json
 import threading
 from collections import defaultdict
             
 class Serializable:
+    """
+    WARNING !!! This class could cause infinite saving process for cross referencing Serializables. Make sure only one class save the property. (oZumbiAnalitico) 
+    
+    A base class providing robust serialization and deserialization support for custom objects.
+
+    The `Serializable` class enables instances of derived classes to be saved to and loaded from 
+    JSON format while preserving their class identity, nested structure, and complex data types 
+    such as tuples, sets, and dictionaries.
+
+    Features:
+        - Automatic registration of subclasses for deserialization by class name.
+        - Configurable field selection for serialization using `__serialize_only__` or 
+          `__ignore_serialize__` class-level attributes.
+        - Thread-safe file saving with atomic writes via temporary files.
+        - Support for nested Serializable instances.
+        - Custom handling of compound data types: tuples, sets, frozensets, lists, and dicts.
+
+    Usage:
+        Subclass `Serializable` and optionally define:
+            - `__serialize_only__`: A list of attribute names to explicitly serialize.
+            - `__ignore_serialize__`: A list of attribute names to skip during serialization.
+
+        Call `Save_JSON(filename)` to serialize to a file.
+        Call `Load_JSON(filename)` to load an instance from a file.
+        Use `to_dict()` and `from_dict()` for manual control of (de)serialization.
+
+    Example:
+        class Character(Serializable):
+            def __init__(self, name, level):
+                super().__init__()
+                self.name = name
+                self.level = level
+                self.inventory = []
+
+        c = Character("Knight", 10)
+        c.Save_JSON("character.json")
+
+        c2 = Character("Placeholder", 0)
+        c2.Load_JSON("character.json")
+
+    Notes:
+        - The use of both `__serialize_only__` and `__ignore_serialize__` in the same class
+          is disallowed and will raise a ValueError.
+        - Player-controlled entities or real-time components may need custom logic to bypass
+          or override turn-based persistence mechanisms.
+
+    --- Documentation generated with the assistance of ChatGPT (OpenAI).
+    """
+    
     _registry = {}
     _registry_lock = threading.Lock()
     _file_locks = defaultdict(threading.Lock)

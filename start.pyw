@@ -4,7 +4,7 @@
 # -> gui.py
 # -----> reality.py
 # ---------> events.py 
-# ---------> config.py 
+# ---------> globals_variables.py 
 # ---------> serialization.py 
 
 # project
@@ -12,7 +12,7 @@ from serialization import *
 from reality import *
 from gui import *
 from events import * 
-from config import *
+from globals_variables import *
 
 # built-in
 import shutil
@@ -693,8 +693,11 @@ class Game(QGraphicsView, Serializable, Game_Component__React):
         key = event.key()
         dx, dy = 0, 0
         b_isForwarding = False
-        if key == Qt.Key_F: # weapon skill  
-            pass
+        if key == Qt.Key_F: # weapon special skill 
+            primary = self.player.primary_hand
+            if primary:
+                if hasattr(primary,"use_special"):
+                    primary.use_special(self.player, self.map)
         elif key == Qt.Key_N:
             self.take_note_on_diary()
             return 
@@ -838,15 +841,20 @@ class Game(QGraphicsView, Serializable, Game_Component__React):
     # -- Reactive Events Handlers
     def Event_NewTurn(self):
         # triggers the new day
-        if self.turn // self.turns_per_day + 1 > self.current_day:
-            self.current_day += 1
-        
+        try:
+            if self.turn // self.turns_per_day + 1 > self.current_day:
+                self.current_day += 1
+        except:
+            pass 
     def Event_NewDay(self):
-        self.low_hp_triggered = False
-        self.low_hunger_triggered = False
-        self.current_day = new_day
-        self.add_message(f"Day {self.current_day} begins")
-        
+        try:
+            self.low_hp_triggered = False
+            self.low_hunger_triggered = False
+            self.current_day = new_day
+            self.add_message(f"Day {self.current_day} begins")
+        except:
+            pass
+            
     def Event_PlayerDeath(self):
         print("Game Over!")
         try:

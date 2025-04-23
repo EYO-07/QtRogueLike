@@ -3,7 +3,7 @@
 # project
 from events import * 
 from serialization import * 
-from config import *
+from globals_variables import *
 
 # built-in
 import random
@@ -100,6 +100,16 @@ class Weapon(Equippable):
     def decrease_durability(self):
         self.damage = max(0,self.damage*self.durability_factor)
     
+class Sword(Weapon):
+    __serialize_only__ = Weapon.__serialize_only__ 
+    def __init__(self, name="", damage=0 ,description="", weight=1, stamina_consumption=1, durability_factor=0.995):
+        super().__init__(name, damage, description, weight, stamina_consumption, durability_factor)
+    def use_special(self, player, map):
+        # knight chess attack 
+        print("Player: ", player.x, player.y)
+        for dx,dy in CHESS_KNIGHT_DIFF_MOVES:
+            print( player.x+dx, player.y+dy )
+
 class Food(Item):
     __serialize_only__ = Item.__serialize_only__+["nutrition"]
     def __init__(self, name="", nutrition=0, description="", weight=1):
@@ -155,6 +165,9 @@ class Character(Container):
         self.waist = None
         self.legs = None
         self.foot = None
+        
+        # used to slowdown a character by checking if turns % self.update_turn: return 
+        self.update_turn = 1 
     
     def equip_item(self, item, slot): 
         if isinstance(item, Equippable) and item.slot == slot:
@@ -218,6 +231,30 @@ class Character(Container):
         self.add_item(item_instance) 
         return item_instance
 
+    def turn_update(self, game_turns_counter):
+        """
+        Determines whether this entity should perform its update logic
+        on the current game turn.
+
+        This is useful in a turn-based system where not all entities 
+        act on every game tick. For example, an entity with 
+        `self.update_turn = 3` would act only every 3 turns.
+
+        Usage:        
+            On derived class use, 
+            
+            def turn_update(self, game_turns_counter):
+                if not super().update(game_turns_counter): return False
+                # return True if the entity should update, False otherwise.
+        Args:
+            game_turns_counter (int): The current global turn count of the game.
+
+        Returns:
+            bool: True if the entity should update this turn, False otherwise.
+        """
+        if game_turns_counter % self.update_turn: return False
+        return True
+
 class Player(Character):
     __serialize_only__ = Character.__serialize_only__+["stamina","max_stamina","hunger","max_hunger"]
     def __init__(self, name="", hp=PLAYER_MAX_HP, x=MAP_WIDTH//2, y=MAP_HEIGHT//2, b_generate_items = True):
@@ -258,8 +295,7 @@ class Player(Character):
         self.hp = min(self.hp + 1, self.max_hp) 
     
     def generate_initial_items(self):
-        self.equip_item(Weapon("Long_Sword", damage=10), "primary_hand")
-        #self.equip_item(Weapon("Long_Sword", damage=10), "primary_hand")
+        self.equip_item(Sword("Long_Sword", damage=10), "primary_hand")
         self.add_item(Food("Apple", nutrition=50))
         self.add_item(Food("Apple", nutrition=50))
         self.add_item(Food("Apple", nutrition=50))
@@ -305,7 +341,7 @@ class Enemy(Character):
                             pass #print(f"Enemy {self.name} moved to ({self.x}, {self.y}) via pathfinding")
                     elif tile.current_char is player:
                         game.events.append(AttackEvent(self, player, self.calculate_damage_done()))
-                        print(f"Enemy {self.name} attacking player")
+                        #print(f"Enemy {self.name} attacking player")
             else:
                 print(f"No path found to player from ({self.x}, {self.y})")            
         else:
@@ -334,6 +370,9 @@ class Enemy(Character):
         except KeyError:
             print("Warning: Enemy sprite not found")
             return QPixmap()  # Fallback
+
+class Prey(Character):
+    pass
 
 class Zombie(Enemy):
     __serialize_only__ = Enemy.__serialize_only__
@@ -368,7 +407,7 @@ class Rogue(Enemy):
         return damage    
 
     def generate_initial_items(self):
-        self.equip_item(Weapon("Long_Sword", damage=10), "primary_hand")
+        self.equip_item(Sword("Long_Sword", damage=10), "primary_hand")
         if random.random() < 0.3:
             self.add_item(Food("bread", nutrition=random.randint(50, 100)))
 
@@ -378,6 +417,12 @@ class Rogue(Enemy):
         except KeyError:
             print("Warning: Rogue sprite not found")
             return QPixmap()
+
+class Bear(Enemy):
+    pass 
+    
+class Dear(Prey):
+    pass 
 
 # --- END 
 
