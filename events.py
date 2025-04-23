@@ -1,4 +1,5 @@
 # events.py
+from config import *
 
 class Event:
     def __init__(self, priority=0):

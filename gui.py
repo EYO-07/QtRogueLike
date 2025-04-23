@@ -2,6 +2,8 @@
 
 # project
 from reality import *
+from config import *
+from events import *
 
 # built-in
 import os
@@ -66,11 +68,49 @@ class JournalWindow(QDialog):
         button_layout.addWidget(self.log_button)
 
         self.setLayout(self.layout)
-        self.setFixedSize(300, 400)  # Similar size to InventoryWindow
+        self.setFixedSize(400, 400)  # Similar size to InventoryWindow
         self.hide()  # Hidden by default
         self.update_position()
         if self.parent():
             self.parent().setFocus()
+
+    def whereAmI(self):
+        player = self.parent().player
+        if not player: return ""
+        parent = self.parent()
+        if not parent: return ""
+        map = parent.map 
+        if not map: return ""
+        dx = map.width//3
+        dy = map.height//3
+        X_1 = dx 
+        X_2 = 2*dx 
+        Y_1 = dy 
+        Y_2 = 2*dy
+        x = player.x 
+        y = player.y 
+        if x<X_1: # west
+            if y<Y_1: # northwest
+                return "I'm on northwest part of this region, where should I go ? ..." 
+            elif y<Y_2: # west
+                return "I'm (going to/in) west, let's see what I find ..." 
+            else: # southwest
+                return "I'm on southwest part of this region, where should I go ? ..." 
+        elif x<X_2: # middle x
+            if y<Y_1: # north 
+                return "I'm (going to/in) north, let's see what I find ..."
+            elif y<Y_2: # middle 
+                return "Feeling lost, I'm in the middle of nowhere, should walk for a while until I find something ..."
+            else: # south
+                return "I'm (going to/in) south, let's see what I find ..."
+        else: # east
+            if y<Y_1: # northeast
+                return "I'm on northeast part of this region, where should I go ? ..." 
+            elif y<Y_2: # east
+                return "I'm (going to/in) east, let's see what I find ..."
+            else: # southest
+                return "I'm on southeast part of this region, where should I go ? ..."
+        return ""
 
     def update_position(self):
         """Position the journal window to the right of the parent window, vertically centered."""
@@ -120,8 +160,31 @@ class JournalWindow(QDialog):
         # timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         entry = (
             f"Day {day}, Map {map_coords}, Position ({self.parent().player.x},{self.parent().player.y})\n"
-            f"{special_text}\n"
-            f"\n\n"
+            f"{special_text} {self.whereAmI()}\n"
+        )
+        self.append_text(entry)
+        self.parent().add_message("Diary entry logged")
+    
+    def log_quick_diary_entry(self):
+        """Create a formatted diary entry with day, map coordinates, and special event text."""
+        if not self.parent():
+            return
+        # Calculate day (1 day = 1000 turns)
+        day = self.parent().turn // 1000 + 1
+        map_coords = self.parent().current_map
+        # Collect special event texts based on flags
+        special_texts = []
+        if getattr(self.parent(), 'low_hp_triggered', False):
+            special_texts.append("I almost died, that enemy was tough, bastard.")
+            self.parent().low_hp_triggered = False  # Reset flag
+        if getattr(self.parent(), 'low_hunger_triggered', False):
+            special_texts.append("I’m hungry, I need food right now, I could eat a horse.")
+            self.parent().low_hunger_triggered = False  # Reset flag
+        special_text = "\n".join(special_texts) if special_texts else "All is calm for now."
+        # Format entry
+        # timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        entry = (
+            f"Position {map_coords} {self.parent().player.x},{self.parent().player.y} {special_text} {self.whereAmI()}\n"
         )
         self.append_text(entry)
         self.parent().add_message("Diary entry logged")
@@ -154,7 +217,7 @@ class JournalWindow(QDialog):
         #timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         current_text = self.text_edit.toPlainText()
         new_text = f"{text}\n" if current_text else f"{text}"
-        self.text_edit.setPlainText(current_text + new_text)
+        self.text_edit.setPlainText(current_text.rstrip("\n") +2*"\n" + new_text)
         cursor = self.text_edit.textCursor()
         cursor.movePosition(QTextCursor.End)
         self.text_edit.setTextCursor(cursor)
@@ -322,7 +385,7 @@ class InventoryWindow(QDialog):
         self.layout.addLayout(button_layout)
         self.setLayout(self.layout)
         # Initial size
-        self.setFixedSize(280, 400)
+        self.setFixedSize(400, 400)
         self.setWindowTitle("Inventory")
         self.hide()  # Hidden by default
         self.parent().setFocus()
@@ -331,46 +394,63 @@ class InventoryWindow(QDialog):
         if self.parent():
             self.parent().setFocus()
 
+    def label_for(self,game_item):
+        if isinstance(game_item, WeaponRepairTool):
+            return f"{game_item.name} : {game_item.uses} [uses] : {game_item.weight} [kg]"
+        # Food
+        if isinstance(game_item, Food):
+            return f"{game_item.name} : {game_item.nutrition} [nutrition] : {game_item.weight} [kg]"
+        # Weapon
+        if isinstance(game_item, Weapon):
+            return f"{game_item.name} : {game_item.damage} [dmg] : {game_item.slot} : {game_item.weight} [kg]"
+        # Common Equippable 
+        if isinstance(game_item, Equippable):
+            return f"{game_item.name} : {game_item.slot} : {game_item.weight} [kg]"
+        # Common Item
+        if isinstance(game_item, Item):
+            return f"{game_item.name} : {game_item.weight} [kg]"
+        return "Default Label"
+    
     def update_inventory(self, player):
         """Update the list with the player's current items."""
         self.player = player  # Store player reference
         self.list_widget_objects.clear()
         self.list_widget.clear()
         for item in player.items:            
-            self.list_widget.addItem(f"{item.name} ({item.weight}kg)")
+            self.list_widget.addItem( self.label_for(item) )
             self.list_widget_objects.append(item)
         # equipped 
         b_equipped = False
         if player.primary_hand:
-            self.list_widget.addItem(f"* {player.primary_hand.name} ({player.primary_hand.damage}damage)")  
+            self.list_widget.addItem( "* "+self.label_for(player.primary_hand) )  
             self.list_widget_objects.append(player.primary_hand)
             b_equipped = True
         if player.secondary_hand:            
-            self.list_widget.addItem(f"* {player.secondary_hand.name} ({player.secondary_hand.weight}kg)")  
+            self.list_widget.addItem( "* "+self.label_for(player.secondary_hand) )  
             self.list_widget_objects.append(player.secondary_hand)
             b_equipped = True
         if player.head:            
-            self.list_widget.addItem(f"* {player.head.name} ({player.head.weight}kg)")  
+            self.list_widget.addItem( "* "+self.label_for(player.head) )  
             self.list_widget_objects.append(player.head)
             b_equipped = True
         if player.neck:            
-            self.list_widget.addItem(f"* {player.neck.name} ({player.neck.weight}kg)")  
+            self.list_widget.addItem( "* "+self.label_for(player.neck) )  
             self.list_widget_objects.append(player.neck)
             b_equipped = True
         if player.torso:
-            self.list_widget.addItem(f"* {player.torso.name} ({player.torso.weight}kg)")  
+            self.list_widget.addItem( "* "+self.label_for(player.torso) )
             self.list_widget_objects.append(player.torso)
             b_equipped = True
         if player.waist:
-            self.list_widget.addItem(f"* {player.waist.name} ({player.waist.weight}kg)")  
+            self.list_widget.addItem( "* "+self.label_for(player.waist) )
             self.list_widget_objects.append(player.waist)
             b_equipped = True
         if player.legs:
-            self.list_widget.addItem(f"* {player.legs.name} ({player.legs.weight}kg)")  
+            self.list_widget.addItem( "* "+self.label_for(player.legs) )
             self.list_widget_objects.append(player.legs)
             b_equipped = True
         if player.foot:            
-            self.list_widget.addItem(f"* {player.foot.name} ({player.foot.weight}kg)")  
+            self.list_widget.addItem( "* "+self.label_for(player.foot) )
             self.list_widget_objects.append(player.foot)
             b_equipped = True
         
@@ -431,15 +511,16 @@ class InventoryWindow(QDialog):
                         self.parent().add_message(f"Cannot equip {game_item.name}")
                     self.update_inventory(self.player)  # Refresh list
                 elif isinstance(game_item, Item):
-                    if game_item.use(self.player):
-                        self.player.items.pop( self.player.getItemIndex(game_item) )
-                        self.parent().add_message(f"{game_item.name} used")
+                    if game_item in self.player.items:                    
+                        self.parent().events.append(UseItemEvent(self.player, game_item))
+                        #self.parent().add_message(f"{game_item.name} used")
                 else:
                     self.parent().add_message(f"{game_item.name} is not equippable or usable")
             else: # equipped
                 if isinstance(game_item, Equippable):
                     self.parent().add_message(f"Unequipped")
                     self.player.unequip_item(game_item.slot)
+            self.parent().game_iteration() 
         self.update_inventory(self.player) # Refresh list            
         self.parent().setFocus()  # Return focus to game
 
@@ -469,6 +550,7 @@ class InventoryWindow(QDialog):
                 self.parent().draw_grid()  # Update grid
             else:
                 self.parent().add_message("Cannot drop item: invalid tile")
+            self.parent().game_iteration() 
         self.parent().setFocus()  # Return focus to game    
 
 

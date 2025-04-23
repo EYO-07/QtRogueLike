@@ -176,8 +176,8 @@ class Serializable:
         else:
             return (k for k in self.__dict__.keys() if k not in self._ignored_keys)
 
-    def __repr__(self):
-        return f"<{self.__class__.__name__} {self.to_dict()}>"
+    # def __repr__(self):
+        # return f"<{self.__class__.__name__} {self.to_dict()}>"
 
     @staticmethod
     def _get_class_by_name(name):

@@ -4,6 +4,7 @@
 # -> gui.py
 # -----> reality.py
 # ---------> events.py 
+# ---------> config.py 
 # ---------> serialization.py 
 
 # project
@@ -11,6 +12,7 @@ from serialization import *
 from reality import *
 from gui import *
 from events import * 
+from config import *
 
 # built-in
 import shutil
@@ -125,7 +127,10 @@ class Game(QGraphicsView, Serializable):
             print(f"Music file {music_path} not found")
         
         self.load_current_game()
-         
+    
+    def init_ui(self):
+        pass 
+    
     def from_dict(self, dictionary):
         if not super().from_dict(dictionary):
             return False
@@ -220,14 +225,21 @@ class Game(QGraphicsView, Serializable):
             else:
                 print(f"Loading Map from Saved File {self.current_map}")
                 self.add_message(f"Loading Map {self.current_map}")
+                # if self.player.current_tile.stair_x:
+                    # return self.player.current_tile.stair_x, self.player.current_tile.stair_y
         else:
             print(f"Loading Map from Cache {self.current_map}")
             self.add_message(f"Loading Map {self.current_map}")
             self.map = self.maps[self.current_map]
+            # if self.player.current_tile.stair_x:
+                # return self.player.current_tile.stair_x, self.player.current_tile.stair_y
         self.enemies[self.current_map] = self.map.enemies 
         return None, None
     
     def check_horizontal_map_transition(self,x,y):
+        self.events.clear()
+        self.save_current_game(slot=self.current_slot)
+        # print(">>> ", self.map, self.current_map)
         new_x, new_y, new_map_coord = self.player_new_x_y_horizontal(x,y)
         if not new_map_coord: return 
         saves_dir = "./saves"
@@ -241,14 +253,13 @@ class Game(QGraphicsView, Serializable):
         self.player.x = new_x
         self.player.y = new_y
         # check if the map already in self.maps
-        map_type = random.choice(["procedural_lake", "procedural_field", "procedural_road"])
+        map_type = random.choice(["procedural_lake", "procedural_field", "procedural_road", "procedural_forest"])
         self.map_transition(new_map_file, new_map_coord, map_type)
         # placing character to the new map 
         if not self.map.place_character(self.player):
             print(f"Error: Failed to place player at ({self.player.x}, {self.player.y})")
             self.player.x, self.player.y = self.map.width // 2, self.map.height // 2
             self.map.place_character(self.player)
-        self.save_current_game(slot=1)
         self.scene.clear()
         self.dirty_tiles.clear()
         self.draw_grid()
@@ -265,49 +276,50 @@ class Game(QGraphicsView, Serializable):
     
     def handle_stair_transition(self, target_map_coords, up):
         """Handle vertical map transition via stairs."""
-        self.show_processing_overlay("Transitioning...")
-        
-        # variables
-        previous_map_coords = self.current_map
+        self.events.clear()
+        self.save_current_game(slot=self.current_slot)
+        if not self.player.current_tile:
+            print("please update the current_tile on char")
+        # Variables
         saves_dir = "./saves"
-        previous_map_file = os.path.join(saves_dir, f"map_{'_'.join(map(str, previous_map_coords))}_1.json")
-        current_tile = self.map.get_tile(self.player.x, self.player.y)
-        prev_x, prev_y = self.player.x, self.player.y
-        
-        # check coords if is a tuple 
-        if not isinstance(target_map_coords, tuple):
-            print(f"Error: target_map {target_map_coords} is not a tuple")
-            self.add_message("Cannot use stair: Invalid map coordinates")
-            return
-        self.add_message(f"Using stairs to map {target_map_coords}")
-        
-        # removes the character from previous map
+        new_map_coord = target_map_coords
+        previous_map_file = os.path.join(saves_dir, f"map_{'_'.join(map(str, self.current_map))}_1.json")
+        new_map_file = os.path.join(saves_dir, f"map_{'_'.join(map(str, new_map_coord))}_1.json")
+        prev_x = self.player.x 
+        prev_y = self.player.y 
+        new_x = self.player.current_tile.stair_x
+        new_y = self.player.current_tile.stair_y 
+        prev_map_coord = self.map.coords
+        prev_tile = self.player.current_tile 
+        # Remove the Player and Save the Current Map 
         self.map.remove_character(self.player)
-
-        # Save Previous Map 
         self.map.Save_JSON(previous_map_file)
+        # update player position from the stair 
+        self.player.x = new_x
+        self.player.y = new_y
         
-        # update 
-        self.current_map = target_map_coords
-        new_map_file = os.path.join(saves_dir, f"map_{'_'.join(map(str, self.current_map))}_1.json")
-        new_coords = self.map_transition(new_map_file, target_map_coords, "procedural_dungeon", previous_map_coords, up)
-        # Find the stair tile linking back to the previous map
-        stair_pos = self.find_stair_tile(self.map, previous_map_coords)
-        if stair_pos:
-            self.player.x, self.player.y = stair_pos
-        else:
-            print(f"Warning: No stair tile found on map {self.current_map} linking to {previous_map_coords}")
-            self.player.x, self.player.y = self.map.width // 2, self.map.height // 2
-            
-        if new_coords[0]:
-            self.player.x, self.player.y = new_coords[0], new_coords[1]
-        # placing the character
-        if not self.map.place_character(self.player):
-            print(f"Error: Failed to place player at ({self.player.x}, {self.player.y}) on map {self.current_map}")
-            self.player.x, self.player.y = self.map.width // 2, self.map.height // 2
-            self.map.place_character(self.player)
-        self.save_current_game(slot=1)
-        print(f"handle_stair_transition(): Current Map Coords: {self.current_map}")
+        # do map transition || ?
+        # do map transition || % old map | % new map || make the stairs from each map points to each other | transitioning
+        # do map transition || % old map || % cached | % loaded || load and use the info on the stair to do the transition
+        # do map transition || % old map || % cached || use the info on the stair to do the transition 
+        
+        # if a new map was created the test_x and test_y must be used to update the player position and the previous tile must be updated and the map saved again
+        test_x, test_y = self.map_transition(new_map_file, new_map_coord, "procedural_dungeon", prev_map_coord, up) 
+        if test_x:
+            self.player.x = test_x
+            self.player.y = test_y
+            prev_tile.stair_x = test_x 
+            prev_tile.stair_y = test_y 
+            if self.map.place_character(self.player):
+                new_tile = self.player.current_tile
+                new_tile.stair_x = prev_x
+                new_tile.stair_y = prev_y
+            self.maps[prev_map_coord].Save_JSON(previous_map_file) # save with the updated tile 
+            self.maps[new_map_coord].Save_JSON(new_map_file) 
+        else: # old map
+            if not self.map.place_character(self.player):
+                print(">>> Failed to Place Character")
+        # Update of Game Scene 
         self.scene.clear()
         self.dirty_tiles.clear()
         self.draw_grid()
@@ -318,6 +330,7 @@ class Game(QGraphicsView, Serializable):
         self.tile_items.clear()
         self.events = []
         self.map = Map(filename_or_procedural_type, coords=self.current_map, previous_coords = prev_coords, going_up = up)
+        self.maps[self.current_map] = self.map # update the cached maps 
         self.fill_enemies(100)
         return self.map.starting_x, self.map.starting_y 
         
@@ -342,7 +355,7 @@ class Game(QGraphicsView, Serializable):
         # Initialize and clear journal
         if not self.journal_window:
             self.journal_window = JournalWindow(self)
-            self.journal_window.append_text("Day 0 - The world was affected by the plague, why? Maybe I should've prayed more instead of living with mercenaries and whores, God don't look to us now, and there is no church to pray anymore. Almost every one has transformed to walking deads, their flesh is putrid and their hunger insatiable, strange enough, before they lose their minds, they try desesperately to find food to satiate the hunger, so it's almost certain that I will find some with them, I'm starving. \n\nI should check myself, I'm almost losing my mind too. If I'm right, to move use A,W,S,D, Left, Right, to attack moves forward (only), to enter or use stairs press C, to open inventory press I, to open journal press J. \n\nI need to find food ...")
+            self.journal_window.append_text("Day 0 - The world was affected by the plague, why? Maybe I should've prayed more instead of living with mercenaries and whores, God don't look to us now, and there is no church to pray anymore. Almost every one has transformed to walking deads, their flesh is putrid and their hunger insatiable, strange enough, before they lose their minds, they try desesperately to find food to satiate the hunger, so it's almost certain that I will find some with them, I'm starving. \n\nI should check myself, I'm almost losing my mind too. If I'm right, to move use A,W,S,D, Left, Right, to attack moves forward (only), to enter or use stairs press C, to open inventory press I, to open journal press J. I should take notes often, press N to write a quick note. \n\nI need to find food ...")
         if not self.journal_window.isVisible():
             self.journal_window.show()
             self.journal_window.update_position()
@@ -684,16 +697,29 @@ class Game(QGraphicsView, Serializable):
                         #self.save_current_game(slot=1)  # Autosave on pickup
             elif isinstance(event, UseItemEvent):
                 if event.item.use(event.character):
-                    event.character.remove_item(event.item)
+                    if hasattr(event.item,"uses"):
+                        self.add_message(f"{event.item.name} used")
+                        if event.item.uses <0:
+                            event.character.remove_item(event.item)
+                    else:
+                        event.character.remove_item(event.item)
+                        self.add_message(f"{event.item.name} used")
                     self.draw_hud()
-                    #self.save_current_game(slot=1)  # Autosave on item use
+                else:
+                    self.add_message("Nevermind ...")
         self.events.clear()
     
     def resolve_attack(self, event):
         event.target.hp -= event.damage
         if not event.target is self.player:
+            self.add_message(f"{event.attacker.name} deals {event.damage} damage to {event.target.name}")
             if self.player.primary_hand:
+                # weapon stamina consumption
                 self.player.stamina = max(0, self.player.stamina - self.player.primary_hand.stamina_consumption)
+                # weaopn durability consumption 
+                self.player.primary_hand.decrease_durability()
+                if self.player.primary_hand.damage < 0.5: self.player.primary_hand = None
+                self.update_inv_window()
         if event.target.hp <= 0:
             if event.target is self.player:
                 # print("Game Over!")
@@ -712,7 +738,6 @@ class Game(QGraphicsView, Serializable):
                 if self.current_map in self.enemies and event.target in self.enemies[self.current_map]:
                     self.enemies[self.current_map].remove(event.target)
                 event.target.current_tile.current_char = None
-        self.add_message(f"{event.attacker.name} deals {event.damage} damage to {event.target.name}")
         
     # Rotation for drawing (camera)
     def rotate_vector_for_camera(self, dx, dy):
@@ -759,12 +784,34 @@ class Game(QGraphicsView, Serializable):
     # gE := Event Handlers
     def resizeEvent(self, event):
         self.fitInView(self.scene.sceneRect(), Qt.KeepAspectRatio)
-        
+    
+    def update_inv_window(self):
+        if self.inventory_window: 
+            if self.inventory_window.isVisible():
+                self.inventory_window.update_inventory(self.player)
+                self.setFocus()
+    
+    def take_note_on_diary(self):
+        if not self.journal_window:
+            self.journal_window = JournalWindow(self) 
+        if self.journal_window.isVisible():
+            self.journal_window.log_quick_diary_entry()
+        else:
+            self.journal_window.load_journal(self.current_slot)  # Refresh contents
+            self.journal_window.log_quick_diary_entry()
+            self.journal_window.show()
+            self.journal_window.update_position()
+        self.journal_window.save_journal()
+        self.setFocus()
+    
     def keyPressEvent(self, event):
         key = event.key()
         dx, dy = 0, 0
         b_isForwarding = False
-        if key == Qt.Key_J:  # Toggle journal window
+        if key == Qt.Key_N:
+            self.take_note_on_diary()
+            return 
+        elif key == Qt.Key_J:  # Toggle journal window
             if not self.journal_window:
                 self.journal_window = JournalWindow(self)
             if self.journal_window.isVisible():
@@ -826,10 +873,7 @@ class Game(QGraphicsView, Serializable):
                     self.events.append(UseItemEvent(self.player, item))
                     self.game_iteration()
                     break
-            if self.inventory_window: 
-                if self.inventory_window.isVisible():
-                    self.inventory_window.update_inventory(self.player)
-                    self.setFocus()
+            self.update_inv_window()
             return    
         elif key == Qt.Key_G:  # Pickup items
             tile = self.map.get_tile(self.player.x, self.player.y)
@@ -837,10 +881,7 @@ class Game(QGraphicsView, Serializable):
                 self.events.append(PickupEvent(self.player, tile))
                 self.dirty_tiles.add((self.player.x, self.player.y))  # Redraw tile
                 self.game_iteration()
-            if self.inventory_window: 
-                if self.inventory_window.isVisible():
-                    self.inventory_window.update_inventory(self.player)
-                    self.setFocus()
+            self.update_inv_window()
             return
         elif key == Qt.Key_F5:
             self.save_current_game(slot=1)
@@ -873,33 +914,11 @@ class Game(QGraphicsView, Serializable):
                 return
         
         elif key == Qt.Key_F1:  # Debugging: Place a stair_down at player's position
-            current_x, current_y, current_z = self.current_map
-            target_map = (current_x, current_y, current_z - 1)
-            tile = self.map.get_tile(self.player.x, self.player.y)
-            if tile:
-                # Remove any existing character or items to simplify
-                tile.current_char = None  # Temporarily remove player
-                tile.items.clear()
-                # Set stair properties
-                tile.walkable = True
-                tile.default_sprite_key = "dungeon_entrance"
-                tile.get_default_pixmap()
-                tile.stair = target_map
-                # Place player back
-                tile.current_char = self.player
-                self.player.current_tile = tile
-                # Save the map to persist the stair
-                saves_dir = "./saves"
-                map_file = os.path.join(saves_dir, f"map_{'_'.join(map(str, self.current_map))}_1.json")
-                self.map.Save_JSON(map_file)
-                self.add_message(f"Placed stair_down at ({self.player.x}, {self.player.y}) leading to {target_map}")
-                # Mark tile for redraw
-                self.dirty_tiles.add((self.player.x, self.player.y))
-                self.scene.clear()
+            #self.player.add_item(WeaponRepairTool("whetstone"))
+            if self.map.add_dungeon_entrance_at(self.player.x, self.player.y):
+                self.dirty_tiles.add((self.player.x, self.player.y))  # Redraw tile
                 self.draw_grid()
                 self.draw_hud()
-                return
-
         else:
             self.game_iteration()
             return 
