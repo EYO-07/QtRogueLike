@@ -31,76 +31,96 @@ from PyQt5.QtGui import QColor, QTransform, QFont
 
 # Set working directory to the script's directory
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
-print(f"Working directory set to: {os.getcwd()}")
 
-class Game(QGraphicsView, Serializable):
-    # -- class variables
-    instance = None  # Temporary singleton for Enemy access
+class Game_Component__React:
+    def __init__(self):
+        self._current_day = 0  # Track current day for flag reset 
+        self._turn = 0  # Track turns
+    # .turn
+    @property
+    def turn(self):
+        return self._turn
+    @turn.setter
+    def turn(self, value):
+        self._turn = value
+        self.Event_NewTurn()
     
+    # .current_day
+    @property
+    def current_day(self):
+        return self._current_day
+    @current_day.setter
+    def current_day(self, value):
+        self._current_day = value
+        self.Event_NewDay()
+    
+    # Event Handlers 
+    def Event_NewTurn(self):
+        pass
+            
+    def Event_NewDay(self):
+        pass
+
+class Game(QGraphicsView, Serializable, Game_Component__React):
+    # -- class variables
     __serialize_only__ = [
         "version",
         "rotation",
         "player",
         "current_map", # map coords
-        "turn",
+        "_turn",
         "current_slot",
         "low_hp_triggered",
         "low_hunger_triggered",
-        "current_day",
+        "_current_day",
         "is_music_muted",
     ]
     
-    # -- 
+    # -- inits
     def __init__(self):
         super().__init__()
         self.version = "1.0.0"
-        self.setFocusPolicy(Qt.StrongFocus)  # Ensure Game accepts focus
-        self.rotation = 0  # degrees: 0, 90, 180, 270
-        self.view_width = 7
-        self.view_height = 7
-        
-        # Overlay for loading/transition indication
-        self.overlay_item = None
-        self.overlay_text = None
-        self.overlay_animation = None
-        self.is_processing = False  # Flag to prevent overlapping operations
-        
-        # gV := Member Variables
-        self.scene = QGraphicsScene()
-        self.setScene(self.scene)
-        self.tile_size = 70
-        self.grid_width = 100
-        self.grid_height = 100
+        # --
+        self.turns_per_day = 2000
+        self.low_hp_triggered = False  # Flag for low HP event
+        self.low_hunger_triggered = False  # Flag for low hunger event
+        # --
+        self.init_viewport()
+        self.init_gui()
+        # -- 
         self.player = Player()
-        #self.player = Player("Adventurer", 100, 50, 50, False)
         self.current_map = (0,0,0) # Current map coordinates
         self.map = Map()
         self.maps = {(0,0,0):self.map}  # Store Map objects with coordinate keys
         # Create and place characters
         self.events = []  # Initialize events list
         self.enemies = {(0, 0, 0): []}  # Dictionary with map coords as keys, enemy lists as values
-        self.turn = 0  # Track turns
-        
         # Initial render
         self.dirty_tiles = set()  # Track tiles that need redrawing
         self.tile_items = {}  # For optimized rendering
+        self.current_slot = 1  # Track current save slot
+        self.load_current_game()
+    def init_viewport(self):
+        self.grid_width = MAP_WIDTH
+        self.grid_height = MAP_HEIGHT
+        self.rotation = 0  # degrees: 0, 90, 180, 270
+        self.view_width = 7
+        self.view_height = 7
+        self.scene = QGraphicsScene()
+        self.setScene(self.scene)
+        self.tile_size = 70 
+    def init_gui(self):
+        # init_view_port() | init_gui() 
+        self.setFocusPolicy(Qt.StrongFocus)  # Ensure Game accepts focus
         self.setWindowTitle("PyQt Rogue Like")
         self.setFixedSize(self.view_width * self.tile_size, self.view_height * self.tile_size)
-        Game.instance = self
-        
+        # --
         self.inventory_window = None  # Initialize later on demand
         # Initialize message window
         self.message_popup = MessagePopup(self)  # Set Game as parent
         self.messages = []  # List of (message, turns_remaining) tuples
-        
         # Add journal window
         self.journal_window = None
-        self.current_slot = 1  # Track current save slot
-        self.low_hp_triggered = False  # Flag for low HP event
-        self.low_hunger_triggered = False  # Flag for low hunger event
-        self.current_day = 1  # Track current day for flag reset
-        self.turns_per_day = 1000  # 1 day = 1000 turns
-        
         # Initialize music player
         self.music_player = QMediaPlayer()
         self.is_music_muted = False
@@ -126,11 +146,7 @@ class Game(QGraphicsView, Serializable):
             self.add_message(f"Music file {music_path} not found")
             print(f"Music file {music_path} not found")
         
-        self.load_current_game()
-    
-    def init_ui(self):
-        pass 
-    
+    # -- overrides
     def from_dict(self, dictionary):
         if not super().from_dict(dictionary):
             return False
@@ -138,6 +154,7 @@ class Game(QGraphicsView, Serializable):
             self.maps[self.current_map].place_character(self.player)
         return True
     
+    # -- gui helpers
     def handle_media_status(self, status):
         """Handle media status changes to start playback when loaded."""
         if status == QMediaPlayer.LoadedMedia and not self.is_music_muted:
@@ -146,7 +163,6 @@ class Game(QGraphicsView, Serializable):
         elif status == QMediaPlayer.InvalidMedia:
             self.add_message("Music failed: Invalid media")
             print("Music failed: Invalid media")
-    
     def toggle_music(self):
         """Toggle music mute state."""
         self.is_music_muted = not self.is_music_muted
@@ -161,15 +177,12 @@ class Game(QGraphicsView, Serializable):
             else:
                 self.add_message("Music not ready, will play when loaded")
                 print("Music not ready, waiting for LoadedMedia state")
-    
     def add_message(self, message, turns=5):
         """Add a message to the queue."""
         self.messages.append((message, turns))
         # Update pop-up with all active messages
         active_messages = [msg for msg, _ in self.messages]
         self.message_popup.set_message(active_messages)
-        # print(f"Added message: '{message}' for {turns} turns, queue: {self.messages}")
-        
     def update_messages(self):
         """Update message queue and refresh pop-up."""
         #print(f"Updating messages, current queue: {self.messages}")
@@ -181,21 +194,25 @@ class Game(QGraphicsView, Serializable):
         # Update pop-up with active messages
         active_messages = [msg for msg, _ in self.messages]
         self.message_popup.set_message(active_messages)
-        #print(f"Active messages: {active_messages}")  
+    def update_inv_window(self):
+        if self.inventory_window: 
+            if self.inventory_window.isVisible():
+                self.inventory_window.update_inventory(self.player)
+                self.setFocus()
+    def take_note_on_diary(self):
+        if not self.journal_window:
+            self.journal_window = JournalWindow(self) 
+        if self.journal_window.isVisible():
+            self.journal_window.log_quick_diary_entry()
+        else:
+            self.journal_window.load_journal(self.current_slot)  # Refresh contents
+            self.journal_window.log_quick_diary_entry()
+            self.journal_window.show()
+            self.journal_window.update_position()
+        self.journal_window.save_journal()
+        self.setFocus()
     
-    def closeEvent(self, event):
-        """Save the game state when the window is closed."""
-        try:
-            self.add_message("Saving game before exit...")
-            self.save_current_game(slot=1)
-        except Exception as e:
-            self.add_message(f"Error saving game on exit: {e}")
-            print(f"Error saving game on exit: {e}")
-        self.message_popup.close()
-        if self.inventory_window:
-            self.inventory_window.close()
-        event.accept()
-
+    # -- map transition helpers
     def player_new_x_y_horizontal(self, out_of_bounds_x, out_of_bounds_y):
         new_map_coord = None
         new_x = out_of_bounds_x
@@ -214,7 +231,43 @@ class Game(QGraphicsView, Serializable):
             new_y = 0
         return new_x, new_y, new_map_coord
 
-    def map_transition(self, new_map_file, new_map_coord, map_type, prv_coords = None, going_up = False):
+    def find_stair_tile(self, map_obj, target_stair_coords):
+        """Find a tile in map_obj with a stair attribute matching target_stair_coords."""
+        for y in range(map_obj.height):
+            for x in range(map_obj.width):
+                tile = map_obj.get_tile(x, y)
+                if tile and tile.stair == target_stair_coords:
+                    return (tile.stair_x or x, tile.stair_y or y)
+        return None
+    
+    def new_map_from_current_coords(
+            self, 
+            filename = "default", 
+            prev_coords = None, 
+            up = False
+        ):
+        self.scene.clear()
+        self.tile_items.clear()
+        self.events = []
+        self.map = Map(
+            filename, 
+            coords=self.current_map, 
+            previous_coords = prev_coords, 
+            going_up = up
+        )
+        self.maps[self.current_map] = self.map # update the cached maps 
+        self.fill_enemies()
+        return self.map.starting_x, self.map.starting_y 
+    
+    # -- map transitions 
+    def map_transition(
+            self, 
+            new_map_file, 
+            new_map_coord, 
+            map_type, 
+            prv_coords = None, 
+            going_up = False
+        ):
         self.current_map = new_map_coord
         if new_map_coord not in self.maps: 
             self.maps[self.current_map] = Map(coords=self.current_map)
@@ -236,7 +289,7 @@ class Game(QGraphicsView, Serializable):
         self.enemies[self.current_map] = self.map.enemies 
         return None, None
     
-    def check_horizontal_map_transition(self,x,y):
+    def horizontal_map_transition(self,x,y):
         self.events.clear()
         self.save_current_game(slot=self.current_slot)
         # print(">>> ", self.map, self.current_map)
@@ -265,16 +318,7 @@ class Game(QGraphicsView, Serializable):
         self.draw_grid()
         self.draw_hud()
     
-    def find_stair_tile(self, map_obj, target_stair_coords):
-        """Find a tile in map_obj with a stair attribute matching target_stair_coords."""
-        for y in range(map_obj.height):
-            for x in range(map_obj.width):
-                tile = map_obj.get_tile(x, y)
-                if tile and tile.stair == target_stair_coords:
-                    return (tile.stair_x or x, tile.stair_y or y)
-        return None
-    
-    def handle_stair_transition(self, target_map_coords, up):
+    def vertical_map_transition(self, target_map_coords, up):
         """Handle vertical map transition via stairs."""
         self.events.clear()
         self.save_current_game(slot=self.current_slot)
@@ -325,15 +369,7 @@ class Game(QGraphicsView, Serializable):
         self.draw_grid()
         self.draw_hud()
         
-    def new_map_from_current_coords(self, filename_or_procedural_type = "default", prev_coords = None, up = False):
-        self.scene.clear()
-        self.tile_items.clear()
-        self.events = []
-        self.map = Map(filename_or_procedural_type, coords=self.current_map, previous_coords = prev_coords, going_up = up)
-        self.maps[self.current_map] = self.map # update the cached maps 
-        self.fill_enemies(100)
-        return self.map.starting_x, self.map.starting_y 
-        
+    # -- save and load from file    
     def start_new_game(self):
         """Reset the game to a new state."""
         self.scene.clear()
@@ -347,7 +383,7 @@ class Game(QGraphicsView, Serializable):
         self.events = []
         self.enemies = {(0, 0, 0): []}
         self.map.place_character(self.player)
-        self.fill_enemies(50)
+        self.fill_enemies()
         self.turn = 0
         
         self.add_message("Starting new game") 
@@ -373,7 +409,6 @@ class Game(QGraphicsView, Serializable):
         self.draw_grid()
         self.draw_hud()
         self.dirty_tiles.clear()    
-        
     def save_current_game(self, slot=1):
         """Save the current map to its JSON file and player state to a central file."""
         # Delay the save operation slightly to allow fade-in
@@ -398,7 +433,6 @@ class Game(QGraphicsView, Serializable):
             print(f"Error saving game: {e}")
             if os.path.exists(os.path.join(saves_dir, f"player_state_{slot}.json.bak")):
                 shutil.copy(os.path.join(saves_dir, f"player_state_{slot}.json.bak"), player_file)  # Restore backup
-                
     def load_current_game(self, slot=1):
         """Load player state and current map from their respective JSON files."""
         saves_dir = "./saves"
@@ -438,153 +472,11 @@ class Game(QGraphicsView, Serializable):
         if not self.journal_window:
             self.journal_window = JournalWindow(self)
         self.journal_window.load_journal(slot)
-           
-    def draw_hud(self):
-        hud_width = self.view_width * self.tile_size
-        hud_height = 50
-        hud_y = self.view_height * self.tile_size - hud_height
-        bar_width = (hud_width - 20) // 3
-        bar_height = 10
-        padding = 5
-
-        # HP Bar (Red)
-        hp_ratio = self.player.hp / self.player.max_hp
-        hp_bar = QGraphicsRectItem(10, hud_y + padding, bar_width * hp_ratio, bar_height)
-        hp_bar.setBrush(QColor("red"))
-        if hp_ratio<0.8: self.scene.addItem(hp_bar)
-
-        # Stamina Bar (Blue)
-        stamina_ratio = self.player.stamina / self.player.max_stamina
-        stamina_bar = QGraphicsRectItem(10 + bar_width + padding, hud_y + padding, bar_width * stamina_ratio, bar_height)
-        stamina_bar.setBrush(QColor("blue"))
-        if stamina_ratio<0.8: self.scene.addItem(stamina_bar)
-
-        # Hunger Bar (Yellow)
-        hunger_ratio = self.player.hunger / self.player.max_hunger
-        hunger_bar = QGraphicsRectItem(10 + 2 * (bar_width + padding), hud_y + padding, bar_width * hunger_ratio, bar_height)
-        hunger_bar.setBrush(QColor("yellow"))
-        if hunger_ratio<0.8: self.scene.addItem(hunger_bar)
-
-        #North Arrow
-        # arrow_size = 40  # Size of the arrow in pixels
-        # arrow_x = (hud_width - arrow_size) / 2  # Desired center x-coordinate
-        # arrow_y = 30  # Desired center y-coordinate
-        # arrow_sprite = Tile.SPRITES.get("HUD_arrow", QPixmap())  # Get arrow sprite
-        # if not arrow_sprite.isNull():
-            # arrow_scaled = arrow_sprite.scaled(arrow_size, arrow_size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-            # arrow_item = QGraphicsPixmapItem(arrow_scaled)
-            #Rotate to point north (opposite of player rotation)
-            # rotation_angle = -self.rotation  # Negative to counter player's rotation
-            # transform = QTransform().rotate(rotation_angle)
-            # arrow_item.setTransform(transform)
-            #Calculate the center of the pixmap
-            # center_x = arrow_scaled.width() / 2
-            # center_y = arrow_scaled.height() / 2
-            #Convert rotation angle to radians for math.cos and math.sin
-            # theta = math.radians(rotation_angle)
-            #Calculate the offset of the center after rotation
-            # offset_x = center_x * math.cos(theta) - center_y * math.sin(theta)
-            # offset_y = center_x * math.sin(theta) + center_y * math.cos(theta)
-            #Adjust position so the center of the pixmap is at (arrow_x, arrow_y)
-            # adjusted_x = arrow_x - offset_x
-            # adjusted_y = arrow_y - offset_y
-            # arrow_item.setPos(adjusted_x, adjusted_y)
-            # self.scene.addItem(arrow_item)
-        # else:
-            # print("Warning: Arrow sprite not found")
-        # North Arrow
-        arrow_size = 50  # Target size for scaling
-        arrow_x = hud_width / 2  # Desired center x-coordinate (middle of HUD)
-        arrow_y = 30  # Desired center y-coordinate
-        arrow_sprite = Tile.SPRITES.get("HUD_arrow", QPixmap())  # Get arrow sprite
-        if not arrow_sprite.isNull():
-            arrow_scaled = arrow_sprite.scaled(arrow_size, arrow_size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-            arrow_item = QGraphicsPixmapItem(arrow_scaled)
-            # Rotate to point north (opposite of player rotation)
-            rotation_angle = -self.rotation
-            transform = QTransform().rotate(rotation_angle)
-            arrow_item.setTransform(transform)
-            # Calculate the center of the pixmap
-            center_x = arrow_scaled.width() / 2
-            center_y = arrow_scaled.height() / 2
-            # Convert rotation angle to radians
-            theta = math.radians(rotation_angle)
-            # Calculate the offset of the center after rotation
-            offset_x = center_x * math.cos(theta) - center_y * math.sin(theta)
-            offset_y = center_x * math.sin(theta) + center_y * math.cos(theta)
-            # Adjust position so the center of the pixmap is at (arrow_x, arrow_y)
-            adjusted_x = arrow_x - center_x - (center_x * (math.cos(theta) - 1) - center_y * math.sin(theta))
-            adjusted_y = arrow_y - center_y - (center_x * math.sin(theta) + center_y * (math.cos(theta) - 1))
-            arrow_item.setPos(adjusted_x, adjusted_y)
-            self.scene.addItem(arrow_item)
-            # Debug output
-            # print(f"Arrow scaled size: {arrow_scaled.width()}x{arrow_scaled.height()}")
-            # print(f"Arrow center: ({center_x}, {center_y})")
-            # print(f"Rotation angle: {rotation_angle} degrees")
-            # print(f"Offset: ({offset_x}, {offset_y})")
-            # print(f"Adjusted position: ({adjusted_x}, {adjusted_y})")
-            # print(f"Desired center: ({arrow_x}, {arrow_y})")
-        else:
-            print("Warning: Arrow sprite not found")    
-        
-    def fill_enemies(self, num_enemies=100):
-        #print(f"Filling enemies for map {self.current_map}")
-        if self.current_map not in self.enemies:
-            self.enemies[self.current_map] = []
-        placed = 0
-        attempts = 0
-        max_attempts = num_enemies * 10
-        while placed < num_enemies and attempts < max_attempts:
-            x = random.randint(0, self.grid_width - 1)
-            y = random.randint(0, self.grid_height - 1)
-            if (x, y) == (self.player.x, self.player.y):
-                attempts += 1
-                continue
-            tile = self.map.get_tile(x, y)
-            if tile and tile.walkable and not tile.current_char:
-                enemy = None
-                coin = random.uniform(0,1)
-                if self.map.enemy_type == "dungeon":
-                    if coin < 0.7:
-                        enemy = Zombie("Zombie", 25, x, y)
-                    else:
-                        enemy = Rogue("Rogue", 35, x, y)
-                elif self.map.filename == 'default':
-                    if coin < 0.8:
-                        enemy = Zombie("Zombie", 20, x, y)
-                    else:
-                        enemy = Rogue("Rogue",30,x,y)
-                elif self.map.filename == 'procedural_field':
-                    if coin < 0.8:
-                        enemy = Zombie("Zombie", 20, x, y)
-                    else:
-                        enemy = Rogue("Rogue",20,x,y)
-                elif self.map.filename == 'procedural_lake':
-                    if coin < 0.7:
-                        enemy = Zombie("Zombie", 20, x, y)
-                    else:
-                        enemy = Rogue("Rogue",30,x,y)
-                elif self.map.filename == 'procedural_road':
-                    if coin < 0.6:
-                        enemy = Zombie("Zombie",20, x, y)
-                    else:
-                        enemy = Rogue("Rogue",30,x,y)
-                else:
-                    enemy = Zombie("Zombie", 20, x, y)
-                if self.map.place_character(enemy):
-                    self.enemies[self.current_map].append(enemy)  # Add to current map's list
-                    
-                    placed += 1
-                    #print(f"Placed enemy at ({x}, {y})")
-                else:
-                    print(f"Failed to place enemy at ({x}, {y})")
-            attempts += 1
-        if placed < num_enemies:
-            print(f"Warning: Only placed {placed} of {num_enemies} enemies due to limited valid tiles")
-        self.map.enemies = self.enemies[self.current_map] 
-        print(f"Added {len(self.enemies[self.current_map])} enemies for map {self.current_map}")
-            
-    # gM := Member Methods
+    
+    # -- viewport draws 
+    def draw(self):
+        self.draw_grid()
+        self.draw_hud()
     def draw_grid(self):        
         if not self.dirty_tiles:  # Full redraw
             self.scene.clear()
@@ -634,58 +526,113 @@ class Game(QGraphicsView, Serializable):
                         player_rendered = True
                     tile.draw(self.scene, screen_x, screen_y, self.tile_size)
         self.scene.setSceneRect(0, 0, self.view_width * self.tile_size, self.view_height * self.tile_size)
-        self.dirty_tiles.clear()
+        self.dirty_tiles.clear() 
+    def draw_hud(self):
+        hud_width = self.view_width * self.tile_size
+        hud_height = 50
+        hud_y = self.view_height * self.tile_size - hud_height
+        bar_width = (hud_width - 20) // 3
+        bar_height = 10
+        padding = 5
 
+        # HP Bar (Red)
+        hp_ratio = self.player.hp / self.player.max_hp
+        hp_bar = QGraphicsRectItem(10, hud_y + padding, bar_width * hp_ratio, bar_height)
+        hp_bar.setBrush(QColor("red"))
+        if hp_ratio<0.8: self.scene.addItem(hp_bar)
+
+        # Stamina Bar (Blue)
+        stamina_ratio = self.player.stamina / self.player.max_stamina
+        stamina_bar = QGraphicsRectItem(10 + bar_width + padding, hud_y + padding, bar_width * stamina_ratio, bar_height)
+        stamina_bar.setBrush(QColor("blue"))
+        if stamina_ratio<0.8: self.scene.addItem(stamina_bar)
+
+        # Hunger Bar (Yellow)
+        hunger_ratio = self.player.hunger / self.player.max_hunger
+        hunger_bar = QGraphicsRectItem(10 + 2 * (bar_width + padding), hud_y + padding, bar_width * hunger_ratio, bar_height)
+        hunger_bar.setBrush(QColor("yellow"))
+        if hunger_ratio<0.8: self.scene.addItem(hunger_bar)
+        
+        # North Arrow
+        arrow_size = 50  # Target size for scaling
+        arrow_x = hud_width / 2  # Desired center x-coordinate (middle of HUD)
+        arrow_y = 30  # Desired center y-coordinate
+        arrow_sprite = Tile.SPRITES.get("HUD_arrow", QPixmap())  # Get arrow sprite
+        if not arrow_sprite.isNull():
+            arrow_scaled = arrow_sprite.scaled(arrow_size, arrow_size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            arrow_item = QGraphicsPixmapItem(arrow_scaled)
+            # Rotate to point north (opposite of player rotation)
+            rotation_angle = -self.rotation
+            transform = QTransform().rotate(rotation_angle)
+            arrow_item.setTransform(transform)
+            # Calculate the center of the pixmap
+            center_x = arrow_scaled.width() / 2
+            center_y = arrow_scaled.height() / 2
+            # Convert rotation angle to radians
+            theta = math.radians(rotation_angle)
+            # Calculate the offset of the center after rotation
+            offset_x = center_x * math.cos(theta) - center_y * math.sin(theta)
+            offset_y = center_x * math.sin(theta) + center_y * math.cos(theta)
+            # Adjust position so the center of the pixmap is at (arrow_x, arrow_y)
+            adjusted_x = arrow_x - center_x - (center_x * (math.cos(theta) - 1) - center_y * math.sin(theta))
+            adjusted_y = arrow_y - center_y - (center_x * math.sin(theta) + center_y * (math.cos(theta) - 1))
+            arrow_item.setPos(adjusted_x, adjusted_y)
+            self.scene.addItem(arrow_item)
+        else:
+            print("Warning: Arrow sprite not found")
+    def rotate_vector_for_camera(self, dx, dy):
+        """ Rotation for drawing (camera)"""
+        if self.rotation == 0:
+            return dx, dy
+        elif self.rotation == 90:
+            return dy, -dx
+        elif self.rotation == 180:
+            return -dx, -dy
+        elif self.rotation == 270:
+            return -dy, dx    
+    def rotate_vector_for_movement(self, dx, dy):
+        """ Rotation for movement (world coordinates) """
+        if self.rotation == 0:
+            return dx, dy
+        elif self.rotation == 90:
+            return -dy, dx
+        elif self.rotation == 180:
+            return -dx, -dy
+        elif self.rotation == 270:
+            return dy, -dx            
+    def rotated_direction(self, dx, dy):
+        return self.rotate_vector_for_movement(dx, dy)
+    
+    # -- game iteration 
     def game_iteration(self):
+        self.update_player()
+        self.turn += 1
+        self.process_events()
+        self.update_enemies()
+        self.update_messages()  # Critical: Update message window 
+        self.draw()
+    
+    def update_player(self):
         self.player.regenerate_stamina()
         self.player.regenerate_health()
         self.player.hunger = max(0, self.player.hunger - 1)  # Hunger decreases each turn
-        # Check for special events and log to journal
-        # if self.player.hp / self.player.max_hp < 0.2 and self.journal_window:
-            # self.journal_window.append_text("I almost died, that enemy was tough, bastard.")
-        # if self.player.hunger / self.player.max_hunger < 0.1 and self.journal_window:
-            # self.journal_window.append_text("I’m hungry, I need food right now, I could eat a horse.")
-        new_day = self.turn // self.turns_per_day + 1
-        if new_day > self.current_day:
-            self.low_hp_triggered = False
-            self.low_hunger_triggered = False
-            self.current_day = new_day
-            self.add_message(f"Day {self.current_day} begins")
         # Check for special events and set flags
         if self.player.hp / self.player.max_hp < 0.2:
             self.low_hp_triggered = True
         if self.player.hunger / self.player.max_hunger < 0.1:
             self.low_hunger_triggered = True    
         if self.player.hunger <= 0:
-            self.player.hp = max(0, self.player.hp - 5)  # Starvation damage
+            self.player.hp = max(0, self.player.hp - 1)  # Starvation damage
             if self.player.hp <= 0:
-                self.add_message("Game Over: Starvation! Reloading last save...") #print("Game Over: Starvation!")
-                try:
-                    self.load_current_game()
-                    self.add_message("Last save reloaded")
-                except FileNotFoundError:
-                    self.add_message("No save file found, starting new game")
-                    self.start_new_game()
-                except Exception as e:
-                    self.add_message(f"Error reloading game: {e}, starting new game")
-                    self.start_new_game()
+                self.add_message("Game Over: Starvation! Reloading last save...")
+                self.Event_PlayerDeath()
                 return
-        self.turn += 1
-        self.process_events()
-        self.update_enemies()
-        if self.current_map in self.enemies and len(self.enemies[self.current_map]) < 5:
-            self.fill_enemies(50)
-        self.update_messages()  # Critical: Update message window    
-        self.draw_grid()
-        self.draw_hud()
-
+        
     def process_events(self):
         """Process events and trigger autosave for significant changes."""
         for event in sorted(self.events, key=lambda e: getattr(e, 'priority', 0)):
             if isinstance(event, AttackEvent):
-                self.resolve_attack(event)
-                if event.target.hp <= 0 and event.target != self.player:
-                    pass #self.save_current_game(slot=1)  # Autosave on enemy death
+                self.Event_DoAttack(event)
             elif isinstance(event, MoveEvent):
                 self.dirty_tiles.add((event.old_x, event.old_y))
             elif isinstance(event, PickupEvent):
@@ -709,106 +656,46 @@ class Game(QGraphicsView, Serializable):
                     self.add_message("Nevermind ...")
         self.events.clear()
     
-    def resolve_attack(self, event):
-        event.target.hp -= event.damage
-        if not event.target is self.player:
-            self.add_message(f"{event.attacker.name} deals {event.damage} damage to {event.target.name}")
-            if self.player.primary_hand:
-                # weapon stamina consumption
-                self.player.stamina = max(0, self.player.stamina - self.player.primary_hand.stamina_consumption)
-                # weaopn durability consumption 
-                self.player.primary_hand.decrease_durability()
-                if self.player.primary_hand.damage < 0.5: self.player.primary_hand = None
-                self.update_inv_window()
-        if event.target.hp <= 0:
-            if event.target is self.player:
-                # print("Game Over!")
-                self.add_message("Game Over: Killed by enemy! Reloading last save...")
-                try:
-                    self.load_current_game()
-                    self.add_message("Last save reloaded")
-                except FileNotFoundError:
-                    self.add_message("No save file found, starting new game")
-                    self.start_new_game()
-                except Exception as e:
-                    self.add_message(f"Error reloading game: {e}, starting new game")
-                    self.start_new_game()
-            else:
-                event.target.drop_on_death()
-                if self.current_map in self.enemies and event.target in self.enemies[self.current_map]:
-                    self.enemies[self.current_map].remove(event.target)
-                event.target.current_tile.current_char = None
-        
-    # Rotation for drawing (camera)
-    def rotate_vector_for_camera(self, dx, dy):
-        if self.rotation == 0:
-            return dx, dy
-        elif self.rotation == 90:
-            return dy, -dx
-        elif self.rotation == 180:
-            return -dx, -dy
-        elif self.rotation == 270:
-            return -dy, dx    
-
-    # Rotation for movement (world coordinates)
-    def rotate_vector_for_movement(self, dx, dy):
-        if self.rotation == 0:
-            return dx, dy
-        elif self.rotation == 90:
-            return -dy, dx
-        elif self.rotation == 180:
-            return -dx, -dy
-        elif self.rotation == 270:
-            return dy, -dx            
-
-    def rotated_direction(self, dx, dy):
-        return self.rotate_vector_for_movement(dx, dy)
-    
+    def fill_enemies(self, num_enemies=70):
+        self.enemies[self.current_map] = self.map.fill_enemies(num_enemies)
+                
     def update_enemies(self):
-        #print(self.current_map)
         if self.current_map in self.enemies:  # Check if map has enemies
-            #print(f"Updating {len(self.enemies[self.current_map])} enemies for map {self.current_map}")
             for enemy in self.enemies[self.current_map]:
                 distance = abs(enemy.x - self.player.x) + abs(enemy.y - self.player.y)
-                if distance < 25:
-                    old_x, old_y = enemy.x, enemy.y
-                    enemy.update(self.player, self.map, self)
-                    if (enemy.x, enemy.y) != (old_x, old_y):
-                        self.events.append(MoveEvent(enemy, old_x, old_y))
-                        self.dirty_tiles.add((old_x, old_y))
-                        self.dirty_tiles.add((enemy.x, enemy.y))
-        else:
-            pass 
-            #print(f"No enemies found for map {self.current_map}")
-                    
-    # gE := Event Handlers
+                if distance >= 25: continue                
+                old_x, old_y = enemy.x, enemy.y
+                enemy.update(self.player, self.map, self)
+                if (enemy.x, enemy.y) != (old_x, old_y):
+                    self.events.append(MoveEvent(enemy, old_x, old_y))
+                    self.dirty_tiles.add((old_x, old_y))
+                    self.dirty_tiles.add((enemy.x, enemy.y))
+            if len(self.enemies[self.current_map]) < 5:
+                self.fill_enemies()
+                
+    # -- Qt Events
+    def closeEvent(self, event):
+        """Save the game state when the window is closed."""
+        try:
+            self.add_message("Saving game before exit...")
+            self.save_current_game(slot=1)
+        except Exception as e:
+            self.add_message(f"Error saving game on exit: {e}")
+            print(f"Error saving game on exit: {e}")
+        self.message_popup.close()
+        if self.inventory_window:
+            self.inventory_window.close()
+        event.accept()
     def resizeEvent(self, event):
         self.fitInView(self.scene.sceneRect(), Qt.KeepAspectRatio)
-    
-    def update_inv_window(self):
-        if self.inventory_window: 
-            if self.inventory_window.isVisible():
-                self.inventory_window.update_inventory(self.player)
-                self.setFocus()
-    
-    def take_note_on_diary(self):
-        if not self.journal_window:
-            self.journal_window = JournalWindow(self) 
-        if self.journal_window.isVisible():
-            self.journal_window.log_quick_diary_entry()
-        else:
-            self.journal_window.load_journal(self.current_slot)  # Refresh contents
-            self.journal_window.log_quick_diary_entry()
-            self.journal_window.show()
-            self.journal_window.update_position()
-        self.journal_window.save_journal()
-        self.setFocus()
-    
+        
     def keyPressEvent(self, event):
         key = event.key()
         dx, dy = 0, 0
         b_isForwarding = False
-        if key == Qt.Key_N:
+        if key == Qt.Key_F: # weapon skill  
+            pass
+        elif key == Qt.Key_N:
             self.take_note_on_diary()
             return 
         elif key == Qt.Key_J:  # Toggle journal window
@@ -840,9 +727,9 @@ class Game(QGraphicsView, Serializable):
             tile = self.map.get_tile(self.player.x, self.player.y)
             if tile and tile.stair:
                 if tile.default_sprite == Tile.SPRITES.get("dungeon_entrance"):
-                    self.handle_stair_transition(tile.stair, False)
+                    self.vertical_map_transition(tile.stair, False)
                 else:
-                    self.handle_stair_transition(tile.stair, tile.default_sprite == Tile.SPRITES.get("stair_up"))
+                    self.vertical_map_transition(tile.stair, tile.default_sprite == Tile.SPRITES.get("stair_up"))
                 return
         elif key in (Qt.Key_Up, Qt.Key_W):
             dx, dy = self.rotated_direction(0, -1)
@@ -927,7 +814,7 @@ class Game(QGraphicsView, Serializable):
             target_x, target_y = self.player.x + dx, self.player.y + dy
             tile = self.map.get_tile(target_x, target_y)
             if target_x <0 or target_x > self.grid_width-1 or target_y<0 or target_y> self.grid_height-1:
-                self.check_horizontal_map_transition(target_x, target_y)  # Add this
+                self.horizontal_map_transition(target_x, target_y)  # Add this
                 return
             if tile and tile.walkable:
                 if tile.current_char:
@@ -947,7 +834,54 @@ class Game(QGraphicsView, Serializable):
             
                 
             self.game_iteration()
-      
+    
+    # -- Reactive Events Handlers
+    def Event_NewTurn(self):
+        # triggers the new day
+        if self.turn // self.turns_per_day + 1 > self.current_day:
+            self.current_day += 1
+        
+    def Event_NewDay(self):
+        self.low_hp_triggered = False
+        self.low_hunger_triggered = False
+        self.current_day = new_day
+        self.add_message(f"Day {self.current_day} begins")
+        
+    def Event_PlayerDeath(self):
+        print("Game Over!")
+        try:
+            self.load_current_game()
+            self.add_message("Last Save Reloaded")
+        except FileNotFoundError:
+            self.add_message("No Save File Found, Starting New Game")
+            self.start_new_game()
+        except Exception as e:
+            self.add_message(f"Error Reloading Game: {e}, Starting New Game")
+            self.start_new_game()
+    
+    def Event_DoAttack(self, event):
+        event.target.hp -= event.damage
+        if not event.target is self.player:
+            self.add_message(f"{event.attacker.name} deals {event.damage} damage to {event.target.name}")
+            if self.player.primary_hand:
+                # weapon stamina consumption
+                self.player.stamina = max(0, self.player.stamina - self.player.primary_hand.stamina_consumption)
+                # weaopn durability consumption 
+                self.player.primary_hand.decrease_durability()
+                if self.player.primary_hand.damage < 0.5: self.player.primary_hand = None
+                self.update_inv_window()
+        if event.target.hp <= 0:
+            self.Event_CharacterDeath(event)
+    
+    def Event_CharacterDeath(self, event):
+        if event.target is self.player:
+            self.Event_PlayerDeath()
+        else:
+            event.target.drop_on_death()
+            if self.current_map in self.enemies and event.target in self.enemies[self.current_map]:
+                self.enemies[self.current_map].remove(event.target)
+            event.target.current_tile.current_char = None
+            
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     game = Game()

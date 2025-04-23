@@ -30,9 +30,5 @@ class UseItemEvent(Event):
         super().__init__(priority=0)  # Same priority as PickupEvent
         self.character = character
         self.item = item
-
-
-
-
-
+        
 # --- END         

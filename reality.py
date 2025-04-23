@@ -212,6 +212,12 @@ class Character(Container):
     def generate_initial_items(self):
         pass    
 
+    def add_item_by_chance(self, item_name, chance = 0.1, *args, **kwargs):
+        item_class = globals()[item_name]
+        item_instance = item_class(*args, **kwargs)
+        self.add_item(item_instance) 
+        return item_instance
+
 class Player(Character):
     __serialize_only__ = Character.__serialize_only__+["stamina","max_stamina","hunger","max_hunger"]
     def __init__(self, name="", hp=PLAYER_MAX_HP, x=MAP_WIDTH//2, y=MAP_HEIGHT//2, b_generate_items = True):
@@ -482,7 +488,18 @@ class Tile(Container):
 
 class Map(Serializable):
     __serialize_only__ = ["width","height","filename","grid","enemy_type","coords","enemies"]
-    def __init__(self, filename="default", coords=(0, 0, 0), width=MAP_WIDTH, height=MAP_HEIGHT, b_generate = True, previous_coords = (0,0,0), prev_x = MAP_WIDTH//2, prev_y = MAP_HEIGHT//2, going_up = False):
+    def __init__(
+            self, 
+            filename="default", 
+            coords=(0, 0, 0), 
+            width=MAP_WIDTH, 
+            height=MAP_HEIGHT, 
+            b_generate = True, 
+            previous_coords = (0,0,0), 
+            prev_x = MAP_WIDTH//2, 
+            prev_y = MAP_HEIGHT//2, 
+            going_up = False
+        ):
         super().__init__()
         self.width = width
         self.height = height
@@ -536,6 +553,70 @@ class Map(Serializable):
                     print(f"Map file {self.filename}.txt not found, using default map")
                     self._generate_default()
     
+    def generate_enemy_at(self, x,y):
+        coin = random.uniform(0,1)
+        enemy = None
+        match self.enemy_type:    
+            case "dungeon":
+                if coin < 0.75:
+                    enemy = Zombie("Zombie", 25, x, y,True)
+                else:
+                    enemy = Rogue("Rogue", 35, x, y,True)
+                    enemy.add_item_by_chance("WeaponRepairTool", name = "Whetstone", uses = 3)
+            case "deep_forest":
+                if coin < 0.9:
+                    enemy = Zombie("Zombie", 25, x, y,True)
+                else:
+                    enemy = Rogue("Rogue", 35, x, y,True)
+                    enemy.add_item_by_chance("WeaponRepairTool", name = "Whetstone", uses = 2)
+            case "field":
+                if coin < 0.9:
+                    enemy = Zombie("Zombie", 20, x, y,True)
+                else:
+                    enemy = Rogue("Rogue", 30, x, y,True)
+            case "default":
+                if coin < 0.9:
+                    enemy = Zombie("Zombie", 20, x, y,True)
+                else:
+                    enemy = Rogue("Rogue", 30, x, y,True)
+            case "road":
+                if coin < 0.9:
+                    enemy = Zombie("Zombie", 20, x, y,True)
+                else:
+                    enemy = Rogue("Rogue", 30, x, y,True)
+            case "lake":
+                if coin < 0.75:
+                    enemy = Zombie("Zombie", 35, x, y,True)
+                else:
+                    enemy = Rogue("Rogue", 35, x, y,True)
+            case _:
+                enemy = Zombie("",25,x,y,True)
+        if not enemy: return False
+        self.enemies.append(enemy)
+        return self.place_character(enemy)
+        
+    def fill_enemies(self, num_enemies=70):
+        #print(f"Filling enemies for map {self.current_map}")
+        placed = 0
+        attempts = 0
+        max_attempts = num_enemies * 5
+        while placed < num_enemies and attempts < max_attempts:
+            x = random.randint(1, self.width - 1)
+            y = random.randint(1, self.height - 1)
+            tile = self.get_tile(x, y)
+            if not tile:
+                attempts += 1
+                continue
+            if tile.current_char or not tile.walkable: 
+                attempts += 1
+                continue
+            if self.generate_enemy_at(x,y): placed += 1
+            attempts += 1
+        if placed < num_enemies:
+            print(f"Warning: Only placed {placed} of {num_enemies} enemies due to limited valid tiles")
+        print(f"Added {len(self.enemies)} enemies for map {self.coords}")
+        return self.enemies 
+    
     # -- procedural generators || generator helpers
     def grid_init_uniform(self, spriteKey = "grass", is_walkable = True, x1 = 0, x2 = None, y1 = 0, y2 = None):
         if not x2: x2 = self.width
@@ -549,6 +630,10 @@ class Map(Serializable):
         for i in range(x1,x2):
             for j in range(y1,y2):
                 self.grid[i][j] = Tile(walkable=is_walkable, sprite_key=spriteKey)
+    
+    def add_rectangle(self, center_x, center_y, width, height, has_entry = True, sprite_border="wall", sprite_floor="floor"):
+        """ Generate a room with one floor-tile entry only changing his limits """
+        pass
     
     def add_rooms(self, sprite_floor = "floor", sprite_corridor_floor = "dirt"):
         # Generate rooms
@@ -712,18 +797,19 @@ class Map(Serializable):
     # -- procedural generators || full map generator
     def _generate_default(self):
         # inner floors, random trees
+        self.enemy_type = "default"
         self.grid_init_uniform()
         self.add_patches()
         self.add_trees()
         self.add_rocks()
 
     def generate_procedural_forest(self):
-        self.enemy_type = "dungeon"
+        self.enemy_type = "deep_forest"
         # initialize grid
         self.grid_init_uniform("grass",True)
         self.grid_init_uniform("tree", False,x1 = 1, x2 = self.width-1, y1 = 1, y2=self.height-1)
         self.add_rooms("grass","dirt")
-        self.add_patches(scale = 0.02)
+        self.add_patches(scale = 0.5)
         self.ensure_connection()  # <--- Here!
 
     def generate_procedural_dungeon(self, previous_map_coords, prev_x, prev_y, up=False):
@@ -782,6 +868,7 @@ class Map(Serializable):
         return new_x, new_y, new_z
     
     def generate_procedural_field(self):
+        self.enemy_type = "field"
         self.grid_init_uniform("grass",True)
         self.add_patches()
         self.add_rocks()
@@ -794,6 +881,7 @@ class Map(Serializable):
                     self.grid[i][j].add_item(Food("Apple", nutrition=10))
                     
     def generate_procedural_road(self):
+        self.enemy_type = "road"
         self.grid_init_uniform("grass",True)
         self.add_patches()
         # Vertical road with noise
@@ -811,6 +899,7 @@ class Map(Serializable):
                     self.grid[i][j] = Tile(walkable=False, sprite_key="tree")
     
     def generate_procedural_lake(self):
+        self.enemy_type = "lake"
         self.grid_init_uniform("grass", True)
         self.add_patches()
         center_x, center_y = self.width//2, self.height//2
