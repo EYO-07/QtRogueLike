@@ -308,7 +308,9 @@ class Game(QGraphicsView, Serializable): #Game_Component__React):
         self.player.x = new_x
         self.player.y = new_y
         # check if the map already in self.maps
-        map_type = random.choice(["procedural_lake", "procedural_field", "procedural_road", "procedural_forest"])
+        # map_type = random.choice(["procedural_lake", "procedural_field", "procedural_road", "procedural_forest"])
+        
+        map_type = "procedural_lake" # debug 
         self.map_transition(new_map_file, new_map_coord, map_type)
         # placing character to the new map 
         if not self.map.place_character(self.player):

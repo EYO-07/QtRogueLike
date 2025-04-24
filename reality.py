@@ -704,11 +704,13 @@ class Map(Serializable):
                     enemy = Rogue("Rogue", 35, x, y,True)
                     enemy.add_item_by_chance("WeaponRepairTool", name = "Whetstone", uses = 3)
             case "deep_forest":
-                if coin < 0.9:
+                if coin < 0.6:
                     enemy = Zombie("Zombie", 25, x, y,True)
-                else:
+                elif coin < 0.9:
                     enemy = Rogue("Rogue", 35, x, y,True)
                     enemy.add_item_by_chance("WeaponRepairTool", name = "Whetstone", uses = 2)
+                else:
+                    enemy = Bear(name ="Bear", x=x, y=y, b_generate_items=True)
             case "field":
                 if coin < 0.9:
                     enemy = Zombie("Zombie", 20, x, y,True)
@@ -849,12 +851,23 @@ class Map(Serializable):
                 elif random.random() < 0.05:  # 5% chance for rocks
                     self.grid[i][j] = Tile(walkable=is_walkable, sprite_key=spriteKey)
                     
-    def add_dungeon_entrance(self, probability = 1.0, border_factor = 0.2):
-        if random.random() >= probability: return False
+    def is_adjacent_walkable(self,tile, x,y):
+        for dx,dy in CROSS_DIFF_MOVES:
+            tile_2 = self.get_tile(x+dx,y+dy)
+            if tile_2:
+                if not tile_2.walkable: return False
+        return True
+    def add_dungeon_entrance(self, probability = 1.0, border_factor = 0.0):
+        coin = random.random()
+        if coin > probability: 
+            print(f"not placed {coin}")
+            return False
         dx = int(border_factor*self.width)
         dy = int(border_factor*self.height)
-        walkable_tiles = [(i, j) for j in range(dy,self.height-dy) for i in range(dx,self.width-dx) if self.grid[i][j].walkable and self.grid[i][j].default_sprite == Tile.SPRITES["grass"]]
-        if not walkable_tiles: return False
+        walkable_tiles = [(i, j) for j in range(dy,self.height-dy) for i in range(dx,self.width-dx) if self.is_adjacent_walkable(self.grid[i][j],i,j) ]
+        if not walkable_tiles: 
+            print(f"not walkable tiles")
+            return False
         entrance_x, entrance_y = random.choice(walkable_tiles)
         target_map = (self.coords[0], self.coords[1], -1)
         self.grid[entrance_y][entrance_x] = Tile(walkable=True, sprite_key="dungeon_entrance")
