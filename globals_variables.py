@@ -14,3 +14,53 @@ CHESS_KNIGHT_DIFF_MOVES = [
         (1, 2), (1, -2), (-1, 2), (-1, -2)
     ]
     
+SPRITE_NAMES = [
+    "grass",
+    "dirt",
+    "floor", 
+    "player", 
+    "enemy", 
+    "zombie", 
+    "wall", 
+    "tree", 
+    "water",
+    "food", 
+    "long_sword", 
+    "club", 
+    "sack",
+    "apple",
+    "fish",
+    "bread",
+    "HUD_arrow",
+    "rogue",
+    "stair_up",
+    "stair_down",
+    "dungeon_entrance",
+    "rock",
+    "whetstone",
+    "bear",
+    "meat"
+]
+
+EQUIPMENT_SLOTS = [
+    'primary_hand', 
+    'secondary_hand', 
+    'head', 
+    'neck', 
+    'torso', 
+    'waist', 
+    'legs', 
+    'foot'
+]
+
+
+
+
+
+
+
+
+
+
+
+

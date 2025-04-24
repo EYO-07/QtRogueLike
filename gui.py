@@ -12,7 +12,7 @@ from datetime import datetime
 # third-party
 from PyQt5.QtWidgets import QWidget, QListWidget, QVBoxLayout, QPushButton, QHBoxLayout, QMenu, QDialog, QLabel, QTextEdit
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QTextCursor
+from PyQt5.QtGui import QTextCursor, QColor
 
 class JournalWindow(QDialog):
     def __init__(self, parent=None):
@@ -145,7 +145,7 @@ class JournalWindow(QDialog):
         if not self.parent():
             return
         # Calculate day (1 day = 1000 turns)
-        day = self.parent().turn // 1000 + 1
+        day = self.parent().current_day
         map_coords = self.parent().current_map
         # Collect special event texts based on flags
         special_texts = []
@@ -223,6 +223,9 @@ class JournalWindow(QDialog):
         self.text_edit.setTextCursor(cursor)
         self.text_edit.ensureCursorVisible()
         self.save_journal()  # Autosave after appending
+        
+    def clear_text(self):
+        self.text_edit.setPlainText("")
 
     def load_journal(self, slot=1):
         """Load journal contents from the current slot's journal file."""
@@ -396,63 +399,46 @@ class InventoryWindow(QDialog):
 
     def label_for(self,game_item):
         if isinstance(game_item, WeaponRepairTool):
-            return f"{game_item.name} : {game_item.uses} [uses] : {game_item.weight} [kg]"
+            return f"{game_item.name} : {game_item.uses} [uses] : {game_item.weight} [kg]", QColor("white")
         # Food
         if isinstance(game_item, Food):
-            return f"{game_item.name} : {game_item.nutrition} [nutrition] : {game_item.weight} [kg]"
+            return f"{game_item.name} : {game_item.nutrition} [nutrition] : {game_item.weight} [kg]", QColor("yellow")
         # Weapon
         if isinstance(game_item, Weapon):
-            return f"{game_item.name} : {game_item.damage} [dmg] : {game_item.slot} : {game_item.weight} [kg]"
+            return f"{game_item.name} : {game_item.damage} [dmg] : {game_item.slot} : {game_item.weight} [kg]", QColor("white")
         # Common Equippable 
         if isinstance(game_item, Equippable):
-            return f"{game_item.name} : {game_item.slot} : {game_item.weight} [kg]"
+            return f"{game_item.name} : {game_item.slot} : {game_item.weight} [kg]", QColor("cyan")
         # Common Item
         if isinstance(game_item, Item):
-            return f"{game_item.name} : {game_item.weight} [kg]"
-        return "Default Label"
+            return f"{game_item.name} : {game_item.weight} [kg]", QColor("white")
+        return "Default Label", QColor("white")
     
     def update_inventory(self, player):
         """Update the list with the player's current items."""
         self.player = player  # Store player reference
         self.list_widget_objects.clear()
         self.list_widget.clear()
-        for item in player.items:            
-            self.list_widget.addItem( self.label_for(item) )
+        wdg_index = 0
+        for item in player.items:     
+            label_text, qt_color = self.label_for(item)
+            self.list_widget.addItem( label_text )
+            item_widget = self.list_widget.item(wdg_index)
+            item_widget.setForeground(qt_color)
             self.list_widget_objects.append(item)
+            wdg_index += 1
         # equipped 
         b_equipped = False
-        if player.primary_hand:
-            self.list_widget.addItem( "* "+self.label_for(player.primary_hand) )  
-            self.list_widget_objects.append(player.primary_hand)
-            b_equipped = True
-        if player.secondary_hand:            
-            self.list_widget.addItem( "* "+self.label_for(player.secondary_hand) )  
-            self.list_widget_objects.append(player.secondary_hand)
-            b_equipped = True
-        if player.head:            
-            self.list_widget.addItem( "* "+self.label_for(player.head) )  
-            self.list_widget_objects.append(player.head)
-            b_equipped = True
-        if player.neck:            
-            self.list_widget.addItem( "* "+self.label_for(player.neck) )  
-            self.list_widget_objects.append(player.neck)
-            b_equipped = True
-        if player.torso:
-            self.list_widget.addItem( "* "+self.label_for(player.torso) )
-            self.list_widget_objects.append(player.torso)
-            b_equipped = True
-        if player.waist:
-            self.list_widget.addItem( "* "+self.label_for(player.waist) )
-            self.list_widget_objects.append(player.waist)
-            b_equipped = True
-        if player.legs:
-            self.list_widget.addItem( "* "+self.label_for(player.legs) )
-            self.list_widget_objects.append(player.legs)
-            b_equipped = True
-        if player.foot:            
-            self.list_widget.addItem( "* "+self.label_for(player.foot) )
-            self.list_widget_objects.append(player.foot)
-            b_equipped = True
+        for slot in EQUIPMENT_SLOTS:
+            equipped_item = getattr(player, slot)
+            if equipped_item:
+                b_equipped = True
+                label_text, qt_color = self.label_for(equipped_item)
+                self.list_widget.addItem( "* "+label_text )
+                item_widget = self.list_widget.item(wdg_index)
+                item_widget.setForeground(qt_color)
+                self.list_widget_objects.append(equipped_item)
+                wdg_index += 1
         
         if player.items or b_equipped:
             self.show()

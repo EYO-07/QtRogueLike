@@ -387,17 +387,18 @@ class Game(QGraphicsView, Serializable): #Game_Component__React):
         self.map.place_character(self.player)
         self.fill_enemies()
         self.turn = 0
+        self.current_day = 0
         
         self.add_message("Starting new game") 
         if self.inventory_window: self.inventory_window.update_inventory(self.player)
         # Initialize and clear journal
         if not self.journal_window:
             self.journal_window = JournalWindow(self)
-            self.journal_window.append_text("Day 0 - The world was affected by the plague, why? Maybe I should've prayed more instead of living with mercenaries and whores, God don't look to us now, and there is no church to pray anymore. Almost every one has transformed to walking deads, their flesh is putrid and their hunger insatiable, strange enough, before they lose their minds, they try desesperately to find food to satiate the hunger, so it's almost certain that I will find some with them, I'm starving. \n\nI should check myself, I'm almost losing my mind too. If I'm right, to move use A,W,S,D, Left, Right, to attack moves forward (only), to enter or use stairs press C, to open inventory press I, to open journal press J. I should take notes often, press N to write a quick note. \n\nI need to find food ...")
         if not self.journal_window.isVisible():
             self.journal_window.show()
             self.journal_window.update_position()
-        self.journal_window.load_journal(self.current_slot)
+        self.journal_window.clear_text()
+        self.journal_window.append_text("Day 0 - The world was affected by the plague, why? Maybe I should've prayed more instead of living with mercenaries and whores, God don't look to us now, and there is no church to pray anymore. Almost every one has transformed to walking deads, their flesh is putrid and their hunger insatiable, strange enough, before they lose their minds, they try desesperately to find food to satiate the hunger, so it's almost certain that I will find some with them, I'm starving. \n\nI should check myself, I'm almost losing my mind too. If I'm right, to move use A,W,S,D, Left, Right, to attack moves forward (only), to enter or use stairs press C, to open inventory press I, to open journal press J. I should take notes often, press N to write a quick note. \n\nI need to find food ...")
         self.setFocus()
         # Trigger music playback if not muted
         if not self.is_music_muted:
@@ -474,7 +475,7 @@ class Game(QGraphicsView, Serializable): #Game_Component__React):
         if not self.journal_window:
             self.journal_window = JournalWindow(self)
         self.journal_window.load_journal(slot)
-    
+        self.player.rotation = self.rotation 
     # -- viewport draws 
     def draw(self):
         self.draw_grid()
@@ -697,10 +698,19 @@ class Game(QGraphicsView, Serializable): #Game_Component__React):
         dx, dy = 0, 0
         b_isForwarding = False
         if key == Qt.Key_F: # weapon special skill 
+            
+            # -- debugging 
+            # self.player.stamina = self.player.max_stamina
+            # self.player.hunger = self.player.hunger
+            
             primary = self.player.primary_hand
             if primary:
                 if hasattr(primary,"use_special"):
-                    primary.use_special(self.player, self.map)
+                    if primary.use_special(self.player, self.map, self):
+                        self.game_iteration()
+                        return 
+                    else:
+                        self.add_message("Can't Use Special Skill Right Now ...")
         elif key == Qt.Key_N:
             self.take_note_on_diary()
             return 
@@ -748,14 +758,12 @@ class Game(QGraphicsView, Serializable): #Game_Component__React):
             dx, dy = self.rotated_direction(1, 0)
         elif key == Qt.Key_Left:
             self.rotation = (self.rotation - 90) % 360
-            direction = {0: "North", 90: "East", 180: "South", 270: "West"}[self.rotation]
-            self.add_message(f"Facing {direction}")
+            self.player.rotation = self.rotation 
             self.game_iteration()
             return        
         elif key == Qt.Key_Right:
             self.rotation = (self.rotation + 90) % 360
-            direction = {0: "North", 90: "East", 180: "South", 270: "West"}[self.rotation]
-            self.add_message(f"Facing {direction}")
+            self.player.rotation = self.rotation 
             self.game_iteration()
             return
         elif key == Qt.Key_E:  # Use first food item
@@ -806,12 +814,38 @@ class Game(QGraphicsView, Serializable): #Game_Component__React):
                 self.inventory_window.hide()
                 return
         
-        elif key == Qt.Key_F1:  # Debugging: Place a stair_down at player's position
+        elif key == Qt.Key_F1:  # F1 Debugging: 
+            # -- item experiment
             #self.player.add_item(WeaponRepairTool("whetstone"))
-            if self.map.add_dungeon_entrance_at(self.player.x, self.player.y):
-                self.dirty_tiles.add((self.player.x, self.player.y))  # Redraw tile
-                self.draw_grid()
-                self.draw_hud()
+            
+            # -- dungeon experiment
+            # if self.map.add_dungeon_entrance_at(self.player.x, self.player.y):
+                # self.dirty_tiles.add((self.player.x, self.player.y))  # Redraw tile
+                # self.draw_grid()
+                # self.draw_hud()
+            
+            # -- skill experiment
+            # self.current_day = 30
+            # for dx,dy in CHESS_KNIGHT_DIFF_MOVES:
+                # if self.map.generate_enemy_at(self.player.x+dx, self.player.y+dy, Bear):
+                    # break
+                    
+            # -- rotation and forward direction 
+            # player = self.player
+            # north = (0,-1)
+            # south = (0,1)
+            # east = (1,0)
+            # west = (-1,0)
+            # print( "Direction is north? :", north == player.get_forward_direction() )
+            # print( "Direction is east? :", east == player.get_forward_direction() )
+            # print( "Direction is west? :", west == player.get_forward_direction() )
+            # print( "Direction is south? :", south == player.get_forward_direction() )
+            # print( "Is in cone vision? :", player.is_in_cone_vision(
+                    # (player.x, player.y), (player.x, player.y-1), direction=player.get_forward_direction(), fov_deg=70
+                # ) 
+            # )
+            pass
+            
         else:
             self.game_iteration()
             return 
@@ -844,7 +878,7 @@ class Game(QGraphicsView, Serializable): #Game_Component__React):
     # -- Reactive Events Handlers
     def Event_NewTurn(self):
         # triggers the new day
-        print(f"Turn {self.turn}")
+        # print(f"Turn {self.turn}")
         if self.turn // self.turns_per_day + 1 > self.current_day:
             self.current_day += 1
             self.Event_NewDay()
@@ -868,13 +902,11 @@ class Game(QGraphicsView, Serializable): #Game_Component__React):
         event.target.hp -= event.damage
         if not event.target is self.player:
             self.add_message(f"{event.attacker.name} deals {event.damage} damage to {event.target.name}")
-            if self.player.primary_hand:
-                # weapon stamina consumption
-                self.player.stamina = max(0, self.player.stamina - self.player.primary_hand.stamina_consumption)
-                # weaopn durability consumption 
-                self.player.primary_hand.decrease_durability()
-                if self.player.primary_hand.damage < 0.5: self.player.primary_hand = None
-                self.update_inv_window()
+            primary = self.player.primary_hand
+            if primary:
+                if isinstance(primary, Weapon):
+                    primary.stats_update(self.player)
+                    self.update_inv_window()
         if event.target.hp <= 0:
             self.Event_CharacterDeath(event)
     

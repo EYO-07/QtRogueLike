@@ -97,18 +97,60 @@ class Weapon(Equippable):
         self.max_damage = damage 
         self.durability_factor = durability_factor
     
-    def decrease_durability(self):
+    def stats_update(self, player):
+        if not player.primary_hand is self: return False
+        # weapon stamina consumption
+        player.stamina = max(0, player.stamina - self.stamina_consumption)
+        # weapon durability consumption 
         self.damage = max(0,self.damage*self.durability_factor)
+        if self.damage < 0.5: player.primary_hand = None
+        return True
     
 class Sword(Weapon):
     __serialize_only__ = Weapon.__serialize_only__ 
     def __init__(self, name="", damage=0 ,description="", weight=1, stamina_consumption=1, durability_factor=0.995):
         super().__init__(name, damage, description, weight, stamina_consumption, durability_factor)
-    def use_special(self, player, map):
-        # knight chess attack 
-        print("Player: ", player.x, player.y)
-        for dx,dy in CHESS_KNIGHT_DIFF_MOVES:
-            print( player.x+dx, player.y+dy )
+        self.days_to_unlock_special = 20
+    
+    def use_special(self, player, map, game):
+        # knight chess attack, sword swing 
+        if game.current_day < self.days_to_unlock_special: 
+            if game.journal_window:
+                game.journal_window.append_text(
+                    f"Survive more than {self.days_to_unlock_special} days to use this Sword Skill, that move will select an enemy in L position (like a chess knight) and do considerable damage."
+                )
+            game.add_message(f"I'm used to do this move, maybe with some practice ...")
+            return False
+        if not player: return False
+        if not map: return False
+        x = player.x
+        y = player.y
+        shuffled_list = random.sample(CHESS_KNIGHT_DIFF_MOVES, len(CHESS_KNIGHT_DIFF_MOVES))
+        b_attack_performed = False
+        for dx,dy in  shuffled_list:
+            tile = map.get_tile(x+dx,y+dy)
+            if tile:
+                if self.special_attack(player, tile, game):
+                    b_attack_performed = True 
+                    break
+        return b_attack_performed
+
+    def special_attack(self, player, tile, game):
+        if not game: return False
+        char = tile.current_char
+        if not char: return False
+        if not isinstance(char, Enemy): return False
+        if not player.can_see_character(char, game.map): 
+            return False
+        # has char and the char is enemy 
+        print(f"Enemy {char}")
+        if player.stamina < player.max_stamina/3: return False
+        game.events.append( AttackEvent(player, char, random.uniform(self.max_damage,3*self.max_damage)) )
+        # extra stats besides attack event
+        player.stamina = player.stamina - player.max_stamina/3
+        for i in range(2): self.damage = max(0,self.damage*self.durability_factor)
+        if self.damage < 0.5: player.primary_hand = None
+        return True 
 
 class Food(Item):
     __serialize_only__ = Item.__serialize_only__+["nutrition"]
@@ -255,10 +297,21 @@ class Character(Container):
         if game_turns_counter % self.update_turn: return False
         return True
 
+    def can_see_character(self, another, game_map):
+        if not isinstance(another, Character): return None
+        distance = abs(self.x - another.x) + abs(self.y - another.y)
+        if distance <= 7:
+            return game_map.line_of_sight(self.x, self.y, another.x, another.y)
+        return False
+
 class Player(Character):
-    __serialize_only__ = Character.__serialize_only__+["stamina","max_stamina","hunger","max_hunger"]
+    __serialize_only__ = Character.__serialize_only__+[
+        "stamina","max_stamina","hunger","max_hunger","rotation", "field_of_view"
+    ]
     def __init__(self, name="", hp=PLAYER_MAX_HP, x=MAP_WIDTH//2, y=MAP_HEIGHT//2, b_generate_items = True):
         super().__init__(name, hp, x, y)
+        self.rotation = 0
+        self.field_of_view = 70
         self.name = name
         self.stamina = 100
         self.max_stamina = PLAYER_MAX_STAMINA
@@ -300,6 +353,56 @@ class Player(Character):
         self.add_item(Food("Apple", nutrition=50))
         self.add_item(Food("Apple", nutrition=50))
         self.add_item(Food("Bread", nutrition=100))
+    
+    def get_forward_direction(self):
+        dx = 0
+        dy = -1
+        rotation_degree = self.rotation
+        if rotation_degree == 0:
+            return dx, dy
+        elif rotation_degree == 90:
+            return -dy, dx
+        elif rotation_degree == 180:
+            return -dx, -dy
+        elif rotation_degree == 270:
+            return dy, -dx
+
+    # Normalize both vectors
+    def _normalize(self, v):
+        length = math.hypot(v[0], v[1])
+        return (v[0]/length, v[1]/length) if length != 0 else (0, 0)
+
+    def is_in_cone_vision(self,observer, point, direction=(0,-1), fov_deg=180):
+        """
+        Determines if a point is visible from the observer through a cone of vision.
+
+        Parameters:
+        - observer: tuple (x, y) of observer's coordinates
+        - point: tuple (x, y) of target point
+        - direction: tuple (dx, dy), observer's frontal direction vector
+        - fov_deg: field of view in degrees (centered on direction vector)
+
+        Returns:
+        - True if the point is within the field of view, False otherwise
+        """
+
+        # Compute vector from observer to point
+        vec_to_point = (point[0] - observer[0], point[1] - observer[1])
+        dir_norm = self._normalize(direction)
+        vec_norm = self._normalize(vec_to_point)
+
+        # Compute dot product and angle
+        dot = dir_norm[0]*vec_norm[0] + dir_norm[1]*vec_norm[1]
+        angle_rad = math.acos(max(min(dot, 1.0), -1.0))  # Clamp dot to avoid domain errors
+        angle_deg = math.degrees(angle_rad)
+
+        # Compare with half the field of view
+        return angle_deg <= fov_deg / 2.0
+
+    def can_see_character(self, another, game_map):
+        if super().can_see_character(another, game_map):
+            return self.is_in_cone_vision( (self.x,self.y), (another.x, another.y), self.get_forward_direction(), self.field_of_view )
+        return False
 
 class Enemy(Character):
     __serialize_only__ = Character.__serialize_only__+["type","stance","canSeeCharacter","patrol_direction"]
@@ -310,12 +413,6 @@ class Enemy(Character):
         self.canSeeCharacter = False
         self.patrol_direction = (random.choice([-1, 1]), 0)
         if b_generate_items: self.generate_initial_items()
-    
-    def can_see_character(self, player, game_map):
-        distance = abs(self.x - player.x) + abs(self.y - player.y)
-        if distance <= 5:
-            return game_map.line_of_sight(self.x, self.y, player.x, player.y)
-        return False
     
     def calculate_damage_done(self):
         damage = random.randint(1, 10)
@@ -386,6 +483,8 @@ class Zombie(Enemy):
     def generate_initial_items(self):
         if random.random() < 0.7:
             self.add_item(Food("bread", nutrition=random.randint(50, 100)))
+        if random.random() < 0.7:
+            self.add_item(Food("apple", nutrition=random.randint(5, 15)))
 
     def get_sprite(self):
         try:
@@ -419,7 +518,23 @@ class Rogue(Enemy):
             return QPixmap()
 
 class Bear(Enemy):
-    pass 
+    __serialize_only__ = Enemy.__serialize_only__
+    def __init__(self, name="", hp=60 , x=50, y=50, b_generate_items = True, dbg_blind=False):
+        super().__init__(name, hp, x, y, b_generate_items)
+        self.dbg_blind = dbg_blind
+    def calculate_damage_done(self):
+        return random.randint(5, 30)
+    def generate_initial_items(self):
+        self.add_item(Food("meat", nutrition=250))
+    def get_sprite(self):
+        try:
+            return Tile.SPRITES.get("bear", Tile.SPRITES["bear"])
+        except KeyError:
+            print("Warning: Bear sprite not found")
+            return QPixmap()
+    def can_see_character(self, another, game_map):
+        if self.dbg_blind: return False
+        return super().can_see_character(another, game_map)
     
 class Dear(Prey):
     pass 
@@ -429,31 +544,7 @@ class Dear(Prey):
 # --- mapping
 class Tile(Container):
     SPRITES = {}  # Class-level sprite cache
-    list_sprites_names = [
-        "grass",
-        "dirt",
-        "floor", 
-        "player", 
-        "enemy", 
-        "zombie", 
-        "wall", 
-        "tree", 
-        "water",
-        "food", 
-        "long_sword", 
-        "club", 
-        "sack",
-        "apple",
-        "fish",
-        "bread",
-        "HUD_arrow",
-        "rogue",
-        "stair_up",
-        "stair_down",
-        "dungeon_entrance",
-        "rock",
-        "whetstone"
-    ]
+    list_sprites_names = list(SPRITE_NAMES)
     __serialize_only__ = ["items", "walkable", "blocks_sight", "default_sprite_key", "stair", "stair_x", "stair_y"]
     def __init__(self, walkable=True, sprite_key="grass"):
         super().__init__()
@@ -598,7 +689,11 @@ class Map(Serializable):
                     print(f"Map file {self.filename}.txt not found, using default map")
                     self._generate_default()
     
-    def generate_enemy_at(self, x,y):
+    def generate_enemy_at(self, x,y, enemy_class=None, *args, **kwargs):
+        if enemy_class:
+            enemy = enemy_class(x=x,y=y,*args, **kwargs)
+            self.enemies.append(enemy)
+            return self.place_character(enemy)
         coin = random.uniform(0,1)
         enemy = None
         match self.enemy_type:    
@@ -1072,6 +1167,38 @@ class Map(Serializable):
         return "grass"  # Fallback if no match found    
 
     def line_of_sight(self, x1, y1, x2, y2):
+        """
+        Determines whether there is a clear line of sight between two points on a grid.
+
+        This method uses Bresenham's Line Algorithm to trace a line from the start point
+        (x1, y1) to the end point (x2, y2). It checks each tile along the line to determine 
+        if any of them block sight. If a tile that blocks sight is encountered, the function 
+        returns False, indicating the line of sight is blocked. If the entire path is clear, 
+        it returns True.
+
+        Parameters
+        ----------
+        x1 : int
+            X-coordinate of the starting point.
+        y1 : int
+            Y-coordinate of the starting point.
+        x2 : int
+            X-coordinate of the ending point.
+        y2 : int
+            Y-coordinate of the ending point.
+
+        Returns
+        -------
+        bool
+            True if the line of sight is clear, False if it is blocked by any tile.
+
+        Notes
+        -----
+        - Assumes that `self.get_tile(x, y)` returns a tile object with a `blocks_sight` attribute.
+        - Diagonal movement and horizontal/vertical lines are supported.
+        - This method does not check the visibility rules related to field of view or distance,
+          only direct line obstruction.
+        """
         # Bresenham's line algorithm
         points = []
         dx = abs(x2 - x1)
