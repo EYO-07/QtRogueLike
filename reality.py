@@ -8,10 +8,7 @@ from globals_variables import *
 # built-in
 import random
 import math
-import json 
 import os 
-import tempfile
-import shutil
 from heapq import heappush, heappop
 from itertools import product
 
@@ -155,6 +152,8 @@ class Weapon(Equippable):
         if self.damage < 0.5: player.primary_hand = None
         return True
     
+# Sword.use_special () || ... Sword.special_attack()* || Append AttackEvent
+# AttackEvent ~ Game.process_events() || 
 class Sword(Weapon):
     __serialize_only__ = Weapon.__serialize_only__ 
     def __init__(self, name="", damage=0 ,description="", weight=1, stamina_consumption=1, durability_factor=0.995):
@@ -190,11 +189,32 @@ class Sword(Weapon):
         if not char: return False
         if not isinstance(char, Enemy): return False
         if not player.can_see_character(char, game.map): 
+            game.add_message(f"Where is the target? ...")
             return False
         # has char and the char is enemy 
         print(f"Enemy {char}")
         if player.stamina < player.max_stamina/3: return False
-        game.events.append( AttackEvent(player, char, random.uniform(self.max_damage,3*self.max_damage)) )
+        damage = random.uniform(self.max_damage,3*self.max_damage)
+        if damage > char.hp: # manual kill and move process 
+            old_x = player.x 
+            old_y = player.y
+            dx = char.x - player.x 
+            dy = char.y - player.y 
+            # death of char and removal from the map 
+            char.drop_on_death()
+            char.current_tile.current_char = None
+            tile = char.current_tile
+            if game.current_map in game.enemies and char in game.enemies[game.current_map]:
+                game.enemies[game.current_map].remove(char)
+            # move the character 
+            old_x, old_y = player.x, player.y
+            if game.map.move_character(player, dx, dy):
+                tile.current_char = player
+                game.dirty_tiles.add((old_x, old_y))
+                game.dirty_tiles.add((player.x, player.y))
+                game.draw()
+        else:
+            game.events.append( AttackEvent(player, char, damage ) )
         # extra stats besides attack event
         player.stamina = player.stamina - player.max_stamina/3
         for i in range(2): self.damage = max(0,self.damage*self.durability_factor)

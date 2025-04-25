@@ -84,7 +84,7 @@ class Game(QGraphicsView, Serializable): #Game_Component__React):
         # --
         self.turn = 0
         self.current_day = 0
-        self.turns_per_day = 2000
+        self.turns_per_day = 1000
         self.low_hp_triggered = False  # Flag for low HP event
         self.low_hunger_triggered = False  # Flag for low hunger event
         self.last_encounter_description = ""
@@ -727,8 +727,9 @@ class Game(QGraphicsView, Serializable): #Game_Component__React):
         dx, dy = 0, 0
         b_isForwarding = False
         if key == Qt.Key_Control: # dodge backward
-            if self.current_day > 5:
-                if self.player.stamina<100:
+            if self.current_day >= 5:
+                stamina_bound = 50
+                if self.player.stamina<stamina_bound:
                     self.add_message("I'm exhausted ... I need to take a breathe")
                 x = self.player.x 
                 y = self.player.y
@@ -738,14 +739,14 @@ class Game(QGraphicsView, Serializable): #Game_Component__React):
                 #print(bx,by)
                 b_is_walkable = True 
                 tile = self.map.get_tile(x+bx,y+by)
-                if tile and self.player.stamina>100:
+                if tile and self.player.stamina>stamina_bound:
                     if tile.walkable:
                         tile2 = self.map.get_tile(x+2*bx,y+2*by)
                         if tile2:
                             if tile2.walkable:
                                 dx = 2*bx 
                                 dy = 2*by
-                                self.player.stamina -= 100
+                                self.player.stamina -= stamina_bound
                             else:
                                 b_is_walkable = False
                         else:
@@ -881,14 +882,14 @@ class Game(QGraphicsView, Serializable): #Game_Component__React):
             #self.player.add_item(WeaponRepairTool("whetstone"))
             
             # -- dungeon experiment
-            if self.map.add_dungeon_entrance_at(self.player.x, self.player.y):
-                self.dirty_tiles.add((self.player.x, self.player.y))  # Redraw tile
-                self.draw_grid()
-                self.draw_hud()
+            # if self.map.add_dungeon_entrance_at(self.player.x, self.player.y):
+                # self.dirty_tiles.add((self.player.x, self.player.y))  # Redraw tile
+                # self.draw_grid()
+                # self.draw_hud()
             
             # -- skill experiment
             self.player.reset_stats()
-            # self.current_day = 30
+            self.current_day = 30
             # for dx,dy in CHESS_KNIGHT_DIFF_MOVES:
                 # if self.map.generate_enemy_at(self.player.x+dx, self.player.y+dy, Rogue):
                     # break
@@ -945,8 +946,10 @@ class Game(QGraphicsView, Serializable): #Game_Component__React):
         if self.turn // self.turns_per_day + 1 > self.current_day:
             self.current_day += 1
             self.Event_NewDay()
-        if self.turn % 5 : # refresh some variables 
+        if self.turn % 5 == 0: # refresh some variables 
             self.last_encounter_description = ""
+        if self.turn % 100 == 0:
+            self.add_message(f"Day : {self.current_day} Turn : {self.turn}")
     def Event_NewDay(self):
         print(f"Day {self.current_day}")
         if self.current_day == 5:

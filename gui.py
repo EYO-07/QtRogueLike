@@ -159,7 +159,7 @@ class JournalWindow(QDialog):
         # Format entry
         # timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         entry = (
-            f"Day {day}, Map {map_coords}, Position ({self.parent().player.x},{self.parent().player.y})\n"
+            f"Day {day}, Map ({map_coords[0]},{-map_coords[1]},{map_coords[2]}), Position ({self.parent().player.x},{(self.parent().grid_height) - (self.parent().player.y)})\n"
             f"{special_text} {self.whereAmI()}\n"
         )
         self.append_text(entry)
@@ -187,7 +187,7 @@ class JournalWindow(QDialog):
         # Format entry
         # timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         entry = (
-            f"Position {map_coords} {self.parent().player.x},{self.parent().player.y} {special_text} {self.whereAmI()}\n"
+            f"Position ({map_coords[0]},{-map_coords[1]},{map_coords[2]}) {self.parent().player.x},{(self.parent().grid_height) - (self.parent().player.y)} {special_text} {self.whereAmI()}\n"
         )
         self.append_text(entry)
         self.parent().add_message("Diary entry logged")
