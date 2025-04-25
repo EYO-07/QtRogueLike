@@ -26,4 +26,6 @@ You can add any track you want on music folder, the game will randomly select an
 
 This game was designed to be difficult and with no leveling system, the items, strategies and the skills will help defeat powerful foes. Choose your opponent carefully.
 
+Mainly developed using A.I. assistance (Grok, ChatGPT, Copilot) and a single human brain cell.
+
 ![](poster.png)
