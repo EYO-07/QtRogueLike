@@ -21,7 +21,8 @@ You can add any track you want on music folder, the game will randomly select an
 2. LEFT, RIGHT : Rotates de Camera
 3. F, CTRL : Special Skills which you gain surviving on day count
 4. SPACE : Rest
-5. J, I : Open User Interfaces. J is for Journal, you can press N to take a quick note and a register your position.
+5. G : Get items on the floor
+6. J, I : Open User Interfaces. J is for Journal, you can press N to take a quick note and a register your position.
 
 This game was designed to be difficult and with no leveling system, the items, strategies and the skills will help defeat powerful foes. Choose your opponent carefully.
 
