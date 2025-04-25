@@ -22,6 +22,7 @@ import os
 import sys
 import math 
 import random
+import re 
 
 # third-party
 from PyQt5.QtMultimedia import QMediaPlayer, QMediaContent
@@ -86,6 +87,7 @@ class Game(QGraphicsView, Serializable): #Game_Component__React):
         self.turns_per_day = 2000
         self.low_hp_triggered = False  # Flag for low HP event
         self.low_hunger_triggered = False  # Flag for low hunger event
+        self.last_encounter_description = ""
         # --
         self.init_viewport()
         self.init_gui()
@@ -111,22 +113,25 @@ class Game(QGraphicsView, Serializable): #Game_Component__React):
         self.scene = QGraphicsScene()
         self.setScene(self.scene)
         self.tile_size = 70 
-    def init_gui(self):
-        # init_view_port() | init_gui() 
-        self.setFocusPolicy(Qt.StrongFocus)  # Ensure Game accepts focus
-        self.setWindowTitle("PyQt Rogue Like")
-        self.setFixedSize(self.view_width * self.tile_size, self.view_height * self.tile_size)
-        # --
-        self.inventory_window = None  # Initialize later on demand
-        # Initialize message window
-        self.message_popup = MessagePopup(self)  # Set Game as parent
-        self.messages = []  # List of (message, turns_remaining) tuples
-        # Add journal window
-        self.journal_window = None
-        # Initialize music player
-        self.music_player = QMediaPlayer()
+    
+    def get_random_music_filename(self,directory="music", pattern=""):
+        # Compile the regex pattern
+        regex = re.compile(pattern)
+
+        # List all files in the directory
+        all_files = os.listdir(directory)
+        if len(all_files)==0: return None
+
+        # Filter files that match the pattern
+        matching_files = [ os.path.join(directory, f) for f in all_files if regex.match(f) ]
+
+        # Return a random file or None if no matches
+        return random.choice(matching_files) if matching_files else None
+    
+    def load_music(self, music_path):
+        if not self.music_player:
+            self.music_player = QMediaPlayer()
         self.is_music_muted = False
-        music_path = "./music/dark_fantasy.mp3"
         if os.path.exists(music_path):
             self.music_player.setMedia(QMediaContent(QUrl.fromLocalFile(music_path)))
             self.music_player.setVolume(10)  # 0-100
@@ -147,6 +152,25 @@ class Game(QGraphicsView, Serializable): #Game_Component__React):
         else:
             self.add_message(f"Music file {music_path} not found")
             print(f"Music file {music_path} not found")
+    
+    def load_random_music(self):
+        return self.load_music( self.get_random_music_filename() )
+    
+    def init_gui(self):
+        # init_view_port() | init_gui() 
+        self.setFocusPolicy(Qt.StrongFocus)  # Ensure Game accepts focus
+        self.setWindowTitle("PyQt Rogue Like")
+        self.setFixedSize(self.view_width * self.tile_size, self.view_height * self.tile_size)
+        # --
+        self.inventory_window = None  # Initialize later on demand
+        # Initialize message window
+        self.message_popup = MessagePopup(self)  # Set Game as parent
+        self.messages = []  # List of (message, turns_remaining) tuples
+        # Add journal window
+        self.journal_window = None
+        # Initialize music player
+        self.music_player = None
+        self.load_random_music()
         
     # -- overrides
     def from_dict(self, dictionary):
@@ -270,6 +294,7 @@ class Game(QGraphicsView, Serializable): #Game_Component__React):
             prv_coords = None, 
             going_up = False
         ):
+        self.load_random_music()
         self.current_map = new_map_coord
         if new_map_coord not in self.maps: 
             self.maps[self.current_map] = Map(coords=self.current_map)
@@ -308,9 +333,9 @@ class Game(QGraphicsView, Serializable): #Game_Component__React):
         self.player.x = new_x
         self.player.y = new_y
         # check if the map already in self.maps
-        # map_type = random.choice(["procedural_lake", "procedural_field", "procedural_road", "procedural_forest"])
+        map_type = random.choice(["procedural_lake", "procedural_field", "procedural_road", "procedural_forest"])
+        #map_type = "procedural_lake" # debug 
         
-        map_type = "procedural_lake" # debug 
         self.map_transition(new_map_file, new_map_coord, map_type)
         # placing character to the new map 
         if not self.map.place_character(self.player):
@@ -381,7 +406,9 @@ class Game(QGraphicsView, Serializable): #Game_Component__React):
         self.maps = {(0, 0, 0): Map("default", coords=self.current_map)}
         self.current_map = (0, 0, 0)
         self.map = self.maps[self.current_map]
-        self.player = Player("Adventurer", 100, 50, 50)
+        xy = self.map.get_random_walkable_tile()
+        if not xy: xy = (50,50)
+        self.player = Player("Adventurer", 100, xy[0], xy[1])
         self.player.hunger = 200
         self.player.max_hunger = 1000
         self.events = []
@@ -699,7 +726,40 @@ class Game(QGraphicsView, Serializable): #Game_Component__React):
         key = event.key()
         dx, dy = 0, 0
         b_isForwarding = False
-        if key == Qt.Key_F: # weapon special skill 
+        if key == Qt.Key_Control: # dodge backward
+            if self.current_day > 5:
+                if self.player.stamina<100:
+                    self.add_message("I'm exhausted ... I need to take a breathe")
+                x = self.player.x 
+                y = self.player.y
+                fx, fy = self.player.get_forward_direction()
+                bx = -fx 
+                by = -fy
+                #print(bx,by)
+                b_is_walkable = True 
+                tile = self.map.get_tile(x+bx,y+by)
+                if tile and self.player.stamina>100:
+                    if tile.walkable:
+                        tile2 = self.map.get_tile(x+2*bx,y+2*by)
+                        if tile2:
+                            if tile2.walkable:
+                                dx = 2*bx 
+                                dy = 2*by
+                                self.player.stamina -= 100
+                            else:
+                                b_is_walkable = False
+                        else:
+                            b_is_walkable = False
+                    else:
+                        b_is_walkable = False
+                else:
+                    b_is_walkable = False
+                if not b_is_walkable:
+                    self.game_iteration()
+            else:
+                self.journal_window.append_text("With ctrl you activate de dodge skill and move 2 tiles backward, in order to use the dodge skill you must survive at least 5 days ...")
+                self.add_message("I don't feel well enough to exercise ... maybe tomorrow I'll feel better.")
+        elif key == Qt.Key_F: # weapon special skill 
             
             # -- debugging 
             # self.player.stamina = self.player.max_stamina
@@ -821,15 +881,16 @@ class Game(QGraphicsView, Serializable): #Game_Component__React):
             #self.player.add_item(WeaponRepairTool("whetstone"))
             
             # -- dungeon experiment
-            # if self.map.add_dungeon_entrance_at(self.player.x, self.player.y):
-                # self.dirty_tiles.add((self.player.x, self.player.y))  # Redraw tile
-                # self.draw_grid()
-                # self.draw_hud()
+            if self.map.add_dungeon_entrance_at(self.player.x, self.player.y):
+                self.dirty_tiles.add((self.player.x, self.player.y))  # Redraw tile
+                self.draw_grid()
+                self.draw_hud()
             
             # -- skill experiment
+            self.player.reset_stats()
             # self.current_day = 30
             # for dx,dy in CHESS_KNIGHT_DIFF_MOVES:
-                # if self.map.generate_enemy_at(self.player.x+dx, self.player.y+dy, Bear):
+                # if self.map.generate_enemy_at(self.player.x+dx, self.player.y+dy, Rogue):
                     # break
                     
             # -- rotation and forward direction 
@@ -884,9 +945,14 @@ class Game(QGraphicsView, Serializable): #Game_Component__React):
         if self.turn // self.turns_per_day + 1 > self.current_day:
             self.current_day += 1
             self.Event_NewDay()
-        
+        if self.turn % 5 : # refresh some variables 
+            self.last_encounter_description = ""
     def Event_NewDay(self):
         print(f"Day {self.current_day}")
+        if self.current_day == 5:
+            self.journal_window.append_text("(Skill - 5 days) I'm in full shape now, I'm feeling agile, use Ctrl to dodge and move two tiles backward ...") 
+        if self.current_day == 20:
+            self.journal_window.append_text("(Skill - 20 days) My body remembered how to use a sword properly, now I can perform deadly blows with F key. Whenever the enemy stay in L position like a knight chess I can swing my sword hit taking him off-guard ...") 
         
     def Event_PlayerDeath(self):
         print("Game Over!")
@@ -901,14 +967,36 @@ class Game(QGraphicsView, Serializable): #Game_Component__React):
             self.start_new_game()
     
     def Event_DoAttack(self, event):
-        event.target.hp -= event.damage
-        if not event.target is self.player:
+        primary = self.player.primary_hand
+        
+        # swords have the parry property in the player perspective, they will try to consume the stamina first 
+        if event.target is self.player: # player being attacked
+            self.last_encounter_description = getattr(event.attacker,"description")
+            primary_attacker = event.attacker.primary_hand 
+            if primary and primary_attacker:
+                if isinstance(primary, Sword) and isinstance(primary_attacker, Sword):
+                    if self.player.stamina > event.damage:
+                        if random.random()<0.7:
+                            self.add_message(f"You parry the incoming attack ...")
+                            self.player.stamina -= event.damage
+                        else:
+                            self.add_message(f"You've being hit, your foe is skilled in sword combat ...")
+                            self.player.hp -= event.damage
+                    else:
+                        self.player.hp -= event.damage
+                else:
+                    self.player.hp -= event.damage    
+            else:
+                self.player.hp -= event.damage            
+        else: # player attack
+            self.last_encounter_description = getattr(event.target,"description")
+            event.target.hp -= event.damage
             self.add_message(f"{event.attacker.name} deals {event.damage} damage to {event.target.name}")
-            primary = self.player.primary_hand
             if primary:
                 if isinstance(primary, Weapon):
                     primary.stats_update(self.player)
                     self.update_inv_window()
+        # in case of death 
         if event.target.hp <= 0:
             self.Event_CharacterDeath(event)
     

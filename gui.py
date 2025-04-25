@@ -180,6 +180,9 @@ class JournalWindow(QDialog):
         if getattr(self.parent(), 'low_hunger_triggered', False):
             special_texts.append("I’m hungry, I need food right now, I could eat a horse.")
             self.parent().low_hunger_triggered = False  # Reset flag
+        if getattr(self.parent(),"last_encounter_description"):
+            special_texts.append(self.parent().last_encounter_description)
+            self.parent().last_encounter_description = ""
         special_text = "\n".join(special_texts) if special_texts else "All is calm for now."
         # Format entry
         # timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -397,21 +400,33 @@ class InventoryWindow(QDialog):
         if self.parent():
             self.parent().setFocus()
 
+    def get_quality(self, game_item):
+        if not hasattr(game_item, "durability_factor"): return ""
+        qlt = game_item.durability_factor
+        if qlt>=0.998: 
+            return "master-crafted"
+        elif qlt>=0.95:
+            return "durable"
+        elif qlt>=0.90:
+            return "bad-quality"
+        else:
+            return "junk"
+
     def label_for(self,game_item):
         if isinstance(game_item, WeaponRepairTool):
-            return f"{game_item.name} : {game_item.uses} [uses] : {game_item.weight} [kg]", QColor("white")
+            return f"{game_item.name} : {game_item.uses} [uses]", QColor("white")
         # Food
         if isinstance(game_item, Food):
-            return f"{game_item.name} : {game_item.nutrition} [nutrition] : {game_item.weight} [kg]", QColor("yellow")
+            return f"{game_item.name} : {game_item.nutrition} [nutrition]", QColor("yellow")
         # Weapon
         if isinstance(game_item, Weapon):
-            return f"{game_item.name} : {game_item.damage} [dmg] : {game_item.slot} : {game_item.weight} [kg]", QColor("white")
+            return f"{game_item.name} : {game_item.damage} [dmg] ({self.get_quality(game_item)})", QColor("white")
         # Common Equippable 
         if isinstance(game_item, Equippable):
-            return f"{game_item.name} : {game_item.slot} : {game_item.weight} [kg]", QColor("cyan")
+            return f"{game_item.name} : {game_item.slot}", QColor("cyan")
         # Common Item
         if isinstance(game_item, Item):
-            return f"{game_item.name} : {game_item.weight} [kg]", QColor("white")
+            return f"{game_item.name}", QColor("white")
         return "Default Label", QColor("white")
     
     def update_inventory(self, player):

@@ -13,12 +13,63 @@ import os
 import tempfile
 import shutil
 from heapq import heappush, heappop
+from itertools import product
 
 # third-party 
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QPixmap, QPainter
 from PyQt5.QtWidgets import QGraphicsPixmapItem
 import noise  # Use python-perlin-noise instead of pynoise
+
+# --- Utilities
+def GetRandomTile_Reservoir_Sampling(tile_container = None, foreach_tiles = None ):
+    """
+    Selects a uniformly random tile using reservoir sampling.
+
+    Args:
+        tile_container: Any object (not directly used here).
+        foreach_tiles (Callable): A function like `map_obj.foreach_tiles`
+            that takes a callback `(tile, i, j, state)` and state, and
+            applies it to each tile.
+
+    Returns:
+        tuple: (tile, i, j) of the randomly selected tile, or None if no tiles were found.
+    """
+    if foreach_tiles == None: return None
+    def random_selector(tile, i, j, state):
+        state['count'] += 1
+        if random.randint(1, state['count']) == 1:
+            state['chosen'] = (tile, i, j)
+    state = {'count': 0, 'chosen': None}
+    foreach_tiles(tile_container, random_selector, state)
+    return state['chosen']
+
+def GetRandomTiles_Reservoir_Sampling(tile_container=None, foreach_tiles=None, k=1):
+    """
+    Selects `k` uniformly random tiles using reservoir sampling.
+
+    Args:
+        tile_container: Object passed to the foreach function as `self`.
+        foreach_tiles (Callable): A method like `Map.foreach_tiles` or `Map.foreach_rooms_tiles`
+            that accepts the form `foreach_tiles(self, callback, state)`.
+        k (int): Number of tiles to sample.
+        
+    Returns:
+        list[tuple]: A list of (tile, i, j) tuples randomly sampled without replacement.
+    """
+    if foreach_tiles is None or k <= 0: return []
+    def sampler(tile, i, j, state):
+        state['count'] += 1
+        idx = state['count'] - 1
+        if idx < state['k']:
+            state['reservoir'].append((tile, i, j))
+        else:
+            s = random.randint(0, idx)
+            if s < state['k']:
+                state['reservoir'][s] = (tile, i, j)
+    state = {'count': 0, 'k': k, 'reservoir': []}
+    foreach_tiles(tile_container, sampler, state)
+    return state['reservoir']
 
 # --- items
 
@@ -63,30 +114,28 @@ class Container(Serializable):
             return True
         return False
 
+    def add_item_by_chance(self, item_name, chance = 0.1, *args, **kwargs):
+        coin = random.random()
+        if coin < chance:
+            item_class = globals()[item_name]
+            item_instance = item_class(*args, **kwargs)
+            self.add_item(item_instance) 
+            return item_instance
+        return None
+
 class Equippable(Item):
     __serialize_only__ = Item.__serialize_only__+["slot"]
     def __init__(self, name="", description="", weight=1, slot="primary_hand"):
         super().__init__(name, description, weight, sprite=name.lower())
         self.slot = slot
         
-    def get_slot(self, char):
-        if self == char.primary_hand:
-            return "primary_hand"
-        if self == char.secondary_hand:
-            return "secondary_hand"
-        if self == char.head: 
-            return "head"
-        if self == char.neck:
-            return "neck"
-        if self == char.torso:
-            return "torso"
-        if self == char.waist: 
-            return "waist"
-        if self == char.legs:
-            return "legs"
-        if self == char.foot:
-            return "foot"
-        return None
+    def get_equipped_slot(self, char):
+        current_slot = None
+        for atrib in EQUIPMENT_SLOTS:
+            if self == getattr(char, atrib):
+                current_slot = atrib
+                break
+        return current_slot
     
 class Weapon(Equippable):
     __serialize_only__ = Equippable.__serialize_only__+["damage","stamina_consumption","max_damage","durability_factor"]
@@ -211,6 +260,9 @@ class Character(Container):
         # used to slowdown a character by checking if turns % self.update_turn: return 
         self.update_turn = 1 
     
+    def reset_stats(self):
+        self.hp = self.max_hp
+    
     def equip_item(self, item, slot): 
         if isinstance(item, Equippable) and item.slot == slot:
             if self.add_item(item): # add item to inventory or verify if its already there 
@@ -267,12 +319,6 @@ class Character(Container):
     def generate_initial_items(self):
         pass    
 
-    def add_item_by_chance(self, item_name, chance = 0.1, *args, **kwargs):
-        item_class = globals()[item_name]
-        item_instance = item_class(*args, **kwargs)
-        self.add_item(item_instance) 
-        return item_instance
-
     def turn_update(self, game_turns_counter):
         """
         Determines whether this entity should perform its update logic
@@ -323,7 +369,7 @@ class Player(Character):
         if self.stamina >= 10:
             moved = game_map.move_character(self, dx, dy)
             if moved:
-                self.stamina -= 2
+                self.stamina -= 4
             return moved
         return False
     
@@ -342,7 +388,7 @@ class Player(Character):
         return max(1, damage)
 
     def regenerate_stamina(self):
-        self.stamina = min(self.stamina + 1, self.max_stamina) 
+        self.stamina = min(self.stamina + 3, self.max_stamina) 
         
     def regenerate_health(self):
         self.hp = min(self.hp + 1, self.max_hp) 
@@ -404,10 +450,16 @@ class Player(Character):
             return self.is_in_cone_vision( (self.x,self.y), (another.x, another.y), self.get_forward_direction(), self.field_of_view )
         return False
 
+    def reset_stats(self):
+        super().reset_stats()
+        self.stamina = self.max_stamina
+        self.hunger = self.max_hunger 
+
 class Enemy(Character):
     __serialize_only__ = Character.__serialize_only__+["type","stance","canSeeCharacter","patrol_direction"]
     def __init__(self, name="", hp=30, x=50, y=50, b_generate_items = True):
         super().__init__(name, hp, x, y)
+        self.description = ""
         self.type = "Generic"
         self.stance = "Aggressive"
         self.canSeeCharacter = False
@@ -476,6 +528,7 @@ class Zombie(Enemy):
     def __init__(self, name="", hp=30, x=50, y=50, b_generate_items = True):
         super().__init__(name, hp, x, y, b_generate_items)
         self.type = "Zombie"
+        self.description = "Zombies, people affected by the plague, they are still alive but because of this strange disease their bodies smells like rotten flesh. Before they lose their minds, they try to acummulate food to satiate hunger, it's almost certain to find food with them ..."
         
     def calculate_damage_done(self):
         return random.randint(0, 15)
@@ -495,9 +548,10 @@ class Zombie(Enemy):
 
 class Rogue(Enemy):
     __serialize_only__ = Enemy.__serialize_only__
-    def __init__(self, name="", hp=30 , x=50, y=50, b_generate_items = True):
+    def __init__(self, name="", hp=100 , x=50, y=50, b_generate_items = True):
         super().__init__(name, hp, x, y, b_generate_items)
         self.type = "Rogue"
+        self.description = "Rogues and Bandits, they are just robbers, ambushing travellers on the road. Always carry a sword with you ..."
         
     def calculate_damage_done(self):
         damage = random.randint(0, 8)
@@ -521,6 +575,7 @@ class Bear(Enemy):
     __serialize_only__ = Enemy.__serialize_only__
     def __init__(self, name="", hp=60 , x=50, y=50, b_generate_items = True, dbg_blind=False):
         super().__init__(name, hp, x, y, b_generate_items)
+        self.description = "Bears, these woods are their home, stronger than any man, don't try to mess with them ..."
         self.dbg_blind = dbg_blind
     def calculate_damage_done(self):
         return random.randint(5, 30)
@@ -699,40 +754,45 @@ class Map(Serializable):
         match self.enemy_type:    
             case "dungeon":
                 if coin < 0.75:
-                    enemy = Zombie("Zombie", 25, x, y,True)
+                    enemy = Zombie("Zombie", x=x, y=y,b_generate_items=True)
                 else:
-                    enemy = Rogue("Rogue", 35, x, y,True)
+                    enemy = Rogue("Rogue", x=x, y=y,b_generate_items=True)
                     enemy.add_item_by_chance("WeaponRepairTool", name = "Whetstone", uses = 3)
+                    enemy.add_item_by_chance("Food", name = "meat", nutrition = 200)
             case "deep_forest":
                 if coin < 0.6:
-                    enemy = Zombie("Zombie", 25, x, y,True)
+                    enemy = Zombie("Zombie", x=x, y=y, b_generate_items=True)
                 elif coin < 0.9:
-                    enemy = Rogue("Rogue", 35, x, y,True)
+                    enemy = Rogue("Rogue", x=x, y=y, b_generate_items=True)
                     enemy.add_item_by_chance("WeaponRepairTool", name = "Whetstone", uses = 2)
                 else:
                     enemy = Bear(name ="Bear", x=x, y=y, b_generate_items=True)
             case "field":
                 if coin < 0.9:
-                    enemy = Zombie("Zombie", 20, x, y,True)
+                    enemy = Zombie("Zombie", x=x, y=y, b_generate_items=True)
+                elif coin < 0.93:
+                    enemy = Rogue("Rogue", x=x, y=y,b_generate_items=True)
                 else:
-                    enemy = Rogue("Rogue", 30, x, y,True)
+                    enemy = Bear(name ="Bear", x=x, y=y, b_generate_items=True)
             case "default":
                 if coin < 0.9:
-                    enemy = Zombie("Zombie", 20, x, y,True)
+                    enemy = Zombie("Zombie", x=x, y=y, b_generate_items=True)
+                elif coin < 0.93:
+                    enemy = Rogue("Rogue", x=x, y=y, b_generate_items=True)
                 else:
-                    enemy = Rogue("Rogue", 30, x, y,True)
+                    enemy = Bear(name ="Bear", x=x, y=y, b_generate_items=True)
             case "road":
                 if coin < 0.9:
-                    enemy = Zombie("Zombie", 20, x, y,True)
+                    enemy = Zombie("Zombie", x=x, y=y, b_generate_items=True)
                 else:
-                    enemy = Rogue("Rogue", 30, x, y,True)
+                    enemy = Rogue("Rogue", x=x, y=y, b_generate_items=True)
             case "lake":
                 if coin < 0.75:
-                    enemy = Zombie("Zombie", 35, x, y,True)
+                    enemy = Zombie("Zombie", x=x, y=y, b_generate_items=True)
                 else:
-                    enemy = Rogue("Rogue", 35, x, y,True)
+                    enemy = Rogue("Rogue", x=x, y=y, b_generate_items=True)
             case _:
-                enemy = Zombie("",25,x,y,True)
+                enemy = Zombie("Zombie",x=x,y=y,b_generate_items=True)
         if not enemy: return False
         self.enemies.append(enemy)
         return self.place_character(enemy)
@@ -777,10 +837,26 @@ class Map(Serializable):
         """ Generate a room with one floor-tile entry only changing his limits """
         pass
     
-    def add_rooms(self, sprite_floor = "floor", sprite_corridor_floor = "dirt"):
-        # Generate rooms
+    def add_L_shaped_connectors(self, sprite_corridor_floor = "dirt"):
+        # Connect rooms with L-shaped corridors
+        for i in range(len(self.rooms) - 1):
+            x1, y1 = self.rooms[i][0] + self.rooms[i][2] // 2, self.rooms[i][1] + self.rooms[i][3] // 2
+            x2, y2 = self.rooms[i + 1][0] + self.rooms[i + 1][2] // 2, self.rooms[i + 1][1] + self.rooms[i + 1][3] // 2
+            if random.choice([True, False]):
+                for x in range(min(x1, x2), max(x1, x2) + 1):
+                    self.grid[y1][x] = Tile(walkable=True, sprite_key=sprite_corridor_floor)
+                for y in range(min(y1, y2), max(y1, y2) + 1):
+                    self.grid[y][x2] = Tile(walkable=True, sprite_key=sprite_corridor_floor)
+            else:
+                for y in range(min(y1, y2), max(y1, y2) + 1):
+                    self.grid[y][x1] = Tile(walkable=True, sprite_key=sprite_corridor_floor)
+                for x in range(min(x1, x2), max(x1, x2) + 1):
+                    self.grid[y2][x] = Tile(walkable=True, sprite_key=sprite_corridor_floor)
+    
+    def add_rooms(self, num_rooms = random.randint(8, 15)):
+        # Generate rooms () || & Generate Enough Rooms || $ (bool) Check if Overlaps | % not overlap || Add Room 
+        # Generate rooms () || & Generate Enough Rooms || $ (bool) Check if Overlaps || Set overlap false | & x,y,w,h : over other rooms || % Overlaps || Set overlap true | break 
         self.rooms = []
-        num_rooms = random.randint(8, 15)
         max_attempts = num_rooms * 10
         attempts = 0
         while len(self.rooms) < num_rooms and attempts < max_attempts:
@@ -796,31 +872,99 @@ class Map(Serializable):
                     room_y + room_h + 2 > other_y):
                     overlap = True
                     break
-            if not overlap:
-                self.rooms.append((room_x, room_y, room_w, room_h))
-                for y in range(room_y, room_y + room_h):
-                    for x in range(room_x, room_x + room_w):
-                        self.grid[y][x] = Tile(walkable=True, sprite_key=sprite_floor)
+            if not overlap: self.rooms.append((room_x, room_y, room_w, room_h))
             attempts += 1
-
         if not self.rooms:
             raise RuntimeError("Failed to generate any rooms for dungeon")
-
-        # Connect rooms with L-shaped corridors
-        for i in range(len(self.rooms) - 1):
-            x1, y1 = self.rooms[i][0] + self.rooms[i][2] // 2, self.rooms[i][1] + self.rooms[i][3] // 2
-            x2, y2 = self.rooms[i + 1][0] + self.rooms[i + 1][2] // 2, self.rooms[i + 1][1] + self.rooms[i + 1][3] // 2
-            if random.choice([True, False]):
-                for x in range(min(x1, x2), max(x1, x2) + 1):
-                    self.grid[y1][x] = Tile(walkable=True, sprite_key=sprite_floor)
-                for y in range(min(y1, y2), max(y1, y2) + 1):
-                    self.grid[y][x2] = Tile(walkable=True, sprite_key=sprite_floor)
-            else:
-                for y in range(min(y1, y2), max(y1, y2) + 1):
-                    self.grid[y][x1] = Tile(walkable=True, sprite_key=sprite_floor)
-                for x in range(min(x1, x2), max(x1, x2) + 1):
-                    self.grid[y2][x] = Tile(walkable=True, sprite_key=sprite_floor)
+    
+    def add_rooms_with_connectors(self, sprite_floor = "floor", sprite_corridor_floor = "dirt"):
+        # Generate rooms
+        # self.rooms = []
+        # num_rooms = random.randint(8, 15)
+        # max_attempts = num_rooms * 10
+        # attempts = 0
+        # while len(self.rooms) < num_rooms and attempts < max_attempts:
+            # room_w = random.randint(5, 10)
+            # room_h = random.randint(5, 10)
+            # room_x = random.randint(1, self.width - room_w - 1)
+            # room_y = random.randint(1, self.height - room_h - 1)
+            # overlap = False
+            # for other_x, other_y, other_w, other_h in self.rooms:
+                # if (room_x < other_x + other_w + 2 and
+                    # room_x + room_w + 2 > other_x and
+                    # room_y < other_y + other_h + 2 and
+                    # room_y + room_h + 2 > other_y):
+                    # overlap = True
+                    # break
+            # if not overlap: self.rooms.append((room_x, room_y, room_w, room_h))
+            # attempts += 1
+        # if not self.rooms:
+            # raise RuntimeError("Failed to generate any rooms for dungeon")
+        self.add_rooms()
+        self.add_L_shaped_connectors(sprite_corridor_floor = sprite_corridor_floor)            
+        self.repaint_floor_rooms(sprite_floor)
         
+    def foreach_rooms_tiles(self, f_lambda = lambda tile,i,j: print((i,j)), *args, **kwargs):
+        """
+        Applies a function to each tile within all defined rooms.
+
+        Iterates through each room in `self.rooms`, treating the room as a rectangle
+        defined by (x, y, w, h). For every tile (i, j) inside the room, the specified
+        `f_lambda` function is called with the tile object and its coordinates.
+
+        The iteration behavior can be altered based on the return value of `f_lambda`:
+        - If `f_lambda` returns `None`, iteration continues.
+        - If `f_lambda` returns `True`, the current room's tile loop breaks.
+        - If `f_lambda` returns any other value, the method immediately returns that value.
+
+        Args:
+            f_lambda (Callable): A lambda or function that accepts the form `f(tile, i, j, *args, **kwargs)`.
+                Defaults to printing the tile coordinates.
+            *args: Additional positional arguments passed to `f_lambda`.
+            **kwargs: Additional keyword arguments passed to `f_lambda`.
+
+        Returns:
+            Any: If `f_lambda` returns a non-None and non-True value, it is immediately returned.
+            Otherwise, returns `None`.
+
+        Example:
+            def mark_tile(tile, i, j):
+                tile.marked = True
+
+            map.foreach_rooms_tiles(mark_tile)
+
+        Note:
+            Make sure `self.rooms` is a list of 4-tuples `(x, y, w, h)`.
+            `self.get_tile(x, y)` must return a tile object.
+        """
+        if not self.rooms: return None 
+        for x,y,w,h in self.rooms:
+            for i,j in product(range(x,x+w), range(y,y+h)):            
+                tile = self.get_tile(i,j)
+                result = f_lambda(tile, i,j,*args, *kwargs)
+                if result == None:
+                    continue
+                else:
+                    if result == True:
+                        break
+                    else:
+                        return result
+        return None
+
+    def repaint_floor_rooms(self, sprite = "floor"):
+        def inner_function(tile,i,j):
+            if not tile: return None
+            if tile.stair: return None
+            self.set_tile(i,j,Tile(walkable=True, sprite_key=sprite))
+            return None
+        self.foreach_rooms_tiles(inner_function)
+
+    def get_random_tile_from_rooms(self):
+        return GetRandomTile_Reservoir_Sampling( self, Map.foreach_rooms_tiles )
+
+    def get_random_tiles_from_rooms(self, k=20):
+        return GetRandomTiles_Reservoir_Sampling( self, Map.foreach_rooms_tiles, k=k )
+
     def add_patches(self, spriteKey = "dirt", is_walkable = True, scale = 0.1):
         # Generate dirt patches using Perlin noise or random clusters
         for i in range(self.width):
@@ -829,6 +973,13 @@ class Map(Serializable):
                 if noise_value > 0.2:  # Threshold for dirt
                     self.grid[i][j] = Tile(walkable=is_walkable, sprite_key=spriteKey)
                     
+    def add_dungeon_loot(self, k=20):
+        # -> add_dungeon_loot () || $ Sample | & (Tile) X : Sample || Random Choice in Loot Table || Add to X the Loot 
+        Sampled_Tiles = self.get_random_tiles_from_rooms(k=k)
+        for tile in Sampled_Tiles:
+            LootKwargs = random.choice(LOOT_TABLE)
+            tile[0].add_item_by_chance(**LootKwargs)
+    
     def add_trees(self):
         # Add trees with slight clustering
         for i in range(1, self.width-1):
@@ -857,18 +1008,21 @@ class Map(Serializable):
             if tile_2:
                 if not tile_2.walkable: return False
         return True
-    def add_dungeon_entrance(self, probability = 1.0, border_factor = 0.0):
-        coin = random.random()
-        if coin > probability: 
-            print(f"not placed {coin}")
-            return False
+    
+    def get_random_walkable_tile(self, border_factor = 0.0):
         dx = int(border_factor*self.width)
         dy = int(border_factor*self.height)
         walkable_tiles = [(i, j) for j in range(dy,self.height-dy) for i in range(dx,self.width-dx) if self.is_adjacent_walkable(self.grid[i][j],i,j) ]
-        if not walkable_tiles: 
-            print(f"not walkable tiles")
-            return False
-        entrance_x, entrance_y = random.choice(walkable_tiles)
+        if not walkable_tiles: return None
+        return random.choice(walkable_tiles)
+    
+    def add_dungeon_entrance(self, probability = 1.0, border_factor = 0.0):
+        coin = random.random()
+        if coin > probability: return False
+        xy = self.get_random_walkable_tile(border_factor = border_factor)
+        if not xy: return False
+        entrance_x = xy[0]
+        entrance_y = xy[1]
         target_map = (self.coords[0], self.coords[1], -1)
         self.grid[entrance_y][entrance_x] = Tile(walkable=True, sprite_key="dungeon_entrance")
         self.grid[entrance_y][entrance_x].stair = target_map
@@ -961,9 +1115,10 @@ class Map(Serializable):
         # initialize grid
         self.grid_init_uniform("grass",True)
         self.grid_init_uniform("tree", False,x1 = 1, x2 = self.width-1, y1 = 1, y2=self.height-1)
-        self.add_rooms("grass","dirt")
-        self.add_patches(scale = 0.5)
+        self.add_rooms_with_connectors("grass","dirt")
+        self.add_patches(scale = 0.4)
         self.ensure_connection()  # <--- Here!
+        self.add_dungeon_loot(k=10)
 
     def generate_procedural_dungeon(self, previous_map_coords, prev_x, prev_y, up=False):
         """
@@ -985,7 +1140,7 @@ class Map(Serializable):
 
         # initialize grid
         self.grid_init_uniform("wall",False)
-        self.add_rooms("floor","dirt")
+        self.add_rooms_with_connectors("floor","dirt")
         
         # Choose starting point (stair_up or stair_down to previous map)
         start_room = random.choice(self.rooms)
@@ -1018,6 +1173,7 @@ class Map(Serializable):
         self.starting_x = new_x
         self.starting_y = new_y
         #self.ensure_connection([(new_x,new_y)])
+        self.add_dungeon_loot()
         return new_x, new_y, new_z
     
     def generate_procedural_field(self):
@@ -1079,6 +1235,9 @@ class Map(Serializable):
         except Exception as e:
             print(f"Error accessing tile ({x}, {y}): {e}")
             return None
+
+    def set_tile(self, x, y, tile):
+        self.grid[y][x] = tile
 
     def place_character(self, char):
         try:

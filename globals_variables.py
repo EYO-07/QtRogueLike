@@ -52,7 +52,8 @@ SPRITE_NAMES = [
     "rock",
     "whetstone",
     "bear",
-    "meat"
+    "meat",
+    "mercenary"
 ]
 
 EQUIPMENT_SLOTS = [
@@ -66,7 +67,15 @@ EQUIPMENT_SLOTS = [
     'foot'
 ]
 
-
+LOOT_TABLE = [
+    { "item_name": "Food", "chance": 0.3, "name":"apple", "nutrition":10 },
+    { "item_name": "Food", "chance": 0.2, "name":"fish", "nutrition":80 },
+    { "item_name": "Food", "chance": 0.1, "name":"bread", "nutrition":50 },
+    { "item_name": "Food", "chance": 0.01, "name":"meat", "nutrition":280 },
+    { "item_name": "Sword", "chance": 0.001, "name":"Long_Sword", "damage":100,"durability_factor":0.998 },
+    { "item_name": "Sword", "chance": 0.1, "name":"Long_Sword", "damage":100,"durability_factor":0.8 },
+    { "item_name": "WeaponRepairTool", "chance": 0.01, "name":"Whetstone", "uses":10 }
+]
 
 
 
