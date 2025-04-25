@@ -160,6 +160,15 @@ class Sword(Weapon):
         super().__init__(name, damage, description, weight, stamina_consumption, durability_factor)
         self.days_to_unlock_special = 20
     
+    def get_player_parry_chance(self, player, enemy, damage):
+        # should be used on the context that self is the primary_hand of player 
+        primary = enemy.primary_hand
+        if not enemy: return 0.0
+        if player.stamina <= damage: return 0.0 
+        # Sword Fight Chance
+        if isinstance(primary, Sword): return 0.7
+        return 0.0 
+    
     def use_special(self, player, map, game):
         # knight chess attack, sword swing 
         if game.current_day < self.days_to_unlock_special: 
@@ -221,6 +230,9 @@ class Sword(Weapon):
         if self.damage < 0.5: player.primary_hand = None
         return True 
 
+class Mace(Weapon):
+    pass 
+
 class Food(Item):
     __serialize_only__ = Item.__serialize_only__+["nutrition"]
     def __init__(self, name="", nutrition=0, description="", weight=1):
@@ -255,6 +267,9 @@ class Armor(Equippable):
     def __init__(self, name="", armor=0, description="", weight=1, slot="torso"):
         super().__init__(name, description, weight, slot)
         self.armor = armor
+
+class Shield(Equippable):
+    pass
 
 # --- living
 

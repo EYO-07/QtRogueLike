@@ -323,6 +323,7 @@ class MessagePopup(QDialog):
         # Position below the main window
         if self.parent():
             parent_geo = self.parent().geometry()
+            if parent_geo.x() == 0 and parent_geo.y() == 0 : return None
             target_x = parent_geo.x() + (parent_geo.width() - self.width()) // 2
             target_y = parent_geo.y() + parent_geo.height() + 10
             self.move(target_x, target_y)
