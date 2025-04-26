@@ -166,7 +166,7 @@ class Game(QGraphicsView, Serializable):
             else:
                 self.add_message("Music not ready, will play when loaded")
                 print("Music not ready, waiting for LoadedMedia state")
-    def add_message(self, message, turns=5):
+    def add_message(self, message, turns=15):
         """Add a message to the queue."""
         self.messages.append((message, turns))
         # Update pop-up with all active messages
@@ -279,6 +279,27 @@ class Game(QGraphicsView, Serializable):
         self.enemies[self.current_map] = self.map.enemies 
         return None, None
     
+    def safely_place_character_to_new_map(self,char=None):
+        if not char: char = self.player 
+        if not char: return 
+        if not self.map.place_character(char):
+            print(f"Error: Failed to place player at ({char.x}, {char.y})")
+            old_x = char.x
+            old_y = char.y
+            b_placed = False
+            for dx,dy in SQUARE_DIFF_MOVES_5x5:
+                tile = self.map.get_tile(old_x+dx , old_y+dy)
+                if not tile: continue
+                if self.map.is_adjacent_walkable(tile, old_x+dx, old_y+dy):
+                    char.x = old_x+dx 
+                    char.y = old_y+dy
+                    if self.map.place_character(char): 
+                        b_placed = True
+                        break 
+            if not b_placed:
+                char.x, char.y = self.map.width // 2, self.map.height // 2
+                self.map.place_character(char)
+    
     def horizontal_map_transition(self,x,y):
         self.events.clear()
         self.save_current_game(slot=self.current_slot)
@@ -301,10 +322,24 @@ class Game(QGraphicsView, Serializable):
         
         self.map_transition(new_map_file, new_map_coord, map_type)
         # placing character to the new map 
-        if not self.map.place_character(self.player):
-            print(f"Error: Failed to place player at ({self.player.x}, {self.player.y})")
-            self.player.x, self.player.y = self.map.width // 2, self.map.height // 2
-            self.map.place_character(self.player)
+        self.safely_place_character_to_new_map()
+        # if not self.map.place_character(self.player):
+            # print(f"Error: Failed to place player at ({self.player.x}, {self.player.y})")
+            # old_x = self.player.x
+            # old_y = self.player.y
+            # b_placed = False
+            # for dx,dy in SQUARE_DIFF_MOVES_5x5:
+                # tile = self.map.get_tile(old_x+dx , old_y+dy)
+                # if not tile: continue
+                # if self.map.is_adjacent_walkable(tile, old_x+dx, old_y+dy):
+                    # self.player.x = old_x+dx 
+                    # self.player.y = old_y+dy
+                    # if self.map.place_character(self.player): 
+                        # b_placed = True 
+                        # break 
+            # if not b_placed:
+                # self.player.x, self.player.y = self.map.width // 2, self.map.height // 2
+                # self.map.place_character(self.player)
         self.scene.clear()
         self.dirty_tiles.clear()
         self.draw_grid()
@@ -611,7 +646,7 @@ class Game(QGraphicsView, Serializable):
     def update_player(self):
         self.player.regenerate_stamina()
         self.player.regenerate_health()
-        self.player.hunger = max(0, self.player.hunger - 1)  # Hunger decreases each turn
+        self.player.hunger = max(0, self.player.hunger - 0.5)  # Hunger decreases each turn
         # Check for special events and set flags
         if self.player.hp / self.player.max_hp < 0.2:
             self.low_hp_triggered = True
@@ -955,7 +990,7 @@ class Game(QGraphicsView, Serializable):
         else: # player attack
             self.last_encounter_description = getattr(event.target,"description")
             event.target.hp -= event.damage
-            self.add_message(f"{event.attacker.name} deals {event.damage} damage to {event.target.name}")
+            self.add_message(f"{event.attacker.name} deals {event.damage:.1f} damage to {event.target.name}")
             if primary:
                 if isinstance(primary, Weapon):
                     primary.stats_update(self.player)

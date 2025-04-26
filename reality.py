@@ -429,7 +429,7 @@ class Player(Character):
         self.hp = min(self.hp + 1, self.max_hp) 
     
     def generate_initial_items(self):
-        self.equip_item(Sword("Long_Sword", damage=10), "primary_hand")
+        self.equip_item(Sword(name="Bastard_Sword", damage=8.5, durability_factor=0.9995, description="although with no name, this Bastard Sword was master-crafted and passed as heirloom in generations of my family, that swords reminds me of the values my father teach me ..."), "primary_hand")
         self.add_item(Food("Apple", nutrition=50))
         self.add_item(Food("Apple", nutrition=50))
         self.add_item(Food("Apple", nutrition=50))
@@ -668,6 +668,7 @@ class Tile(Container):
         return self.default_sprite
 
     def draw(self, scene, x, y, tile_size):
+        # -> draw() || $ .combined_sprite | % has char | % has item | % else | $ (QGraphicsPixmapItem) item | Add the item to scene 
         base = self.get_default_pixmap()
         base_scaled = base.scaled(tile_size, tile_size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
         if self.current_char:
@@ -711,6 +712,18 @@ class Tile(Container):
             self.items.remove(item)
             return True
         return False
+
+    def can_place_character(self):
+        return self.walkable and (not self.current_char )
+
+class Room:
+    def __init__(self):
+        self.positions = [] # (x,y) tuples walkable or not
+        self.boundaries = [] # (x,y) tuples non-interior and non-walkable positions
+        self.entry = None # tuple 
+        self.exit = None # tuple, could be the same .entry 
+    def get_iterator(self):
+        return self.positions
 
 class Map(Serializable):
     __serialize_only__ = ["width","height","filename","grid","enemy_type","coords","enemies"]

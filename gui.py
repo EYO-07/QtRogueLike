@@ -11,7 +11,7 @@ from datetime import datetime
 
 # third-party
 from PyQt5.QtWidgets import QWidget, QListWidget, QVBoxLayout, QPushButton, QHBoxLayout, QMenu, QDialog, QLabel, QTextEdit
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QEvent
 from PyQt5.QtGui import QTextCursor, QColor
 
 class JournalWindow(QDialog):
@@ -267,73 +267,65 @@ class MessagePopup(QDialog):
         self.setWindowOpacity(0.7)  # 70% opaque
         self.setModal(False)  # Non-blocking
         self.setFocusPolicy(Qt.NoFocus)  # Prevent keyboard focus
-
         # Layout
         self.layout = QVBoxLayout()
-        # self.layout.setSpacing(2)  # Small gap between messages
-        #self.layout.setContentsMargins(0, 0, 0, 0)  # Padding around messages
-        self.labels = []  # List to store QLabel widgets for messages
+        self.label = QLabel(self) 
+        self.label.setStyleSheet("""
+            background-color: rgba(0, 0, 0, 150);
+            color: white;
+            padding: 5px;
+            border-radius: 5px;
+            font-size: 10px;
+            font-weight: bold;
+        """)
+        self.label.setWordWrap(True)
+        self.label.setFocusPolicy(Qt.NoFocus)
+        self.layout.addWidget(self.label)
         self.setLayout(self.layout)
-
         # Base size (updated in set_message)
         self.base_height = 31  # Height per message
         self.max_messages = 5  # Limit to prevent oversized pop-up
         self.setWindowTitle("Messages")
         self.hide()  # Hidden by default
-        #print("MessagePopup initialized, hidden by default")
 
     def set_message(self, messages):
         """Display a list of messages, newest at the top."""
-        # Clear existing labels
-        for label in self.labels:
-            self.layout.removeWidget(label)
-            label.deleteLater()
-        self.labels.clear()
-
         # If no messages, hide the pop-up
         if not messages:
             self.hide()
-            #print("MessagePopup hidden, no messages")
             return
-
+                
         # Limit to max_messages
         messages = messages[-self.max_messages:]  # Take newest messages
-        #print(f"MessagePopup displaying {len(messages)} messages: {messages}")
-
-        # Create a QLabel for each message (newest first)
-        for message in reversed(messages):  # Reverse to show newest at top
-            label = QLabel(message, self)
-            label.setStyleSheet("""
-                background-color: rgba(0, 0, 0, 150);  /* Semi-transparent black */
-                color: white;
-                padding: 0px;
-                border-radius: 0px;
-                font-size: 10px;
-                font-weight: bold;
-            """)
-            label.setWordWrap(True)
-            label.setFocusPolicy(Qt.NoFocus)
-            self.layout.addWidget(label)
-            self.labels.append(label)
-
-        # Resize pop-up based on number of messages
-        height = len(messages) * self.base_height
-        self.setFixedSize(500, height+3)
-
+        text = " | ".join(reversed(messages))  # Newest at top
+        self.label.setText(text)
+        
         # Position below the main window
+        parent_height = 400
+        parent_width = 400
+        parent_geo = None
+        target_x = 100
+        target_y = 300
         if self.parent():
             parent_geo = self.parent().geometry()
-            if parent_geo.x() == 0 and parent_geo.y() == 0 : return None
-            target_x = parent_geo.x() + (parent_geo.width() - self.width()) // 2
-            target_y = parent_geo.y() + parent_geo.height() + 10
-            self.move(target_x, target_y)
-            #print(f"MessagePopup positioned at ({target_x}, {target_y}), parent at ({parent_geo.x()}, {parent_geo.y()}), size {parent_geo.width()}x{parent_geo.height()}, popup height={height}")
-        else:
-            self.move(100, 300)
-            #print(f"MessagePopup positioned at (100, 300), no parent")
-
+            parent_width = parent_geo.width()
+            parent_height = parent_geo.height()
+        if parent_geo.x() == 0 and parent_geo.y() == 0 : 
+            self.hide()
+            return 
+        # --
+        target_x = parent_geo.x() + (parent_geo.width() - self.width()) // 2
+        target_y = parent_geo.y() + parent_geo.height() + 10
+        # adjust size
+        fixed_width = parent_width
+        self.label.setFixedWidth(fixed_width)
+        # self.setFixedSize(fixed_width + 20, self.label.height() + 20)
+        self.label.adjustSize()
+        self.adjustSize()
+        self.move(target_x, target_y)        
         # Show and ensure main window retains focus
         self.show()
+            
         if self.parent():
             self.parent().setFocus()
             
@@ -361,13 +353,16 @@ class InventoryWindow(QDialog):
             }
             QListWidget::item:selected {
                 background-color: rgba(255, 255, 255, 20);
+                color: cyan; 
             }
         """)
         self.list_widget.setSelectionMode(QListWidget.SingleSelection)
         self.list_widget.itemDoubleClicked.connect(self.item_double_click)  # Double-click to equip
         self.list_widget.setContextMenuPolicy(Qt.CustomContextMenu)
         self.list_widget.customContextMenuRequested.connect(self.show_context_menu)
+        self.list_widget.installEventFilter(self) # now the list_widget will use the keyPressEvent function 
         self.layout.addWidget(self.list_widget)
+        self.list_widget_last_size = 0
         # Buttons
         button_layout = QHBoxLayout()
         self.equip_button = QPushButton("Equip/Use")
@@ -396,10 +391,22 @@ class InventoryWindow(QDialog):
         self.setWindowTitle("Inventory")
         self.hide()  # Hidden by default
         self.parent().setFocus()
-        
-    def keyPressEvent(self, event):
-        if self.parent():
-            self.parent().setFocus()
+
+    def eventFilter(self, obj, event):
+        if obj == self.list_widget and event.type() == QEvent.KeyPress:
+            # self.current_list_widget_item_index = self.list_widget.currentRow()
+            # print("Current Index:", self.current_list_widget_item_index)
+            if event.key() in (Qt.Key_Return, Qt.Key_Enter):
+                current_item = self.list_widget.currentItem()
+                if current_item:
+                    self.item_double_click(current_item)
+                    return True
+            elif event.key() == Qt.Key_Delete:
+                current_item = self.list_widget.currentItem()
+                if current_item:
+                    self.drop_item(current_item)
+                    return True
+        return super().eventFilter(obj, event)
 
     def get_quality(self, game_item):
         if not hasattr(game_item, "durability_factor"): return ""
@@ -433,6 +440,10 @@ class InventoryWindow(QDialog):
     def update_inventory(self, player):
         """Update the list with the player's current items."""
         self.player = player  # Store player reference
+        # --
+        last_list_widget_size = len(self.list_widget_objects)
+        last_list_widget_current_item_index = self.list_widget.currentRow()
+        # -- 
         self.list_widget_objects.clear()
         self.list_widget.clear()
         wdg_index = 0
@@ -462,6 +473,12 @@ class InventoryWindow(QDialog):
             self.parent().setFocus()
         else:
             self.hide()
+        if last_list_widget_size == len(self.list_widget_objects): # same size
+            self.list_widget.setCurrentRow(last_list_widget_current_item_index)
+        elif last_list_widget_size == len(self.list_widget_objects)-1: # size -1
+            self.list_widget.setCurrentRow(last_list_widget_current_item_index-1)
+        else:
+            self.list_widget.setCurrentRow(0)
             
     def update_position(self):
         """Position the inventory window to the left of the parent window, vertically centered."""
@@ -507,7 +524,7 @@ class InventoryWindow(QDialog):
             if ply_index == wdg_index: # not equipped 
                 if isinstance(game_item, Equippable):
                     if self.player.equip_item(game_item, game_item.slot):
-                        self.parent().add_message(f"Equipped {game_item.name}")
+                        self.parent().add_message(f"Equipped {game_item.name}, {game_item.description}")
                         self.parent().draw_hud()  # Update HUD if needed
                     else:
                         self.parent().add_message(f"Cannot equip {game_item.name}")

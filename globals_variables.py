@@ -1,3 +1,7 @@
+# Global Functions
+def Generate_Square_Diffs(radius=3):
+    return [ (x,y) for y in range(-radius+1,radius) for x in range(-radius+1,radius) ]
+
 # Global Variables
 
 # map configuration 
@@ -14,11 +18,8 @@ CHESS_KNIGHT_DIFF_MOVES = [
     (1, 2), (1, -2), (-1, 2), (-1, -2)
 ]
     
-SQUARE_DIFF_MOVES = [
-    (-1,-1), (-1,0), (-1,1), 
-    (0,-1), (0,0) ,(0,-1),
-    (1,-1), (1,0), (1,1)
-]
+SQUARE_DIFF_MOVES = Generate_Square_Diffs(2)
+SQUARE_DIFF_MOVES_5x5 = Generate_Square_Diffs(3)
 
 CROSS_DIFF_MOVES = [
     (0,1), (0,2), (0,3),
@@ -53,7 +54,8 @@ SPRITE_NAMES = [
     "whetstone",
     "bear",
     "meat",
-    "mercenary"
+    "mercenary",
+    "bastard_sword"
 ]
 
 EQUIPMENT_SLOTS = [
@@ -78,8 +80,15 @@ LOOT_TABLE = [
     { "item_name": "WeaponRepairTool", "chance": 0.01, "name":"Whetstone", "uses":10 }
 ]
 
+DUNGEON_ENEMY_TABLE = []
 
+FOREST_ENEMY_TABLE = []
 
+FIELD_ENEMY_TABLE = []
+ 
+ROAD_ENEMY_TABLE = [] 
+
+LAKE_ENEMY_TABLE = [] 
 
 
 
