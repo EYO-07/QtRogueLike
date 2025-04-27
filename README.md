@@ -19,13 +19,16 @@ You can add any track you want on music folder, the game will randomly select an
 ## Gameplay
 1. A,W,S,D, UP, DOWN : Moves the Character
 2. LEFT, RIGHT : Rotates de Camera
-3. F, CTRL : Special Skills which you gain surviving on day count
-4. SPACE : Rest
-5. G : Get items on the floor
-6. J, I : Open User Interfaces. J is for Journal, you can press N to take a quick note and a register your position.
-7. F5, F6 : Save the game in slots 1 and 2 respectively
-8. F7, F8 : Load the game in slots 1 and 2 respectively
-9. F9 : New Game 
+3. R : Use whetstone to repair weapons
+4. E : Eat the first food in inventory
+5. C : Interact with stairs
+6. F, CTRL, END : Special Skills which you gain surviving on day count.
+7. SPACE : Rest
+8. G : Get items on the floor
+9. J, I : Open User Interfaces. J is for Journal, you can press N to take a quick note and a register your position.
+10. F5, F6 : Save the game in slots 1 and 2 respectively
+11. F7, F8 : Load the game in slots 1 and 2 respectively
+12. F9 : New Game 
 
 This game was designed to be difficult and with no leveling system, the items, strategies and the skills will help defeat powerful foes. Choose your opponent carefully.
 
