@@ -53,6 +53,7 @@ class Game(QGraphicsView, Serializable):
         self.low_hunger_triggered = False  # Flag for low hunger event
         self.last_encounter_description = ""
         # --
+        self.is_music_muted = False
         self.init_viewport()
         self.init_gui()
         # -- 
@@ -119,6 +120,7 @@ class Game(QGraphicsView, Serializable):
             print(f"Music file {music_path} not found")
     
     def load_random_music(self):
+        if self.is_music_muted: return None
         return self.load_music( self.get_random_music_filename() )
     
     def init_gui(self):
@@ -911,43 +913,85 @@ class Game(QGraphicsView, Serializable):
                 self.inventory_window.update_inventory(self.player)
             return
         elif key == Qt.Key_Escape:  # Close inventory window
-            if self.inventory_window and self.inventory_window.isVisible():
-                self.inventory_window.hide()
-                return
-        
-        elif key == Qt.Key_F1:  # F1 Debugging: 
-            # -- item experiment
-            # self.player.add_item(WeaponRepairTool("whetstone"))
-            
-            # -- dungeon experiment
-            if self.map.add_dungeon_entrance_at(self.player.x, self.player.y):
-                self.dirty_tiles.add((self.player.x, self.player.y))  # Redraw tile
-                self.draw_grid()
-                self.draw_hud()
-            
-            # -- skill experiment
-            # self.player.reset_stats()
-            # self.current_day = 30
-            # for dx,dy in CHESS_KNIGHT_DIFF_MOVES:
-                # if self.map.generate_enemy_at(self.player.x+dx, self.player.y+dy, Mercenary):
-                    # break
-                    
-            # -- rotation and forward direction 
-            # player = self.player
-            # north = (0,-1)
-            # south = (0,1)
-            # east = (1,0)
-            # west = (-1,0)
-            # print( "Direction is north? :", north == player.get_forward_direction() )
-            # print( "Direction is east? :", east == player.get_forward_direction() )
-            # print( "Direction is west? :", west == player.get_forward_direction() )
-            # print( "Direction is south? :", south == player.get_forward_direction() )
-            # print( "Is in cone vision? :", player.is_in_cone_vision(
-                    # (player.x, player.y), (player.x, player.y-1), direction=player.get_forward_direction(), fov_deg=70
-                # ) 
-            # )
-            pass
-            
+            pass 
+            # if self.inventory_window and self.inventory_window.isVisible():
+                # self.inventory_window.hide()
+                # return
+        elif key == Qt.Key_F12:  # F12 Debugging: 
+            def action_(menu,item, gui):
+                if item == "Return": gui.set_list()
+                # -- 
+                if menu == "main":
+                    match item:
+                        case "Exit": 
+                            gui.close()
+                        case "Add Item >": 
+                            gui.set_list("Add Item >")
+                        case "Restore Status":
+                            self.player.reset_stats()
+                            gui.close()
+                        case "Set Day 100":
+                            self.current_day = 100
+                            gui.close()
+                        case "Generate Enemies >":
+                            gui.set_list("Generate Enemies >")
+                        case "Generate Dungeon Entrance":
+                            if self.map.add_dungeon_entrance_at(self.player.x, self.player.y):
+                                self.dirty_tiles.add((self.player.x, self.player.y)) 
+                                self.draw_grid()
+                                self.draw_hud()
+                            gui.close()
+                # --
+                if menu == "Add Item >":
+                    match item:
+                        case "Whetstone":
+                            self.player.add_item(WeaponRepairTool("whetstone"))
+                            gui.close()
+                # -- 
+                if menu ==  "Generate Enemies >":
+                    match item:
+                        case "Zombie":
+                            for dx,dy in CHESS_KNIGHT_DIFF_MOVES:
+                                if self.map.generate_enemy_at(self.player.x+dx, self.player.y+dy, Zombie):
+                                    break
+                            gui.close()
+                        case "Bear":
+                            for dx,dy in CHESS_KNIGHT_DIFF_MOVES:
+                                if self.map.generate_enemy_at(self.player.x+dx, self.player.y+dy, Bear):
+                                    break
+                            gui.close()
+                        case "Rogue":
+                            for dx,dy in CHESS_KNIGHT_DIFF_MOVES:
+                                if self.map.generate_enemy_at(self.player.x+dx, self.player.y+dy, Rogue):
+                                    break
+                            gui.close()
+                        case "Mercenary":
+                            for dx,dy in CHESS_KNIGHT_DIFF_MOVES:
+                                if self.map.generate_enemy_at(self.player.x+dx, self.player.y+dy, Mercenary):
+                                    break
+                            gui.close()
+                            
+            SB = SelectionBox(parent=self, item_list = [
+                "[ DEBUG MENU ]",
+                "Set Day 100", 
+                "Add Item >", 
+                "Generate Enemies >", 
+                "Restore Status",
+                "Generate Dungeon Entrance", 
+                "Exit"
+            ], action = action_)
+            SB.add_list("Add Item >",[
+                "Whetstone",
+                "Return"
+            ])
+            SB.add_list("Generate Enemies >",[
+                "Zombie",
+                "Bear",
+                "Rogue",
+                "Mercenary",
+                "Return"
+            ])
+            SB.show()        
         else:
             self.game_iteration()
             return 

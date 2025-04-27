@@ -119,8 +119,8 @@ DUNGEON_ENEMY_TABLE = [
     {"enemy": "Zombie", "chance": 0.75, "b_generate_items": True}
 ]
 FOREST_ENEMY_TABLE = [
-    {"enemy": "Bear", "chance": 0.1, "b_generate_items": True},
-    {"enemy": "Mercenary", "chance": 0.1, "b_generate_items": True, "extra_items": [
+    {"enemy": "Bear", "chance": 0.07, "b_generate_items": True},
+    {"enemy": "Mercenary", "chance": 0.05, "b_generate_items": True, "extra_items": [
         {"item_name": "WeaponRepairTool", "name":"Whetstone", "uses": 5},
         {"item_name": "Food", "name":"meat", "nutrition":250}
     ]},

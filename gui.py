@@ -10,7 +10,7 @@ import os
 from datetime import datetime
 
 # third-party
-from PyQt5.QtWidgets import QWidget, QListWidget, QVBoxLayout, QPushButton, QHBoxLayout, QMenu, QDialog, QLabel, QTextEdit
+from PyQt5.QtWidgets import QWidget, QListWidget, QVBoxLayout, QPushButton, QHBoxLayout, QMenu, QDialog, QLabel, QTextEdit, QSizePolicy
 from PyQt5.QtCore import Qt, QEvent
 from PyQt5.QtGui import QTextCursor, QColor
 
@@ -328,6 +328,92 @@ class MessagePopup(QDialog):
             
         if self.parent():
             self.parent().setFocus()
+
+class SelectionBox(QWidget):
+    def __init__(self, item_list = [f"Option {i}" for i in range(5)], action = lambda x, instance: instance.close(), parent=None):
+        super().__init__(parent)
+        self.action = action 
+        self.list_dictionary = { "main": item_list }
+        self.current_key = "main"
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setWindowOpacity(0.7)  # 70% opaque, like MessagePopup
+        self.layout = QVBoxLayout()
+        self.layout.setContentsMargins(10, 10, 10, 10)
+        self.layout.setSpacing(5)
+        self.list_widget_objects = []
+        self.list_widget = QListWidget()
+        self.list_widget.setStyleSheet("""
+            QListWidget {
+                background-color: rgba(0, 0, 0, 150);
+                color: white;
+                border: 1px solid rgba(255, 255, 255, 50);
+                border-radius: 5px;
+                padding: 5px;
+            }
+            QListWidget::item:selected {
+                background-color: rgba(255, 255, 255, 20);
+                color: cyan; 
+            }
+        """)
+        self.list_widget.setSelectionMode(QListWidget.SingleSelection)
+        self.list_widget.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.list_widget.itemDoubleClicked.connect(self.action)
+        self.list_widget.installEventFilter(self) # now the list_widget will use the keyPressEvent function 
+        self.set_list()
+        self.list_widget.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)        
+        self.list_widget.setCurrentRow(len(self.list_widget)//2)
+        self.layout.addWidget(self.list_widget)
+        self.setLayout(self.layout)
+        self.setFocus()
+        self.list_widget.setFocus()
+    def get_current_list(self):
+        return self.current_key
+    def add_list(self, key,item_list):
+        self.list_dictionary.update({key:item_list})
+    def set_list(self,key = "main"):
+        self.list_widget.clear()
+        for it in self.list_dictionary[key]:
+            self.list_widget.addItem(it)
+        self.current_key = key
+        self.list_widget.setCurrentRow(0)
+        # Set fixed size to fit items exactly
+        row_count = self.list_widget.count()
+        row_height = self.list_widget.sizeHintForRow(0) if row_count > 0 else 20
+        spacing = self.list_widget.spacing()
+        frame = 2 * self.list_widget.frameWidth()
+        total_height = row_height * row_count + spacing + frame
+        self.list_widget.setFixedHeight(total_height)
+        # Get max width of all items
+        max_width = max(self.list_widget.sizeHintForIndex(self.list_widget.model().index(i, 0)).width() for i in range(row_count)) if row_count > 0 else 100
+        self.list_widget.setFixedWidth(max_width + 100)
+        
+    def eventFilter(self, obj, event):
+        if obj == self.list_widget and event.type() == QEvent.KeyPress:
+            if event.key() in (Qt.Key_Return, Qt.Key_Enter):
+                current_item = self.list_widget.currentItem()
+                if current_item:
+                    self.do_enter_action(current_item)
+                    return True
+            if event.key() == Qt.Key_Escape:
+                self.close()
+                return True
+            if event.key() == Qt.Key_Up:
+                if self.list_widget.currentRow() == 0:
+                    return True
+                else:
+                    return super().eventFilter(obj, event)
+            if event.key() == Qt.Key_Down:
+                if self.list_widget.currentRow() == len(self.list_widget)-1:
+                    return True
+                else:
+                    return super().eventFilter(obj, event)
+            if event.key() in (Qt.Key_Left, Qt.Key_Right):
+                return True 
+        return super().eventFilter(obj, event)
+    def do_enter_action(self, item=None):
+        if not item: 
+            item = self.list_widget.currentItem()
+        self.action(self.current_key, item.text(),self)
             
 class InventoryWindow(QDialog):
     def __init__(self, parent=None):

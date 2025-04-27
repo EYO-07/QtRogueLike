@@ -662,8 +662,6 @@ class Bear(Enemy):
 class Dear(Prey):
     pass 
 
-# --- END 
-
 # --- mapping
 class Tile(Container):
     SPRITES = {}  # Class-level sprite cache
@@ -681,7 +679,7 @@ class Tile(Container):
         # --
         self.current_char = None 
         # -- 
-        self.stair = None # used to store a tuple map cooord to connect between maps 
+        self.stair = None # used to store a tuple map coord to connect between maps 
         self.stair_x = None # points to the stair tile from the map with coord self.stair
         self.stair_y = None # points to the stair tile from the map with coord self.stair 
         
@@ -1508,5 +1506,15 @@ class Map(Serializable):
                 return False
         return True    
 
+# Town Management 
+class Town:
+    def __init__(self, coords):
+        self.coords = coords 
+        self.food = 0
+        self.wood = 0
+        self.stone = 0
+        self.metal = 0
+        self.raid_interval = 30 # 30 days 
+        self.villagers = 0 
 
 # --- END 
