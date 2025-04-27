@@ -66,16 +66,17 @@ class Game(QGraphicsView, Serializable):
         self.dirty_tiles = set()  # Track tiles that need redrawing
         self.tile_items = {}  # For optimized rendering
         self.current_slot = 1  # Track current save slot
+        Tile._load_sprites()
         self.load_current_game()
     def init_viewport(self):
         self.grid_width = MAP_WIDTH
         self.grid_height = MAP_HEIGHT
         self.rotation = 0  # degrees: 0, 90, 180, 270
-        self.view_width = 7
-        self.view_height = 7
+        self.view_width = VIEW_WIDTH_IN_TILES
+        self.view_height = VIEW_HEIGHT_IN_TILES
         self.scene = QGraphicsScene()
         self.setScene(self.scene)
-        self.tile_size = 70 
+        self.tile_size = TILE_SIZE 
     
     def get_random_music_filename(self,directory="music", pattern=""):
         # Compile the regex pattern
@@ -263,19 +264,18 @@ class Game(QGraphicsView, Serializable):
             self.maps[self.current_map] = Map(coords=self.current_map)
             self.map = self.maps[self.current_map]
             if not self.map.Load_JSON(new_map_file):
-                print(f"Creating new map at {new_map_coord}")
+                if new_map_coord:
+                    print(f"Creating new map at ({new_map_coord[0]}, {-new_map_coord[1]}, {new_map_coord[2]})")
                 return self.new_map_from_current_coords(map_type, prev_coords = prv_coords, up = going_up)
             else:
                 print(f"Loading Map from Saved File {self.current_map}")
-                self.add_message(f"Loading Map {self.current_map}")
-                # if self.player.current_tile.stair_x:
-                    # return self.player.current_tile.stair_x, self.player.current_tile.stair_y
+                if self.current_map:
+                    self.add_message(f"Loading Map from Saved File ({self.current_map[0]}, {-self.current_map[1]}, {self.current_map[2]})")
         else:
             print(f"Loading Map from Cache {self.current_map}")
-            self.add_message(f"Loading Map {self.current_map}")
+            if self.current_map:
+                self.add_message(f"Loading Map from Cache ({self.current_map[0]}, {-self.current_map[1]}, {self.current_map[2]})")
             self.map = self.maps[self.current_map]
-            # if self.player.current_tile.stair_x:
-                # return self.player.current_tile.stair_x, self.player.current_tile.stair_y
         self.enemies[self.current_map] = self.map.enemies 
         return None, None
     
@@ -687,7 +687,7 @@ class Game(QGraphicsView, Serializable):
                     self.add_message("Nevermind ...")
         self.events.clear()
     
-    def fill_enemies(self, num_enemies=70):
+    def fill_enemies(self, num_enemies=100):
         self.enemies[self.current_map] = self.map.fill_enemies(num_enemies)
                 
     def update_enemies(self):
@@ -724,11 +724,45 @@ class Game(QGraphicsView, Serializable):
         key = event.key()
         dx, dy = 0, 0
         b_isForwarding = False
-        if key == Qt.Key_End:
-            print("end key pressed")
+        stamina_bound = 20
+        if key == Qt.Key_R:
+            self.player.use_first_item_of(WeaponRepairTool, self)
+            return
+        elif key == Qt.Key_End:
+            if self.current_day >= 15:
+                tx, ty = self.player.get_forward_direction()
+                tile0 = self.map.get_tile(self.player.x+tx, self.player.y+ty)
+                if tile0:
+                    if not tile0.walkable:
+                        self.add_message("Can't find a target ...")
+                        return 
+                    if tile0.current_char:
+                        self.add_message("The enemy is too close to perform this attack ...")
+                        return 
+                tile1 = self.map.get_tile(self.player.x+2*tx, self.player.y+2*ty)
+                if tile1:
+                    if tile1.current_char:
+                        if self.player.primary_hand:
+                            if self.player.stamina<stamina_bound:
+                                self.add_message("I'm exhausted ... I need to take a breathe")
+                            else:
+                                self.add_message("Powerful Strike ...")
+                                self.events.append(
+                                    AttackEvent(
+                                        self.player, tile1.current_char, d(self.player.primary_hand.damage,3*self.player.primary_hand.damage) 
+                                    ) 
+                                )
+                                self.player.stamina -= stamina_bound
+                                self.game_iteration()
+                                return 
+                    else:
+                        self.add_message("Can't find a target ...")
+            else:
+                self.journal_window.append_text("With 'end' key you activate de power strike skill, you must be one tile of distance to the target, if the target is too close there is no much space to perform that skill, in order to use it you must survive at least 15 days ...")
+                self.add_message("I don't feel well enough to exercise ... maybe tomorrow I'll feel better.")
         elif key == Qt.Key_Control: # dodge backward
             if self.current_day >= 5:
-                stamina_bound = 50
+                
                 if self.player.stamina<stamina_bound:
                     self.add_message("I'm exhausted ... I need to take a breathe")
                 x = self.player.x 
@@ -761,11 +795,6 @@ class Game(QGraphicsView, Serializable):
                 self.journal_window.append_text("With ctrl you activate de dodge skill and move 2 tiles backward, in order to use the dodge skill you must survive at least 5 days ...")
                 self.add_message("I don't feel well enough to exercise ... maybe tomorrow I'll feel better.")
         elif key == Qt.Key_F: # weapon special skill 
-            
-            # -- debugging 
-            # self.player.stamina = self.player.max_stamina
-            # self.player.hunger = self.player.hunger
-            
             primary = self.player.primary_hand
             if primary:
                 if hasattr(primary,"use_special"):
@@ -830,14 +859,7 @@ class Game(QGraphicsView, Serializable):
             self.game_iteration()
             return
         elif key == Qt.Key_E:  # Use first food item
-            #print(self.player.items)
-            #from items import Food  # Import here to avoid circular import
-            for item in self.player.items:
-                if isinstance(item, Food):
-                    self.events.append(UseItemEvent(self.player, item))
-                    self.game_iteration()
-                    break
-            self.update_inv_window()
+            self.player.use_first_item_of(Food, self)
             return    
         elif key == Qt.Key_G:  # Pickup items
             tile = self.map.get_tile(self.player.x, self.player.y)
@@ -879,7 +901,7 @@ class Game(QGraphicsView, Serializable):
         
         elif key == Qt.Key_F1:  # F1 Debugging: 
             # -- item experiment
-            #self.player.add_item(WeaponRepairTool("whetstone"))
+            # self.player.add_item(WeaponRepairTool("whetstone"))
             
             # -- dungeon experiment
             # if self.map.add_dungeon_entrance_at(self.player.x, self.player.y):
@@ -888,11 +910,11 @@ class Game(QGraphicsView, Serializable):
                 # self.draw_hud()
             
             # -- skill experiment
-            # self.player.reset_stats()
-            # self.current_day = 30
-            # for dx,dy in CHESS_KNIGHT_DIFF_MOVES:
-                # if self.map.generate_enemy_at(self.player.x+dx, self.player.y+dy, Rogue):
-                    # break
+            self.player.reset_stats()
+            self.current_day = 30
+            for dx,dy in CHESS_KNIGHT_DIFF_MOVES:
+                if self.map.generate_enemy_at(self.player.x+dx, self.player.y+dy, Mercenary):
+                    break
                     
             # -- rotation and forward direction 
             # player = self.player
@@ -956,7 +978,6 @@ class Game(QGraphicsView, Serializable):
             self.journal_window.append_text("(Skill - 5 days) I'm in full shape now, I'm feeling agile, use Ctrl to dodge and move two tiles backward ...") 
         if self.current_day == 20:
             self.journal_window.append_text("(Skill - 20 days) My body remembered how to use a sword properly, now I can perform deadly blows with F key. Whenever the enemy stay in L position like a knight chess I can swing my sword hit taking him off-guard ...") 
-        
     def Event_PlayerDeath(self):
         print("Game Over!")
         try:
@@ -968,7 +989,6 @@ class Game(QGraphicsView, Serializable):
         except Exception as e:
             self.add_message(f"Error Reloading Game: {e}, Starting New Game")
             self.start_new_game()
-    
     def Event_DoAttack(self, event):
         primary = self.player.primary_hand
         # swords have the parry property in the player perspective, they will try to consume the stamina first 
@@ -998,7 +1018,6 @@ class Game(QGraphicsView, Serializable):
         # in case of death 
         if event.target.hp <= 0:
             self.Event_CharacterDeath(event)
-    
     def Event_CharacterDeath(self, event):
         if event.target is self.player:
             self.Event_PlayerDeath()
@@ -1009,33 +1028,3 @@ class Game(QGraphicsView, Serializable):
             event.target.current_tile.current_char = None
             
 # --- END 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

@@ -284,7 +284,7 @@ class MessagePopup(QDialog):
         self.setLayout(self.layout)
         # Base size (updated in set_message)
         self.base_height = 31  # Height per message
-        self.max_messages = 5  # Limit to prevent oversized pop-up
+        self.max_messages = 15  # Limit to prevent oversized pop-up
         self.setWindowTitle("Messages")
         self.hide()  # Hidden by default
 
@@ -428,7 +428,7 @@ class InventoryWindow(QDialog):
             return f"{game_item.name} : {game_item.nutrition} [nutrition]", QColor("yellow")
         # Weapon
         if isinstance(game_item, Weapon):
-            return f"{game_item.name} : {game_item.damage} [dmg] ({self.get_quality(game_item)})", QColor("white")
+            return f"{game_item.name} : {game_item.damage:.1f} [dmg] ({self.get_quality(game_item)})", QColor("white")
         # Common Equippable 
         if isinstance(game_item, Equippable):
             return f"{game_item.name} : {game_item.slot}", QColor("cyan")

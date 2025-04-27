@@ -70,19 +70,6 @@ def is_node_dynamic_import(node):
                         if import_arg.s.split('.')[0] in restricted_modules:
                             return True
     return False
-
-# def is_node_eval_with_dynamic_import(node):
-    # if isinstance(node, ast.Call):
-        # if isinstance(node.func, ast.Name) and node.func.id == 'eval':
-            # if node.args:
-                # arg = node.args[0]
-                # if isinstance(arg, ast.Str):
-                    # eval_str = arg.s
-                    # for mod in restricted_modules:
-                        # if f"__import__('{mod}')" in eval_str or f'__import__("{mod}")' in eval_str:
-                            # return True
-    # return False
-
 def is_node_string_injection_with_dynamic_import(node):
     """
     Detects restricted calls containing dynamic imports of restricted modules in their string arguments.

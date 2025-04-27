@@ -67,10 +67,26 @@ def GetRandomTiles_Reservoir_Sampling(tile_container=None, foreach_tiles=None, k
     state = {'count': 0, 'k': k, 'reservoir': []}
     foreach_tiles(tile_container, sampler, state)
     return state['reservoir']
+    
+# --- Entity2D
+class Entity2D:
+    def __init__(self):
+        self.sprite = None
+    def get_sprite(self):
+        if not self.sprite: 
+            print(f"Warning: {self} sprite not found")
+            return QPixmap()
+        try:
+            return Tile.SPRITES[self.sprite]
+        except KeyError:
+            print(f"Warning: {self} sprite not found")
+            return QPixmap()  # Fallback    
+    def paint_to(self, painter):
+        painter.drawPixmap(0, 0, self.get_sprite())
 
 # --- items
 
-class Item(Serializable):
+class Item(Serializable, Entity2D):
     __serialize_only__ = ["name","description","weight","sprite"]
     def __init__(self, name="", description="", weight=1, sprite="item"):
         super().__init__()
@@ -156,7 +172,7 @@ class Weapon(Equippable):
 # AttackEvent ~ Game.process_events() || 
 class Sword(Weapon):
     __serialize_only__ = Weapon.__serialize_only__ 
-    def __init__(self, name="", damage=0 ,description="", weight=1, stamina_consumption=1, durability_factor=0.995):
+    def __init__(self, name="long_sword", damage=8 ,description="", weight=1, stamina_consumption=1, durability_factor=0.995):
         super().__init__(name, damage, description, weight, stamina_consumption, durability_factor)
         self.days_to_unlock_special = 20
     
@@ -166,7 +182,10 @@ class Sword(Weapon):
         if not enemy: return 0.0
         if player.stamina <= damage: return 0.0 
         # Sword Fight Chance
-        if isinstance(primary, Sword): return 0.7
+        if isinstance(primary, Sword): 
+            return 0.7
+        elif isinstance(primary, Mace):
+            return 0.5
         return 0.0 
     
     def use_special(self, player, map, game):
@@ -231,7 +250,20 @@ class Sword(Weapon):
         return True 
 
 class Mace(Weapon):
-    pass 
+    __serialize_only__ = Weapon.__serialize_only__ 
+    def __init__(self, name="mace", damage=10 ,description="", weight=1, stamina_consumption=2, durability_factor=0.995):
+        super().__init__(name, damage, description, weight, stamina_consumption, durability_factor)
+        self.days_to_unlock_special = 10
+    def get_player_parry_chance(self, player, enemy, damage):
+        primary = enemy.primary_hand
+        if not enemy: return 0.0
+        if player.stamina <= damage: return 0.0 
+        # Sword Fight Chance
+        if isinstance(primary, Sword): 
+            return 0.5
+        elif isinstance(primary, Mace):
+            return 0.3
+        return 0.0 
 
 class Food(Item):
     __serialize_only__ = Item.__serialize_only__+["nutrition"]
@@ -273,7 +305,7 @@ class Shield(Equippable):
 
 # --- living
 
-class Character(Container):
+class Character(Container, Entity2D):
     __serialize_only__ = ["name", "hp", "max_hp", "x", "y", "primary_hand", "secondary_hand", "head", "neck", "torso", "waist", "legs", "foot", "items"]
     def __init__(self, name="", hp=100, x=50, y=50):
         super().__init__()
@@ -330,13 +362,11 @@ class Character(Container):
         if self.current_tile:
             for item in self.items:
                 self.current_tile.add_item(item)  # Use Tile.add_item
-            if self.primary_hand and random.uniform(0,1)<0.2:
-                self.current_tile.add_item(self.primary_hand)
+            for equip in EQUIPMENT_SLOTS:
+                item = getattr(self, equip)
+                if item and random.uniform(0,1)<0.2:
+                    self.current_tile.add_item(item)
             self.items.clear()
-
-    def get_sprite(self):
-        # This should be overridden in subclasses
-        return QPixmap()
 
     def calculate_damage_done(self):
         damage = 1
@@ -385,6 +415,17 @@ class Character(Container):
             return game_map.line_of_sight(self.x, self.y, another.x, another.y)
         return False
 
+    def use_first_item_of(self, item_class_name, game_instance):
+        for item in self.items:
+            if isinstance(item, item_class_name):
+                game_instance.events.append(UseItemEvent(self, item))
+                game_instance.game_iteration()
+                break
+        game_instance.update_inv_window()
+    
+class Ally(Character):
+    pass
+
 class Player(Character):
     __serialize_only__ = Character.__serialize_only__+[
         "stamina","max_stamina","hunger","max_hunger","rotation", "field_of_view"
@@ -398,6 +439,7 @@ class Player(Character):
         self.max_stamina = PLAYER_MAX_STAMINA
         self.hunger = 100
         self.max_hunger = PLAYER_MAX_HUNGER
+        self.sprite = "player"
         if b_generate_items: self.generate_initial_items()
     
     def move(self, dx, dy, game_map):
@@ -408,13 +450,6 @@ class Player(Character):
             return moved
         return False
     
-    def get_sprite(self):
-        try:
-            return Tile.SPRITES["player"]
-        except KeyError:
-            print("Warning: Player sprite not found")
-            return QPixmap()  # Fallback    
-
     def calculate_damage_done(self):
         damage = 1
         if self.primary_hand and hasattr(self.primary_hand, 'damage'):
@@ -499,6 +534,7 @@ class Enemy(Character):
         self.stance = "Aggressive"
         self.canSeeCharacter = False
         self.patrol_direction = (random.choice([-1, 1]), 0)
+        self.sprite = "enemy"
         if b_generate_items: self.generate_initial_items()
     
     def calculate_damage_done(self):
@@ -548,22 +584,16 @@ class Enemy(Character):
         if random.random() < 0.2:
             self.equip_item(Weapon("Club", damage=1), "primary_hand")
     
-    def get_sprite(self):
-        try:
-            return Tile.SPRITES["enemy"]
-        except KeyError:
-            print("Warning: Enemy sprite not found")
-            return QPixmap()  # Fallback
-
 class Prey(Character):
     pass
 
 class Zombie(Enemy):
     __serialize_only__ = Enemy.__serialize_only__
-    def __init__(self, name="", hp=30, x=50, y=50, b_generate_items = True):
+    def __init__(self, name="", hp=40, x=50, y=50, b_generate_items = True):
         super().__init__(name, hp, x, y, b_generate_items)
         self.type = "Zombie"
         self.description = "Zombies, people affected by the plague, they are still alive but because of this strange disease their bodies smells like rotten flesh. Before they lose their minds, they try to acummulate food to satiate hunger, it's almost certain to find food with them ..."
+        self.sprite = "zombie"
         
     def calculate_damage_done(self):
         return random.randint(0, 15)
@@ -574,19 +604,13 @@ class Zombie(Enemy):
         if random.random() < 0.7:
             self.add_item(Food("apple", nutrition=random.randint(5, 15)))
 
-    def get_sprite(self):
-        try:
-            return Tile.SPRITES.get("zombie", Tile.SPRITES["enemy"])
-        except KeyError:
-            print("Warning: Zombie sprite not found")
-            return QPixmap()
-
 class Rogue(Enemy):
     __serialize_only__ = Enemy.__serialize_only__
     def __init__(self, name="", hp=100 , x=50, y=50, b_generate_items = True):
         super().__init__(name, hp, x, y, b_generate_items)
         self.type = "Rogue"
         self.description = "Rogues and Bandits, they are just robbers, ambushing travellers on the road. Always carry a sword with you ..."
+        self.sprite = "rogue"
         
     def calculate_damage_done(self):
         damage = random.randint(0, 8)
@@ -599,29 +623,38 @@ class Rogue(Enemy):
         if random.random() < 0.3:
             self.add_item(Food("bread", nutrition=random.randint(50, 100)))
 
-    def get_sprite(self):
-        try:
-            return Tile.SPRITES.get("rogue", Tile.SPRITES["rogue"])
-        except KeyError:
-            print("Warning: Rogue sprite not found")
-            return QPixmap()
+class Mercenary(Rogue):
+    __serialize_only__ = Enemy.__serialize_only__
+    def __init__(self, name="", hp=130 , x=50, y=50, b_generate_items = True):
+        super().__init__(name, hp, x, y, b_generate_items)
+        self.type = "Mercenary"
+        self.description = "More experienced in combat than rogues, but often doing the same kind of 'job', money before honor ..."
+        self.sprite = "mercenary"
+        
+    def calculate_damage_done(self):
+        damage = random.randint(0, 12)
+        if self.primary_hand and hasattr(self.primary_hand, 'damage'):
+            damage += self.primary_hand.damage
+        return damage    
 
+    def generate_initial_items(self):
+        self.equip_item(Mace("mace", damage=10), "primary_hand")
+        if random.random() < 0.3:
+            self.add_item(Food("bread", nutrition=random.randint(50, 100)))
+        else:
+            self.add_item(Food("meat", nutrition=random.randint(150, 200)))
+    
 class Bear(Enemy):
     __serialize_only__ = Enemy.__serialize_only__
     def __init__(self, name="", hp=60 , x=50, y=50, b_generate_items = True, dbg_blind=False):
         super().__init__(name, hp, x, y, b_generate_items)
         self.description = "Bears, these woods are their home, stronger than any man, don't try to mess with them ..."
         self.dbg_blind = dbg_blind
+        self.sprite = "bear"
     def calculate_damage_done(self):
         return random.randint(5, 30)
     def generate_initial_items(self):
         self.add_item(Food("meat", nutrition=250))
-    def get_sprite(self):
-        try:
-            return Tile.SPRITES.get("bear", Tile.SPRITES["bear"])
-        except KeyError:
-            print("Warning: Bear sprite not found")
-            return QPixmap()
     def can_see_character(self, another, game_map):
         if self.dbg_blind: return False
         return super().can_see_character(another, game_map)
@@ -635,25 +668,61 @@ class Dear(Prey):
 class Tile(Container):
     SPRITES = {}  # Class-level sprite cache
     list_sprites_names = list(SPRITE_NAMES)
-    __serialize_only__ = ["items", "walkable", "blocks_sight", "default_sprite_key", "stair", "stair_x", "stair_y"]
+    __serialize_only__ = ["items", "walkable", "blocks_sight", "default_sprite_key", "stair", "stair_x", "stair_y", "cosmetic_layer_sprite_keys"]
     def __init__(self, walkable=True, sprite_key="grass"):
         super().__init__()
         self._load_sprites()
         self.walkable = walkable
         self.blocks_sight = not walkable
-        self.default_sprite_key = sprite_key
-        self.default_sprite = None # maybe isn't necessary anymore
-        self.cosmetic_layer_sprite = None # to be used as a modifier for default_sprite
-        self.current_char = None
-        self.combined_sprite = None
+        # --
+        self.default_sprite_key = sprite_key # is the first and last layer sprite 
+        self.cosmetic_layer_sprite_keys = [] # to be used as a modifier for default_sprite
+        self.combined_sprite = None # is the final sprite rendered 
+        # --
+        self.current_char = None 
+        # -- 
         self.stair = None # used to store a tuple map cooord to connect between maps 
         self.stair_x = None # points to the stair tile from the map with coord self.stair
         self.stair_y = None # points to the stair tile from the map with coord self.stair 
         
+    def draw(self, scene, x, y, tile_size = TILE_SIZE):
+        # BEGIN Painter
+        combined = QPixmap(tile_size, tile_size) # will be changed with QPainter 
+        combined.fill(Qt.transparent)
+        painter = QPainter(combined)
+        # -- Base and Cosmetic Layers 
+        base = self.get_default_pixmap()
+        painter.drawPixmap(0, 0, base)
+        for sprite_key in self.cosmetic_layer_sprite_keys:
+            painter.drawPixmap(0, 0, Tile.SPRITES.get(sprite_key, base) )
+        # -- Char Paint or Item Paint
+        if self.current_char:
+            self.current_char.paint_to(painter)
+        elif self.items:
+            if len(self.items) > 1:
+                item_sprite = Tile.SPRITES.get("sack", base)
+            else:
+                item_sprite = Tile.SPRITES.get(self.items[0].sprite, base)
+            if not item_sprite.isNull():
+                painter.drawPixmap(0, 0, item_sprite)
+        # END Painter 
+        painter.end()
+        self.combined_sprite = combined
+        # -- Add to Scene
+        item = QGraphicsPixmapItem(self.combined_sprite)
+        item.setPos(x, y)
+        scene.addItem(item)
+        
+    def can_place_character(self):
+        return self.walkable and (not self.current_char )
+
+    # sprites handling 
     @classmethod
     def _try_load(cls, key):
+        # cls.SPRITES will store the sprites in memory 
         try: 
-            cls.SPRITES[key] = QPixmap("./assets/"+key)
+            qpx = QPixmap("./assets/"+key)
+            cls.SPRITES[key] = qpx.scaled(TILE_SIZE, TILE_SIZE, Qt.KeepAspectRatio, Qt.SmoothTransformation)
         except Exception as e:
             print(f"Failed to load sprites: {e}")
             cls.SPRITES[key] = QPixmap()
@@ -664,57 +733,11 @@ class Tile(Container):
             for key in cls.list_sprites_names: cls._try_load(key)
         
     def get_default_pixmap(self):
-        self.default_sprite = self.SPRITES.get(self.default_sprite_key, QPixmap())
-        return self.default_sprite
+        return self.SPRITES.get(self.default_sprite_key, QPixmap())
 
-    def draw(self, scene, x, y, tile_size):
-        # -> draw() || $ .combined_sprite | % has char | % has item | % else | $ (QGraphicsPixmapItem) item | Add the item to scene 
-        base = self.get_default_pixmap()
-        base_scaled = base.scaled(tile_size, tile_size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-        if self.current_char:
-            char_sprite = self.current_char.get_sprite()
-            char_scaled = char_sprite.scaled(tile_size, tile_size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-            combined = QPixmap(tile_size, tile_size)
-            combined.fill(Qt.transparent)
-            painter = QPainter(combined)
-            painter.drawPixmap(0, 0, base_scaled)
-            painter.drawPixmap(0, 0, char_scaled)
-            painter.end()
-            self.combined_sprite = combined
-            #print(f"Tile ({x}, {y}) drawn with character {self.current_char.name}")
-        elif self.items:
-            if len(self.items) > 1:
-                item_sprite = Tile.SPRITES.get("sack", base_scaled)
-            else:
-                item_sprite = Tile.SPRITES.get(self.items[0].sprite, base_scaled)
-            item_scaled = item_sprite.scaled(tile_size, tile_size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-            combined = QPixmap(tile_size, tile_size)
-            combined.fill(Qt.transparent)
-            painter = QPainter(combined)
-            painter.drawPixmap(0, 0, base_scaled)
-            if not item_sprite.isNull():
-                painter.drawPixmap(0, 0, item_scaled)
-            painter.end()
-            self.combined_sprite = combined
-        else:
-            self.combined_sprite = base_scaled
-            #print(f"Tile ({x}, {y}) drawn as empty floor")
-        item = QGraphicsPixmapItem(self.combined_sprite)
-        item.setPos(x, y)
-        scene.addItem(item)
-        
-    def add_item(self, item):
-        self.items.append(item)
-        return True  # No weight limit for tiles (adjust as needed)
-
-    def remove_item(self, item):
-        if item in self.items:
-            self.items.remove(item)
-            return True
-        return False
-
-    def can_place_character(self):
-        return self.walkable and (not self.current_char )
+    def add_cosmetic_sprite(self, sprite_key = None):
+        if not sprite_key: return 
+        self.cosmetic_layer_sprite_keys.append(sprite_key)
 
 class Room:
     def __init__(self):
@@ -724,6 +747,12 @@ class Room:
         self.exit = None # tuple, could be the same .entry 
     def get_iterator(self):
         return self.positions
+    def set_tiles_for_positions(self, map_instance, floor_sprite_key = "floor"):
+        pass
+    def set_tiles_for_boundaries(self, map_instance, wall_sprite_key = "wall"):
+        pass 
+    def add_random_loot(self, loot_table):
+        pass 
 
 class Map(Serializable):
     __serialize_only__ = ["width","height","filename","grid","enemy_type","coords","enemies"]
@@ -754,7 +783,7 @@ class Map(Serializable):
         self.enemies = []
         self.starting_x = None
         self.starting_y = None
-        self.rooms = None
+        self.rooms = None # could be tuple (x,y,w,h) of rectangular room of could be a Room instance 
         if b_generate: self.generate()
     
     def from_dict(self, dictionary):
@@ -792,6 +821,91 @@ class Map(Serializable):
                     print(f"Map file {self.filename}.txt not found, using default map")
                     self._generate_default()
     
+    # -- fill enemies 
+    def generate_enemy_by_chance_at(self, x,y, enemy = Enemy, chance = 1.0, extra_items = None, **kwargs):
+        """
+        Attempts to spawn an enemy at a given position with a certain probability.
+
+        This method supports both direct class references and string-based enemy names,
+        allowing for dynamic, data-driven enemy generation. It optionally equips the enemy
+        with items by chance, if specified.
+
+        Args:
+            x (int | float): X-coordinate for the enemy spawn position.
+            y (int | float): Y-coordinate for the enemy spawn position.
+            enemy (type | str): The enemy class to instantiate (e.g., `Zombie` or "Zombie").
+                                If a string is provided, the class is looked up in the global scope.
+            chance (float): A value between 0.0 and 1.0 representing the spawn probability.
+            extra_items (list[dict], optional): A list of item descriptors to attempt adding to
+                                                the spawned enemy via `add_item_by_chance`.
+                                                Defaults to an empty list.
+            **kwargs: Additional keyword arguments passed to the enemy constructor.
+
+        Returns:
+            object | None: The created enemy instance if spawned; otherwise, `None`.
+
+        Raises:
+            ValueError: If `enemy` is a string that doesn't correspond to a known global class.
+
+        Example:
+            >>> self.generate_enemy_by_chance_at(50, 50, **{
+            ...     "enemy": "Zombie",
+            ...     "chance": 0.9,
+            ...     "b_generate_items": True,
+            ...     "extra_items": [
+            ...         {"item": "WeaponRepairTool", "name": "Whetstone", "uses": 3}
+            ...     ]
+            ... })
+        """
+        if isinstance(enemy, str):
+            enemy = globals().get(enemy)
+            if enemy is None:                
+                return None
+        if extra_items is None:
+            extra_items = [] 
+        if d(0.0,1.0) < chance:
+            enemy_instance = enemy(x=x, y=y, **kwargs)
+            for kw in extra_items:
+                enemy_instance.add_item_by_chance(**kw)
+            return enemy_instance
+        else:
+            return None
+            
+    def generate_enemy_by_chance_by_list_at(self, x,y, enemy_list):
+        """
+        Attempts to spawn an enemy at a given position from a list of possible enemy configurations.
+
+        This method iterates over a list of enemy definitions (dicts) and passes each to
+        `generate_enemy_by_chance_at`. It returns the first successfully spawned enemy,
+        or `None` if none were spawned.
+
+        Args:
+            x (int | float): X-coordinate for the enemy spawn position.
+            y (int | float): Y-coordinate for the enemy spawn position.
+            enemy_list (list[dict]): A list of keyword-argument dictionaries. Each dict is a
+                                     configuration to pass to `generate_enemy_by_chance_at`.
+                                     Must include at least the "enemy" key (class or string name).
+
+        Returns:
+            object | None: The first enemy instance successfully spawned based on chance;
+                           otherwise, `None`.
+
+        Example:
+            >>> self.generate_enemy_by_chance_by_list_at(100, 200, [
+            ...     {"enemy": "Skeleton", "chance": 0.3},
+            ...     {"enemy": "Zombie", "chance": 0.5, "extra_items": [...]}
+            ... ])
+        """
+        for config in enemy_list:  # Try all but if fails fallback to the last 
+            enemy = self.generate_enemy_by_chance_at(x, y, **config)
+            if enemy:
+                return enemy
+
+        # Fallback: guaranteed spawn
+        fallback_config = enemy_list[-1].copy()
+        fallback_config["chance"] = 1.0  # force spawn
+        return self.generate_enemy_by_chance_at(x, y, **fallback_config)
+    
     def generate_enemy_at(self, x,y, enemy_class=None, *args, **kwargs):
         if enemy_class:
             enemy = enemy_class(x=x,y=y,*args, **kwargs)
@@ -801,51 +915,24 @@ class Map(Serializable):
         enemy = None
         match self.enemy_type:    
             case "dungeon":
-                if coin < 0.75:
-                    enemy = Zombie("Zombie", x=x, y=y,b_generate_items=True)
-                else:
-                    enemy = Rogue("Rogue", x=x, y=y,b_generate_items=True)
-                    enemy.add_item_by_chance("WeaponRepairTool", name = "Whetstone", uses = 3)
-                    enemy.add_item_by_chance("Food", name = "meat", nutrition = 200)
+                enemy = self.generate_enemy_by_chance_by_list_at(x,y,DUNGEON_ENEMY_TABLE)
             case "deep_forest":
-                if coin < 0.6:
-                    enemy = Zombie("Zombie", x=x, y=y, b_generate_items=True)
-                elif coin < 0.9:
-                    enemy = Rogue("Rogue", x=x, y=y, b_generate_items=True)
-                    enemy.add_item_by_chance("WeaponRepairTool", name = "Whetstone", uses = 2)
-                else:
-                    enemy = Bear(name ="Bear", x=x, y=y, b_generate_items=True)
+                enemy = self.generate_enemy_by_chance_by_list_at(x,y,FOREST_ENEMY_TABLE)
             case "field":
-                if coin < 0.9:
-                    enemy = Zombie("Zombie", x=x, y=y, b_generate_items=True)
-                elif coin < 0.93:
-                    enemy = Rogue("Rogue", x=x, y=y,b_generate_items=True)
-                else:
-                    enemy = Bear(name ="Bear", x=x, y=y, b_generate_items=True)
+                enemy = self.generate_enemy_by_chance_by_list_at(x,y,FIELD_ENEMY_TABLE)
             case "default":
-                if coin < 0.9:
-                    enemy = Zombie("Zombie", x=x, y=y, b_generate_items=True)
-                elif coin < 0.93:
-                    enemy = Rogue("Rogue", x=x, y=y, b_generate_items=True)
-                else:
-                    enemy = Bear(name ="Bear", x=x, y=y, b_generate_items=True)
+                enemy = self.generate_enemy_by_chance_by_list_at(x,y,DEFAULT_ENEMY_TABLE)
             case "road":
-                if coin < 0.9:
-                    enemy = Zombie("Zombie", x=x, y=y, b_generate_items=True)
-                else:
-                    enemy = Rogue("Rogue", x=x, y=y, b_generate_items=True)
+                enemy = self.generate_enemy_by_chance_by_list_at(x,y,ROAD_ENEMY_TABLE)
             case "lake":
-                if coin < 0.75:
-                    enemy = Zombie("Zombie", x=x, y=y, b_generate_items=True)
-                else:
-                    enemy = Rogue("Rogue", x=x, y=y, b_generate_items=True)
+                enemy = self.generate_enemy_by_chance_by_list_at(x,y,LAKE_ENEMY_TABLE)
             case _:
                 enemy = Zombie("Zombie",x=x,y=y,b_generate_items=True)
         if not enemy: return False
         self.enemies.append(enemy)
         return self.place_character(enemy)
         
-    def fill_enemies(self, num_enemies=70):
+    def fill_enemies(self, num_enemies=100):
         #print(f"Filling enemies for map {self.current_map}")
         placed = 0
         attempts = 0
@@ -926,28 +1013,6 @@ class Map(Serializable):
             raise RuntimeError("Failed to generate any rooms for dungeon")
     
     def add_rooms_with_connectors(self, sprite_floor = "floor", sprite_corridor_floor = "dirt"):
-        # Generate rooms
-        # self.rooms = []
-        # num_rooms = random.randint(8, 15)
-        # max_attempts = num_rooms * 10
-        # attempts = 0
-        # while len(self.rooms) < num_rooms and attempts < max_attempts:
-            # room_w = random.randint(5, 10)
-            # room_h = random.randint(5, 10)
-            # room_x = random.randint(1, self.width - room_w - 1)
-            # room_y = random.randint(1, self.height - room_h - 1)
-            # overlap = False
-            # for other_x, other_y, other_w, other_h in self.rooms:
-                # if (room_x < other_x + other_w + 2 and
-                    # room_x + room_w + 2 > other_x and
-                    # room_y < other_y + other_h + 2 and
-                    # room_y + room_h + 2 > other_y):
-                    # overlap = True
-                    # break
-            # if not overlap: self.rooms.append((room_x, room_y, room_w, room_h))
-            # attempts += 1
-        # if not self.rooms:
-            # raise RuntimeError("Failed to generate any rooms for dungeon")
         self.add_rooms()
         self.add_L_shaped_connectors(sprite_corridor_floor = sprite_corridor_floor)            
         self.repaint_floor_rooms(sprite_floor)
