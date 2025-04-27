@@ -28,7 +28,8 @@ You can add any track you want on music folder, the game will randomly select an
 9. J, I : Open User Interfaces. J is for Journal, you can press N to take a quick note and a register your position.
 10. F5, F6 : Save the game in slots 1 and 2 respectively
 11. F7, F8 : Load the game in slots 1 and 2 respectively
-12. F9 : New Game 
+12. F9 : New Game
+13. M, -, = : Music Controls
 
 This game was designed to be difficult and with no leveling system, the items, strategies and the skills will help defeat powerful foes. Choose your opponent carefully.
 
