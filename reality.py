@@ -1400,7 +1400,7 @@ class Map(Serializable):
     def find_path(self, start_x: int, start_y: int, goal_x: int, goal_y: int) -> list[tuple[int, int]]:
         """A* pathfinding to find shortest path from (start_x, start_y) to (goal_x, goal_y)."""
         # Validate coordinates
-        if not (0 <= start_x < 100 and 0 <= start_y < 100 and 0 <= goal_x < 100 and 0 <= goal_y < 100):
+        if not (0 <= start_x < self.width and 0 <= start_y < self.height and 0 <= goal_x < self.width and 0 <= goal_y < self.height):
             #print(f"Invalid coordinates: start=({start_x}, {start_y}), goal=({goal_x}, {goal_y})")
             return []
 
@@ -1425,7 +1425,7 @@ class Map(Serializable):
 
             for dx, dy in [(0, 1), (0, -1), (1, 0), (-1, 0)]:
                 next_x, next_y = x + dx, y + dy
-                if not (0 <= next_x < 100 and 0 <= next_y < 100):
+                if not (0 <= next_x < self.width and 0 <= next_y < self.height):
                     continue  # Skip out-of-bounds tiles
                 tile = self.get_tile(next_x, next_y)
                 if tile:

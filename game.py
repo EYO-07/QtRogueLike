@@ -6,6 +6,7 @@
 # ---------> serialization.py 
 
 # project
+from performance import *
 from serialization import *
 from reality import *
 from gui import *
@@ -301,6 +302,7 @@ class Game(QGraphicsView, Serializable):
                 self.map.place_character(char)
     
     def horizontal_map_transition(self,x,y):
+        T1 = tic()
         self.events.clear()
         self.save_current_game(slot=self.current_slot)
         # print(">>> ", self.map, self.current_map)
@@ -344,9 +346,11 @@ class Game(QGraphicsView, Serializable):
         self.dirty_tiles.clear()
         self.draw_grid()
         self.draw_hud()
+        toc(T1,"Game.horizontal_map_transition() ||")
     
     def vertical_map_transition(self, target_map_coords, up):
         """Handle vertical map transition via stairs."""
+        T1 = tic()
         self.events.clear()
         self.save_current_game(slot=self.current_slot)
         if not self.player.current_tile:
@@ -395,7 +399,7 @@ class Game(QGraphicsView, Serializable):
         self.dirty_tiles.clear()
         self.draw_grid()
         self.draw_hud()
-        
+        toc(T1,"Game.vertical_map_transition() ||")
     # -- save and load from file    
     def start_new_game(self):
         """Reset the game to a new state."""
@@ -441,6 +445,7 @@ class Game(QGraphicsView, Serializable):
         self.dirty_tiles.clear()    
     def save_current_game(self, slot=1):
         """Save the current map to its JSON file and player state to a central file."""
+        T1 = tic()
         # Delay the save operation slightly to allow fade-in
         try:
             # Ensure ./saves directory exists
@@ -449,22 +454,32 @@ class Game(QGraphicsView, Serializable):
             if not os.path.exists(saves_dir): os.makedirs(saves_dir)
             # Save current map state
             map_file = os.path.join(saves_dir, f"map_{'_'.join(map(str, self.current_map))}_{slot}.json")
+            T2 = tic()
             self.map.Save_JSON(map_file)
+            toc(T2,"Game.save_current_game() || map.Save_JSON() ||")
             # save the player_file 
             player_file = os.path.join(saves_dir, f"player_state_{slot}.json")
+            T3 = tic()
             self.Save_JSON( player_file )
+            toc(T3,"Game.save_current_game() || Game.Save_JSON() ||")
             # Backup player state
+            T4 = tic()
             if os.path.exists(player_file): shutil.copy(player_file, os.path.join(saves_dir, f"player_state_{slot}.json.bak"))
+            toc(T4,"Game.save_current_game() || Backup Save ||")
             # Save journal
+            T5 = tic()
             if self.journal_window: self.journal_window.save_journal()
+            toc(T5,"Game.save_current_game() || Journal Save ||")
             self.add_message(f"Game saved to slot {slot}!")
         except Exception as e:
             self.add_message(f"Failed to save game: {e}")
             print(f"Error saving game: {e}")
             if os.path.exists(os.path.join(saves_dir, f"player_state_{slot}.json.bak")):
                 shutil.copy(os.path.join(saves_dir, f"player_state_{slot}.json.bak"), player_file)  # Restore backup
+        toc(T1, "Game.save_current_game() ||")
     def load_current_game(self, slot=1):
         """Load player state and current map from their respective JSON files."""
+        T1 = tic()
         saves_dir = "./saves"
         player_file = os.path.join(saves_dir, f"player_state_{slot}.json")
         if not self.Load_JSON(player_file):
@@ -503,6 +518,7 @@ class Game(QGraphicsView, Serializable):
             self.journal_window = JournalWindow(self)
         self.journal_window.load_journal(slot)
         self.player.rotation = self.rotation 
+        toc(T1,"Game.load_current_game() ||")
     # -- viewport draws 
     def draw(self):
         self.draw_grid()
@@ -834,10 +850,10 @@ class Game(QGraphicsView, Serializable):
         elif key == Qt.Key_C:  # Interact with stair
             tile = self.map.get_tile(self.player.x, self.player.y)
             if tile and tile.stair:
-                if tile.default_sprite == Tile.SPRITES.get("dungeon_entrance"):
+                if tile.default_sprite_key == "dungeon_entrance":
                     self.vertical_map_transition(tile.stair, False)
                 else:
-                    self.vertical_map_transition(tile.stair, tile.default_sprite == Tile.SPRITES.get("stair_up"))
+                    self.vertical_map_transition(tile.stair, tile.default_sprite_key == "stair_up")
                 return
         elif key in (Qt.Key_Up, Qt.Key_W):
             dx, dy = self.rotated_direction(0, -1)
@@ -904,17 +920,17 @@ class Game(QGraphicsView, Serializable):
             # self.player.add_item(WeaponRepairTool("whetstone"))
             
             # -- dungeon experiment
-            # if self.map.add_dungeon_entrance_at(self.player.x, self.player.y):
-                # self.dirty_tiles.add((self.player.x, self.player.y))  # Redraw tile
-                # self.draw_grid()
-                # self.draw_hud()
+            if self.map.add_dungeon_entrance_at(self.player.x, self.player.y):
+                self.dirty_tiles.add((self.player.x, self.player.y))  # Redraw tile
+                self.draw_grid()
+                self.draw_hud()
             
             # -- skill experiment
-            self.player.reset_stats()
-            self.current_day = 30
-            for dx,dy in CHESS_KNIGHT_DIFF_MOVES:
-                if self.map.generate_enemy_at(self.player.x+dx, self.player.y+dy, Mercenary):
-                    break
+            # self.player.reset_stats()
+            # self.current_day = 30
+            # for dx,dy in CHESS_KNIGHT_DIFF_MOVES:
+                # if self.map.generate_enemy_at(self.player.x+dx, self.player.y+dy, Mercenary):
+                    # break
                     
             # -- rotation and forward direction 
             # player = self.player
@@ -1008,7 +1024,7 @@ class Game(QGraphicsView, Serializable):
             else:
                 self.player.hp -= event.damage            
         else: # player attack
-            self.last_encounter_description = getattr(event.target,"description")
+            if hasattr(event.target, "description"): self.last_encounter_description = getattr(event.target,"description")
             event.target.hp -= event.damage
             self.add_message(f"{event.attacker.name} deals {event.damage:.1f} damage to {event.target.name}")
             if primary:

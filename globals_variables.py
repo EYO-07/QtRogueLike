@@ -13,8 +13,8 @@ def d(a,b = None): # float dice
 # Global Variables
 
 # map configuration 
-MAP_WIDTH = 100
-MAP_HEIGHT = 100 
+MAP_WIDTH = 70
+MAP_HEIGHT = 70 
 
 # View Port
 TILE_SIZE = 70
