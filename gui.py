@@ -17,6 +17,7 @@ from PyQt5.QtGui import QTextCursor, QColor
 class JournalWindow(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
+        #self.setWindowFlags(Qt.FramelessWindowHint)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setWindowOpacity(0.8)  # Match InventoryWindow
         self.setFocusPolicy(Qt.NoFocus)  # Prevent stealing focus
@@ -261,6 +262,7 @@ class JournalWindow(QDialog):
 class MessagePopup(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
+        #self.setWindowFlags(Qt.FramelessWindowHint)
         # Non-modal dialog with translucency
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setAttribute(Qt.WA_ShowWithoutActivating)  # Show without taking focus
@@ -357,7 +359,7 @@ class SelectionBox(QWidget):
         """)
         self.list_widget.setSelectionMode(QListWidget.SingleSelection)
         self.list_widget.setContextMenuPolicy(Qt.CustomContextMenu)
-        self.list_widget.itemDoubleClicked.connect(self.action)
+        # self.list_widget.itemDoubleClicked.connect(self.action)
         self.list_widget.installEventFilter(self) # now the list_widget will use the keyPressEvent function 
         self.set_list()
         self.list_widget.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)        
@@ -418,6 +420,7 @@ class SelectionBox(QWidget):
 class InventoryWindow(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
+        #self.setWindowFlags(Qt.FramelessWindowHint)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setWindowOpacity(0.8)  # 70% opaque, like MessagePopup
         self.setFocusPolicy(Qt.NoFocus)  # Prevent stealing focus

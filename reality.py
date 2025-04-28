@@ -167,6 +167,9 @@ class Weapon(Equippable):
         self.damage = max(0,self.damage*self.durability_factor)
         if self.damage < 0.5: player.primary_hand = None
         return True
+
+class Tool(Equippable):
+    pass 
     
 # Sword.use_special () || ... Sword.special_attack()* || Append AttackEvent
 # AttackEvent ~ Game.process_events() || 

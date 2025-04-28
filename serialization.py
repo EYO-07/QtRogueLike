@@ -1,5 +1,8 @@
 # serialization.py 
 
+# project 
+from performance import *
+
 # built-in
 from pathlib import Path
 import tempfile, shutil, os, json
@@ -81,18 +84,28 @@ class Serializable:
             Serializable._registry[cls.__name__] = cls
     
     def to_dict(self):
+        T1 = tic()
         data = {"class_name": self.class_name}
         
         keys_to_serialize = getattr(self, "_explicit_keys", None)
         if keys_to_serialize is None:
-            keys_to_serialize = (k for k in self.__dict__.keys() if k not in self._ignored_keys)
+            keys_to_serialize = [k for k in self.__dict__.keys() if k not in self._ignored_keys]
+        
+        # local variable lookup 
+        local_serialize = self._serialize
+        local_isinstance = isinstance
+        local_Serializable = Serializable
+        local_getattr = getattr 
 
         for key in keys_to_serialize:
-            value = self.__dict__[key]
-            if isinstance(value, Serializable):
+            # value = self.__dict__[key]
+            value = local_getattr(self, key, None)
+            if value is None: continue 
+            if local_isinstance(value, local_Serializable):
                 data[key] = value.to_dict()
             else:
-                data[key] = self._serialize(value)
+                data[key] = local_serialize(value)
+        toc(T1, "Serializable.to_dict() ||")        
         return data
     
     def from_dict(self, dictionary):
@@ -116,7 +129,9 @@ class Serializable:
         with file_lock:
             try:
                 with tempfile.NamedTemporaryFile('w', delete=False, encoding='utf-8', dir=filename.parent) as tmp_file:
+                    T1 = tic()
                     json.dump(self.to_dict(), tmp_file, indent=4)
+                    toc(T1, f"Serializable.Save_JSON() || json.dump( Serializable: { self }) ||")
                     temp_name = tmp_file.name
                 shutil.move(temp_name, filename)  # atomic replace
                 return True

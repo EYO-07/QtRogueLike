@@ -44,6 +44,8 @@ class Game(QGraphicsView, Serializable):
     # -- inits
     def __init__(self):
         super().__init__()
+        self.setWindowFlags(Qt.FramelessWindowHint)
+        self.alt_pressed = False
         self.version = "1.0.0"
         # --
         self.turn = 0
@@ -456,22 +458,22 @@ class Game(QGraphicsView, Serializable):
             if not os.path.exists(saves_dir): os.makedirs(saves_dir)
             # Save current map state
             map_file = os.path.join(saves_dir, f"map_{'_'.join(map(str, self.current_map))}_{slot}.json")
-            T2 = tic()
+            #T2 = tic()
             self.map.Save_JSON(map_file)
-            toc(T2,"Game.save_current_game() || map.Save_JSON() ||")
+            #toc(T2,"Game.save_current_game() || map.Save_JSON() ||")
             # save the player_file 
             player_file = os.path.join(saves_dir, f"player_state_{slot}.json")
-            T3 = tic()
+            #T3 = tic()
             self.Save_JSON( player_file )
-            toc(T3,"Game.save_current_game() || Game.Save_JSON() ||")
+            #toc(T3,"Game.save_current_game() || Game.Save_JSON() ||")
             # Backup player state
-            T4 = tic()
+            #T4 = tic()
             if os.path.exists(player_file): shutil.copy(player_file, os.path.join(saves_dir, f"player_state_{slot}.json.bak"))
-            toc(T4,"Game.save_current_game() || Backup Save ||")
+            #toc(T4,"Game.save_current_game() || Backup Save ||")
             # Save journal
-            T5 = tic()
+            #T5 = tic()
             if self.journal_window: self.journal_window.save_journal()
-            toc(T5,"Game.save_current_game() || Journal Save ||")
+            #toc(T5,"Game.save_current_game() || Journal Save ||")
             self.add_message(f"Game saved to slot {slot}!")
         except Exception as e:
             self.add_message(f"Failed to save game: {e}")
@@ -481,7 +483,7 @@ class Game(QGraphicsView, Serializable):
         toc(T1, "Game.save_current_game() ||")
     def load_current_game(self, slot=1):
         """Load player state and current map from their respective JSON files."""
-        T1 = tic()
+        #T1 = tic()
         saves_dir = "./saves"
         player_file = os.path.join(saves_dir, f"player_state_{slot}.json")
         if not self.Load_JSON(player_file):
@@ -520,7 +522,7 @@ class Game(QGraphicsView, Serializable):
             self.journal_window = JournalWindow(self)
         self.journal_window.load_journal(slot)
         self.player.rotation = self.rotation 
-        toc(T1,"Game.load_current_game() ||")
+        #toc(T1,"Game.load_current_game() ||")
     # -- viewport draws 
     def draw(self):
         self.draw_grid()
@@ -737,13 +739,139 @@ class Game(QGraphicsView, Serializable):
         event.accept()
     def resizeEvent(self, event):
         self.fitInView(self.scene.sceneRect(), Qt.KeepAspectRatio)
-        
+    
+    def keyReleaseEvent(self, event):
+        if event.key() == Qt.Key_Alt:
+            self.alt_pressed = False
+            
     def keyPressEvent(self, event):
+        
+        # window movement 
+        if event.key() == Qt.Key_Alt:
+            self.alt_pressed = True
+        if self.alt_pressed:
+            if event.key() == Qt.Key_Left:
+                self.move(self.x() - 10, self.y())
+                return 
+            elif event.key() == Qt.Key_Right:
+                self.move(self.x() + 10, self.y())
+                return 
+            elif event.key() == Qt.Key_Up:
+                self.move(self.x(), self.y() - 10)
+                return 
+            elif event.key() == Qt.Key_Down:
+                self.move(self.x(), self.y() + 10)
+                return 
+        
+        # game key inpu 
         key = event.key()
         dx, dy = 0, 0
         b_isForwarding = False
         stamina_bound = 20
-        if key == Qt.Key_R:
+        if key == Qt.Key_B: # build menu 
+            pass
+        elif key == Qt.Key_X: # skill menu 
+            def skill_menu(menu, item, instance):
+                if item == "Exit": instance.close()
+                if "Dodge" in item: 
+                    if self.current_day >= 5:
+                        dx = 0
+                        dy = 0
+                        if self.player.stamina<stamina_bound:
+                            self.add_message("I'm exhausted ... I need to take a breathe")
+                        x = self.player.x 
+                        y = self.player.y
+                        fx, fy = self.player.get_forward_direction()
+                        bx = -fx 
+                        by = -fy
+                        b_is_walkable = True 
+                        tile = self.map.get_tile(x+bx,y+by)
+                        if tile and self.player.stamina>stamina_bound:
+                            if tile.walkable:
+                                tile2 = self.map.get_tile(x+2*bx,y+2*by)
+                                if tile2:
+                                    if tile2.walkable:
+                                        dx = 2*bx 
+                                        dy = 2*by
+                                        self.player.stamina -= stamina_bound
+                                    else:
+                                        b_is_walkable = False
+                                else:
+                                    b_is_walkable = False
+                            else:
+                                b_is_walkable = False
+                        else:
+                            b_is_walkable = False
+                        if not b_is_walkable:
+                            self.game_iteration()
+                        if dx or dy:
+                            target_x, target_y = self.player.x + dx, self.player.y + dy
+                            tile = self.map.get_tile(target_x, target_y)
+                            if target_x <0 or target_x > self.grid_width-1 or target_y<0 or target_y> self.grid_height-1:
+                                self.horizontal_map_transition(target_x, target_y)  # Add this
+                                instance.close()
+                            if tile and tile.walkable:
+                                if tile.current_char:
+                                    if b_isForwarding:
+                                        damage = self.player.calculate_damage_done()
+                                        self.events.append(AttackEvent(self.player, tile.current_char, damage))
+                                else:
+                                    old_x, old_y = self.player.x, self.player.y
+                                    if self.player.move(dx, dy, self.map):
+                                        self.events.append(MoveEvent(self.player, old_x, old_y))
+                                        self.dirty_tiles.add((old_x, old_y))
+                                        self.dirty_tiles.add((self.player.x, self.player.y))
+                            self.game_iteration()
+                        instance.close()
+                if "Power Attack" in item: 
+                    if self.current_day >= 15:
+                        tx, ty = self.player.get_forward_direction()
+                        tile0 = self.map.get_tile(self.player.x+tx, self.player.y+ty)
+                        if tile0:
+                            if not tile0.walkable:
+                                self.add_message("Can't find a target ...")
+                                instance.close()
+                            if tile0.current_char:
+                                self.add_message("The enemy is too close to perform this attack ...")
+                                instance.close()
+                        tile1 = self.map.get_tile(self.player.x+2*tx, self.player.y+2*ty)
+                        if tile1:
+                            if tile1.current_char:
+                                if self.player.primary_hand:
+                                    if self.player.stamina<stamina_bound:
+                                        self.add_message("I'm exhausted ... I need to take a breathe")
+                                    else:
+                                        self.add_message("Powerful Strike ...")
+                                        self.events.append(
+                                            AttackEvent(
+                                                self.player, tile1.current_char, d(self.player.primary_hand.damage,3*self.player.primary_hand.damage) 
+                                            ) 
+                                        )
+                                        self.player.stamina -= stamina_bound
+                                        self.game_iteration()
+                                        instance.close()
+                            else:
+                                self.add_message("Can't find a target ...")
+                        instance.close()
+                if "Weapon Special Attack" in item: 
+                    primary = self.player.primary_hand
+                    if primary:
+                        if hasattr(primary,"use_special"):
+                            if primary.use_special(self.player, self.map, self):
+                                self.game_iteration()
+                                instance.close() 
+                            else:
+                                self.add_message("Can't Use Special Skill Right Now ...")
+                        instance.close()                    
+            SB = SelectionBox(parent = self, item_list = [
+                f"[ Avaiable Skills ](days survived: {self.current_day})",
+                f"Dodge: { self.current_day>=5 }",
+                f"Power Attack: { self.current_day>=15 }",
+                f"Weapon Special Attack: { self.current_day>=20 }",
+                "Exit"
+            ], action = skill_menu)
+            SB.show()
+        elif key == Qt.Key_R:
             self.player.use_first_item_of(WeaponRepairTool, self)
             return
         elif key == Qt.Key_End:
@@ -780,7 +908,6 @@ class Game(QGraphicsView, Serializable):
                 self.add_message("I don't feel well enough to exercise ... maybe tomorrow I'll feel better.")
         elif key == Qt.Key_Control: # dodge backward
             if self.current_day >= 5:
-                
                 if self.player.stamina<stamina_bound:
                     self.add_message("I'm exhausted ... I need to take a breathe")
                 x = self.player.x 
@@ -912,64 +1039,102 @@ class Game(QGraphicsView, Serializable):
             else:
                 self.inventory_window.update_inventory(self.player)
             return
-        elif key == Qt.Key_Escape:  # Close inventory window
-            pass 
-            # if self.inventory_window and self.inventory_window.isVisible():
-                # self.inventory_window.hide()
-                # return
+        elif key == Qt.Key_Escape:  # Main Menu 
+            def main_menu(menu, item, instance):
+                if menu == "main":
+                    match item:
+                        case "Resume": instance.close()
+                        case "Start New Game": 
+                            self.start_new_game()
+                            instance.close()
+                        case "Load Game >": instance.set_list("Load Game >")
+                        case "Save Game >": instance.set_list("Save Game >")
+                        case "Quit to Desktop": self.close()
+                elif menu == "Load Game >":
+                    match item:
+                        case "Slot 1": 
+                            try:
+                                self.load_current_game(slot = 1)
+                                instance.close()
+                            except:
+                                pass
+                        case "Slot 2": 
+                            try:
+                                self.load_current_game(slot = 2)
+                                instance.close()
+                            except:
+                                pass 
+                        case "..":
+                            instance.set_list("main")
+                elif menu == "Save Game >":
+                    match item:
+                        case "Slot 1":
+                            self.save_current_game(slot = 1)
+                            instance.close()
+                        case "Slot 2":
+                            self.save_current_game(slot = 2)
+                            instance.close()
+                        case "..":
+                            instance.set_list("main")
+            SB = SelectionBox(parent=self, item_list = [f"[ Main Menu ](Current Save Slot: {self.current_slot})", "Resume","Start New Game", "Load Game >", "Save Game >", "Quit to Desktop"], action = main_menu)
+            SB.add_list("Load Game >", ["Slot 1", "Slot 2", ".."])
+            SB.add_list("Save Game >", ["Slot 1", "Slot 2", ".."])
+            SB.show()
         elif key == Qt.Key_F12:  # F12 Debugging: 
-            def action_(menu,item, gui):
-                if item == "Return": gui.set_list()
+            def debugging_menu(menu,item, instance):
+                if item == "Return": instance.set_list()
                 # -- 
                 if menu == "main":
                     match item:
                         case "Exit": 
-                            gui.close()
+                            instance.close()
                         case "Add Item >": 
-                            gui.set_list("Add Item >")
+                            instance.set_list("Add Item >")
                         case "Restore Status":
                             self.player.reset_stats()
-                            gui.close()
+                            instance.close()
                         case "Set Day 100":
                             self.current_day = 100
-                            gui.close()
+                            instance.close()
                         case "Generate Enemies >":
-                            gui.set_list("Generate Enemies >")
+                            instance.set_list("Generate Enemies >")
                         case "Generate Dungeon Entrance":
                             if self.map.add_dungeon_entrance_at(self.player.x, self.player.y):
                                 self.dirty_tiles.add((self.player.x, self.player.y)) 
-                                self.draw_grid()
-                                self.draw_hud()
-                            gui.close()
+                                self.draw()
+                            instance.close()
                 # --
                 if menu == "Add Item >":
                     match item:
                         case "Whetstone":
                             self.player.add_item(WeaponRepairTool("whetstone"))
-                            gui.close()
+                            instance.close()
                 # -- 
                 if menu ==  "Generate Enemies >":
-                    match item:
+                    dx, dy = self.player.get_forward_direction()
+                    dx = 2*dx 
+                    dy = 2*dy
+                    match item:                        
                         case "Zombie":
-                            for dx,dy in CHESS_KNIGHT_DIFF_MOVES:
-                                if self.map.generate_enemy_at(self.player.x+dx, self.player.y+dy, Zombie):
-                                    break
-                            gui.close()
+                            self.map.generate_enemy_at(self.player.x+dx, self.player.y+dy, Zombie)
+                            self.dirty_tiles.add((self.player.x+dx, self.player.y+dy)) 
+                            self.draw()
+                            instance.close()
                         case "Bear":
-                            for dx,dy in CHESS_KNIGHT_DIFF_MOVES:
-                                if self.map.generate_enemy_at(self.player.x+dx, self.player.y+dy, Bear):
-                                    break
-                            gui.close()
+                            self.map.generate_enemy_at(self.player.x+dx, self.player.y+dy, Bear)
+                            self.dirty_tiles.add((self.player.x+dx, self.player.y+dy)) 
+                            self.draw()
+                            instance.close()
                         case "Rogue":
-                            for dx,dy in CHESS_KNIGHT_DIFF_MOVES:
-                                if self.map.generate_enemy_at(self.player.x+dx, self.player.y+dy, Rogue):
-                                    break
-                            gui.close()
+                            self.map.generate_enemy_at(self.player.x+dx, self.player.y+dy, Rogue)
+                            self.dirty_tiles.add((self.player.x+dx, self.player.y+dy)) 
+                            self.draw()
+                            instance.close()
                         case "Mercenary":
-                            for dx,dy in CHESS_KNIGHT_DIFF_MOVES:
-                                if self.map.generate_enemy_at(self.player.x+dx, self.player.y+dy, Mercenary):
-                                    break
-                            gui.close()
+                            self.map.generate_enemy_at(self.player.x+dx, self.player.y+dy, Mercenary)
+                            self.dirty_tiles.add((self.player.x+dx, self.player.y+dy)) 
+                            self.draw()
+                            instance.close()
                             
             SB = SelectionBox(parent=self, item_list = [
                 "[ DEBUG MENU ]",
@@ -979,7 +1144,7 @@ class Game(QGraphicsView, Serializable):
                 "Restore Status",
                 "Generate Dungeon Entrance", 
                 "Exit"
-            ], action = action_)
+            ], action = debugging_menu)
             SB.add_list("Add Item >",[
                 "Whetstone",
                 "Return"
