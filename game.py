@@ -1,9 +1,11 @@
-# start.pyw 
-# -> gui.py
-# -----> reality.py
-# ---------> events.py 
-# ---------> globals_variables.py 
-# ---------> serialization.py 
+# game.py
+    # gui.py
+    # mapping.py
+        # reality.py
+        # events.py 
+        # globals_variables.py 
+        # serialization.py 
+        # performance.py 
 
 # project
 from performance import *
@@ -12,6 +14,7 @@ from reality import *
 from gui import *
 from events import * 
 from globals_variables import *
+from mapping import * 
 
 # built-in
 import os
@@ -26,12 +29,13 @@ from PyQt5.QtWidgets import QGraphicsView, QGraphicsScene, QGraphicsRectItem, QG
 from PyQt5.QtCore import Qt, QRectF, QUrl, QPropertyAnimation, QTimer
 from PyQt5.QtGui import QColor, QTransform, QFont
 
+# Main Window Class 
 class Game(QGraphicsView, Serializable):
     # -- class variables
     __serialize_only__ = [
         "version",
         "rotation",
-        "player",
+        "players",
         "current_map", # map coords
         "turn",
         "current_slot",
@@ -39,8 +43,8 @@ class Game(QGraphicsView, Serializable):
         "low_hunger_triggered",
         "current_day",
         "is_music_muted",
+        "current_player"
     ]
-    
     # -- inits
     def __init__(self):
         super().__init__()
@@ -59,13 +63,14 @@ class Game(QGraphicsView, Serializable):
         self.init_viewport()
         self.init_gui()
         # -- 
-        self.player = Player()
+        self.player = None # Player()
+        self.current_player = None # string key identifier
+        self.players = {} # players storage 
         self.current_map = (0,0,0) # Current map coordinates
         self.map = Map()
         self.maps = {(0,0,0):self.map}  # Store Map objects with coordinate keys
         # Create and place characters
         self.events = []  # Initialize events list
-        self.enemies = {(0, 0, 0): []}  # Dictionary with map coords as keys, enemy lists as values
         # Initial render
         self.dirty_tiles = set()  # Track tiles that need redrawing
         self.tile_items = {}  # For optimized rendering
@@ -81,7 +86,23 @@ class Game(QGraphicsView, Serializable):
         self.scene = QGraphicsScene()
         self.setScene(self.scene)
         self.tile_size = TILE_SIZE 
-    
+    def init_gui(self):
+        # init_view_port() | init_gui() 
+        self.setFocusPolicy(Qt.StrongFocus)  # Ensure Game accepts focus
+        self.setWindowTitle("PyQt Rogue Like")
+        self.setFixedSize(self.view_width * self.tile_size, self.view_height * self.tile_size)
+        # --
+        self.inventory_window = None  # Initialize later on demand
+        # Initialize message window
+        self.message_popup = MessagePopup(self)  # Set Game as parent
+        self.messages = []  # List of (message, turns_remaining) tuples
+        # Add journal window
+        self.journal_window = None
+        # Initialize music player
+        self.music_player = None
+        self.load_random_music()
+
+    # -- music
     def get_random_music_filename(self,directory="music", pattern=""):
         # Compile the regex pattern
         regex = re.compile(pattern)
@@ -95,7 +116,6 @@ class Game(QGraphicsView, Serializable):
 
         # Return a random file or None if no matches
         return random.choice(matching_files) if matching_files else None
-    
     def load_music(self, music_path):
         if not self.music_player:
             self.music_player = QMediaPlayer()
@@ -120,27 +140,24 @@ class Game(QGraphicsView, Serializable):
         else:
             self.add_message(f"Music file {music_path} not found")
             print(f"Music file {music_path} not found")
-    
     def load_random_music(self):
         if self.is_music_muted: return None
         return self.load_music( self.get_random_music_filename() )
-    
-    def init_gui(self):
-        # init_view_port() | init_gui() 
-        self.setFocusPolicy(Qt.StrongFocus)  # Ensure Game accepts focus
-        self.setWindowTitle("PyQt Rogue Like")
-        self.setFixedSize(self.view_width * self.tile_size, self.view_height * self.tile_size)
-        # --
-        self.inventory_window = None  # Initialize later on demand
-        # Initialize message window
-        self.message_popup = MessagePopup(self)  # Set Game as parent
-        self.messages = []  # List of (message, turns_remaining) tuples
-        # Add journal window
-        self.journal_window = None
-        # Initialize music player
-        self.music_player = None
-        self.load_random_music()
         
+    # -- players - players and allies are the same 
+    def add_player(self, key, **kwargs): # add a player or ally in dictionary 
+        self.players.update({ key : Player(**kwargs) })
+    def set_player(self, name): # set the Game.player by dictionary name  
+        self.player = self.players.get(name)
+        self.current_player = name 
+    def set_player_name(self,key,new_name):
+        player = self.players.get(key,None)
+        if not player: return False
+        self.players.pop(key)
+        player.name = new_name 
+        self.players.update({new_name:player})
+        return True
+    
     # -- overrides
     def from_dict(self, dictionary):
         if not super().from_dict(dictionary):
@@ -225,7 +242,6 @@ class Game(QGraphicsView, Serializable):
             new_map_coord = (self.current_map[0], self.current_map[1] + 1, self.current_map[2])
             new_y = 0
         return new_x, new_y, new_map_coord
-
     def find_stair_tile(self, map_obj, target_stair_coords):
         """Find a tile in map_obj with a stair attribute matching target_stair_coords."""
         for y in range(map_obj.height):
@@ -234,7 +250,6 @@ class Game(QGraphicsView, Serializable):
                 if tile and tile.stair == target_stair_coords:
                     return (tile.stair_x or x, tile.stair_y or y)
         return None
-    
     def new_map_from_current_coords(
             self, 
             filename = "default", 
@@ -251,10 +266,8 @@ class Game(QGraphicsView, Serializable):
             going_up = up
         )
         self.maps[self.current_map] = self.map # update the cached maps 
-        self.fill_enemies()
+        self.map.fill_enemies()
         return self.map.starting_x, self.map.starting_y 
-    
-    # -- map transitions 
     def map_transition(
             self, 
             new_map_file, 
@@ -264,6 +277,7 @@ class Game(QGraphicsView, Serializable):
             going_up = False
         ):
         self.load_random_music()
+        self.player.current_map = new_map_coord
         self.current_map = new_map_coord
         if new_map_coord not in self.maps: 
             self.maps[self.current_map] = Map(coords=self.current_map)
@@ -281,9 +295,7 @@ class Game(QGraphicsView, Serializable):
             if self.current_map:
                 self.add_message(f"Loading Map from Cache ({self.current_map[0]}, {-self.current_map[1]}, {self.current_map[2]})")
             self.map = self.maps[self.current_map]
-        self.enemies[self.current_map] = self.map.enemies 
         return None, None
-    
     def safely_place_character_to_new_map(self,char=None):
         if not char: char = self.player 
         if not char: return 
@@ -305,6 +317,7 @@ class Game(QGraphicsView, Serializable):
                 char.x, char.y = self.map.width // 2, self.map.height // 2
                 self.map.place_character(char)
     
+    # -- map transitions 
     def horizontal_map_transition(self,x,y):
         T1 = tic()
         self.events.clear()
@@ -351,7 +364,6 @@ class Game(QGraphicsView, Serializable):
         self.draw_grid()
         self.draw_hud()
         toc(T1,"Game.horizontal_map_transition() ||")
-    
     def vertical_map_transition(self, target_map_coords, up):
         """Handle vertical map transition via stairs."""
         T1 = tic()
@@ -404,23 +416,22 @@ class Game(QGraphicsView, Serializable):
         self.draw_grid()
         self.draw_hud()
         toc(T1,"Game.vertical_map_transition() ||")
-    # -- save and load from file    
-    def start_new_game(self):
+    
+    # -- save and load from file - try to use the already created map    
+    def start_new_game(self, new_character_name = "Main Character"):
         """Reset the game to a new state."""
         self.scene.clear()
         self.tile_items.clear()
-        self.maps = {(0, 0, 0): Map("default", coords=self.current_map)}
         self.current_map = (0, 0, 0)
-        self.map = self.maps[self.current_map]
+        self.try_load_map_or_create_new()
         xy = self.map.get_random_walkable_tile()
         if not xy: xy = (50,50)
-        self.player = Player("Adventurer", 100, xy[0], xy[1])
+        self.add_player(new_character_name, name = new_character_name, hp = 100, x=xy[0], y=xy[1], b_generate_items=True)
+        self.set_player(new_character_name)
         self.player.hunger = 200
         self.player.max_hunger = 1000
         self.events = []
-        self.enemies = {(0, 0, 0): []}
         self.map.place_character(self.player)
-        self.fill_enemies()
         self.turn = 0
         self.current_day = 0
         
@@ -481,33 +492,35 @@ class Game(QGraphicsView, Serializable):
             if os.path.exists(os.path.join(saves_dir, f"player_state_{slot}.json.bak")):
                 shutil.copy(os.path.join(saves_dir, f"player_state_{slot}.json.bak"), player_file)  # Restore backup
         toc(T1, "Game.save_current_game() ||")
+    
+    def try_load_map_or_create_new(self):
+        saves_dir = "./saves"
+        map_file = os.path.join(saves_dir, f"map_{'_'.join(map(str, self.current_map))}_{self.current_slot}.json")
+        self.map = Map("default", coords=self.current_map)
+        if not self.map.Load_JSON(map_file):
+            self.add_message(f"No map save file found for slot {self.current_slot}")
+            print(f"No map save file found: {map_file}")
+            self.new_map_from_current_coords()
+        self.maps[self.current_map] = self.map
+    
     def load_current_game(self, slot=1):
         """Load player state and current map from their respective JSON files."""
+        print("Current Player :", self.current_player)
         #T1 = tic()
         saves_dir = "./saves"
         player_file = os.path.join(saves_dir, f"player_state_{slot}.json")
         if not self.Load_JSON(player_file):
-            print("here")
             print(f"Failed to Load or no File Found: {player_file}")
             self.start_new_game()
             return 
+        self.set_player(self.current_player)
         # Clear current state
         self.scene.clear()
         self.tile_items.clear()
         self.events.clear()
-        self.enemies.clear()
         self.maps.clear()
-        # Load current map and update enemies
-        map_file = os.path.join(saves_dir, f"map_{'_'.join(map(str, self.current_map))}_{slot}.json")
-        self.map = Map("default", coords=self.current_map)
-        if not self.map.Load_JSON(map_file):
-            self.add_message(f"No map save file found for slot {slot}")
-            print(f"No map save file found: {map_file}")
-            self.new_map_from_current_coords()
-        else:
-            self.enemies[self.current_map] = self.map.enemies
-        self.maps[self.current_map] = self.map
-        
+        # Load current map
+        self.try_load_map_or_create_new()
         # Place characters
         if not self.map.place_character(self.player):
             self.add_message(f"Warning: Could not place player at ({self.player.x}, {self.player.y})")
@@ -522,7 +535,7 @@ class Game(QGraphicsView, Serializable):
             self.journal_window = JournalWindow(self)
         self.journal_window.load_journal(slot)
         self.player.rotation = self.rotation 
-        #toc(T1,"Game.load_current_game() ||")
+        
     # -- viewport draws 
     def draw(self):
         self.draw_grid()
@@ -655,30 +668,13 @@ class Game(QGraphicsView, Serializable):
     
     # -- game iteration 
     def game_iteration(self):
-        self.update_player()
         self.turn += 1
         self.Event_NewTurn()
-        self.process_events()
+        self.process_events() 
+        self.update_players() # which include player and allies 
         self.update_enemies()
-        self.update_messages()  # Critical: Update message window 
+        self.update_messages() # Critical: Update message window 
         self.draw()
-    
-    def update_player(self):
-        self.player.regenerate_stamina()
-        self.player.regenerate_health()
-        self.player.hunger = max(0, self.player.hunger - 0.5)  # Hunger decreases each turn
-        # Check for special events and set flags
-        if self.player.hp / self.player.max_hp < 0.2:
-            self.low_hp_triggered = True
-        if self.player.hunger / self.player.max_hunger < 0.1:
-            self.low_hunger_triggered = True    
-        if self.player.hunger <= 0:
-            self.player.hp = max(0, self.player.hp - 1)  # Starvation damage
-            if self.player.hp <= 0:
-                self.add_message("Game Over: Starvation! Reloading last save...")
-                self.Event_PlayerDeath()
-                return
-        
     def process_events(self):
         """Process events and trigger autosave for significant changes."""
         for event in sorted(self.events, key=lambda e: getattr(e, 'priority', 0)):
@@ -706,24 +702,11 @@ class Game(QGraphicsView, Serializable):
                 else:
                     self.add_message("Nevermind ...")
         self.events.clear()
-    
-    def fill_enemies(self, num_enemies=100):
-        self.enemies[self.current_map] = self.map.fill_enemies(num_enemies)
-                
-    def update_enemies(self):
-        if self.current_map in self.enemies:  # Check if map has enemies
-            for enemy in self.enemies[self.current_map]:
-                distance = abs(enemy.x - self.player.x) + abs(enemy.y - self.player.y)
-                if distance >= 25: continue                
-                old_x, old_y = enemy.x, enemy.y
-                enemy.update(self.player, self.map, self)
-                if (enemy.x, enemy.y) != (old_x, old_y):
-                    self.events.append(MoveEvent(enemy, old_x, old_y))
-                    self.dirty_tiles.add((old_x, old_y))
-                    self.dirty_tiles.add((enemy.x, enemy.y))
-            if len(self.enemies[self.current_map]) < 5:
-                self.fill_enemies()
-                
+    def update_players(self):
+        self.player.update(self)
+    def update_enemies(self): # maybe more maps could be updated, like maps with alive players 
+        self.map.update_enemies(self)
+                           
     # -- Qt Events
     def closeEvent(self, event):
         """Save the game state when the window is closed."""
@@ -739,13 +722,10 @@ class Game(QGraphicsView, Serializable):
         event.accept()
     def resizeEvent(self, event):
         self.fitInView(self.scene.sceneRect(), Qt.KeepAspectRatio)
-    
     def keyReleaseEvent(self, event):
         if event.key() == Qt.Key_Alt:
             self.alt_pressed = False
-            
     def keyPressEvent(self, event):
-        
         # window movement 
         if event.key() == Qt.Key_Alt:
             self.alt_pressed = True
@@ -762,114 +742,34 @@ class Game(QGraphicsView, Serializable):
             elif event.key() == Qt.Key_Down:
                 self.move(self.x(), self.y() + 10)
                 return 
-        
-        # game key inpu 
+        # game key input 
         key = event.key()
         dx, dy = 0, 0
         b_isForwarding = False
         stamina_bound = 20
-        if key == Qt.Key_B: # build menu 
+        if key == Qt.Key_1:
+            list_of_weapons = [ [wp, f"{wp.name} {wp.damage:.1f} [dmg]"] for wp in self.player.items if isinstance(wp, Weapon) ]
+            if self.player.primary_hand and hasattr(self.player.primary_hand, "damage"):
+                SB = SelectionBox( 
+                    parent=self, 
+                    item_list = ["[ Weapon Selection ]", f"-> primary: {self.player.primary_hand.name} {self.player.primary_hand.damage:.1f} [dmg]"]+[ i[1] for i in list_of_weapons ]+["Exit"], 
+                    action = primary_menu, 
+                    game_instance = self, 
+                    list_of_weapons = list_of_weapons 
+                )
+            else:
+                SB = SelectionBox( parent=self, item_list = ["[ Weapon Selection ]"]+[ i[1] for i in list_of_weapons ]+["Exit"], action = primary_menu, game_instance = self, list_of_weapons = list_of_weapons )
+            SB.show()
+        elif key == Qt.Key_B: # build menu 
             pass
-        elif key == Qt.Key_X: # skill menu 
-            def skill_menu(menu, item, instance):
-                if item == "Exit": instance.close()
-                if "Dodge" in item: 
-                    if self.current_day >= 5:
-                        dx = 0
-                        dy = 0
-                        if self.player.stamina<stamina_bound:
-                            self.add_message("I'm exhausted ... I need to take a breathe")
-                        x = self.player.x 
-                        y = self.player.y
-                        fx, fy = self.player.get_forward_direction()
-                        bx = -fx 
-                        by = -fy
-                        b_is_walkable = True 
-                        tile = self.map.get_tile(x+bx,y+by)
-                        if tile and self.player.stamina>stamina_bound:
-                            if tile.walkable:
-                                tile2 = self.map.get_tile(x+2*bx,y+2*by)
-                                if tile2:
-                                    if tile2.walkable:
-                                        dx = 2*bx 
-                                        dy = 2*by
-                                        self.player.stamina -= stamina_bound
-                                    else:
-                                        b_is_walkable = False
-                                else:
-                                    b_is_walkable = False
-                            else:
-                                b_is_walkable = False
-                        else:
-                            b_is_walkable = False
-                        if not b_is_walkable:
-                            self.game_iteration()
-                        if dx or dy:
-                            target_x, target_y = self.player.x + dx, self.player.y + dy
-                            tile = self.map.get_tile(target_x, target_y)
-                            if target_x <0 or target_x > self.grid_width-1 or target_y<0 or target_y> self.grid_height-1:
-                                self.horizontal_map_transition(target_x, target_y)  # Add this
-                                instance.close()
-                            if tile and tile.walkable:
-                                if tile.current_char:
-                                    if b_isForwarding:
-                                        damage = self.player.calculate_damage_done()
-                                        self.events.append(AttackEvent(self.player, tile.current_char, damage))
-                                else:
-                                    old_x, old_y = self.player.x, self.player.y
-                                    if self.player.move(dx, dy, self.map):
-                                        self.events.append(MoveEvent(self.player, old_x, old_y))
-                                        self.dirty_tiles.add((old_x, old_y))
-                                        self.dirty_tiles.add((self.player.x, self.player.y))
-                            self.game_iteration()
-                        instance.close()
-                if "Power Attack" in item: 
-                    if self.current_day >= 15:
-                        tx, ty = self.player.get_forward_direction()
-                        tile0 = self.map.get_tile(self.player.x+tx, self.player.y+ty)
-                        if tile0:
-                            if not tile0.walkable:
-                                self.add_message("Can't find a target ...")
-                                instance.close()
-                            if tile0.current_char:
-                                self.add_message("The enemy is too close to perform this attack ...")
-                                instance.close()
-                        tile1 = self.map.get_tile(self.player.x+2*tx, self.player.y+2*ty)
-                        if tile1:
-                            if tile1.current_char:
-                                if self.player.primary_hand:
-                                    if self.player.stamina<stamina_bound:
-                                        self.add_message("I'm exhausted ... I need to take a breathe")
-                                    else:
-                                        self.add_message("Powerful Strike ...")
-                                        self.events.append(
-                                            AttackEvent(
-                                                self.player, tile1.current_char, d(self.player.primary_hand.damage,3*self.player.primary_hand.damage) 
-                                            ) 
-                                        )
-                                        self.player.stamina -= stamina_bound
-                                        self.game_iteration()
-                                        instance.close()
-                            else:
-                                self.add_message("Can't find a target ...")
-                        instance.close()
-                if "Weapon Special Attack" in item: 
-                    primary = self.player.primary_hand
-                    if primary:
-                        if hasattr(primary,"use_special"):
-                            if primary.use_special(self.player, self.map, self):
-                                self.game_iteration()
-                                instance.close() 
-                            else:
-                                self.add_message("Can't Use Special Skill Right Now ...")
-                        instance.close()                    
+        elif key == Qt.Key_X: # skill menu            
             SB = SelectionBox(parent = self, item_list = [
                 f"[ Avaiable Skills ](days survived: {self.current_day})",
                 f"Dodge: { self.current_day>=5 }",
                 f"Power Attack: { self.current_day>=15 }",
                 f"Weapon Special Attack: { self.current_day>=20 }",
                 "Exit"
-            ], action = skill_menu)
+            ], action = skill_menu, game_instance = self, stamina_bound = stamina_bound)
             SB.show()
         elif key == Qt.Key_R:
             self.player.use_first_item_of(WeaponRepairTool, self)
@@ -1040,102 +940,38 @@ class Game(QGraphicsView, Serializable):
                 self.inventory_window.update_inventory(self.player)
             return
         elif key == Qt.Key_Escape:  # Main Menu 
-            def main_menu(menu, item, instance):
-                if menu == "main":
-                    match item:
-                        case "Resume": instance.close()
-                        case "Start New Game": 
-                            self.start_new_game()
-                            instance.close()
-                        case "Load Game >": instance.set_list("Load Game >")
-                        case "Save Game >": instance.set_list("Save Game >")
-                        case "Quit to Desktop": self.close()
-                elif menu == "Load Game >":
-                    match item:
-                        case "Slot 1": 
-                            try:
-                                self.load_current_game(slot = 1)
-                                instance.close()
-                            except:
-                                pass
-                        case "Slot 2": 
-                            try:
-                                self.load_current_game(slot = 2)
-                                instance.close()
-                            except:
-                                pass 
-                        case "..":
-                            instance.set_list("main")
-                elif menu == "Save Game >":
-                    match item:
-                        case "Slot 1":
-                            self.save_current_game(slot = 1)
-                            instance.close()
-                        case "Slot 2":
-                            self.save_current_game(slot = 2)
-                            instance.close()
-                        case "..":
-                            instance.set_list("main")
-            SB = SelectionBox(parent=self, item_list = [f"[ Main Menu ](Current Save Slot: {self.current_slot})", "Resume","Start New Game", "Load Game >", "Save Game >", "Quit to Desktop"], action = main_menu)
-            SB.add_list("Load Game >", ["Slot 1", "Slot 2", ".."])
-            SB.add_list("Save Game >", ["Slot 1", "Slot 2", ".."])
+            SB = SelectionBox( parent=self, item_list = [
+                f"[ Main Menu ]", 
+                f"-> Current Save Slot: {self.current_slot}",
+                f"-> Character: {self.current_player}",
+                "Resume",
+                "Start New Game",
+                "Character Settings >",
+                "Load Game >", 
+                "Save Game >", 
+                "Quit to Desktop"
+            ], action = main_menu, game_instance = self)
+            SB.add_list("Load Game >", ["[ Main Menu > Load Game ]","Slot 1", "Slot 2", ".."])
+            SB.add_list("Save Game >", ["[ Main Menu > Save Game ]","Slot 1", "Slot 2", ".."])
+            SB.add_list("Select Player Sprite >", [
+                "[ Character Settings > Select Sprite ]",
+                "player",
+                "rogue",
+                "mercenary",
+                "player_female",
+                "enemy",
+                ".."
+            ])
+            SB.add_list("Select Player Character >", ["[ Character Settings > Character Selection ]"] + [ k for k in self.players.keys() ] + [".."])
+            SB.add_list("Character Settings >", [
+                "[ Main Menu > Character Settings ]",
+                "Select Player Sprite >",
+                "Select Player Character >",
+                "Change Current Character Name",
+                ".."
+            ] )
             SB.show()
         elif key == Qt.Key_F12:  # F12 Debugging: 
-            def debugging_menu(menu,item, instance):
-                if item == "Return": instance.set_list()
-                # -- 
-                if menu == "main":
-                    match item:
-                        case "Exit": 
-                            instance.close()
-                        case "Add Item >": 
-                            instance.set_list("Add Item >")
-                        case "Restore Status":
-                            self.player.reset_stats()
-                            instance.close()
-                        case "Set Day 100":
-                            self.current_day = 100
-                            instance.close()
-                        case "Generate Enemies >":
-                            instance.set_list("Generate Enemies >")
-                        case "Generate Dungeon Entrance":
-                            if self.map.add_dungeon_entrance_at(self.player.x, self.player.y):
-                                self.dirty_tiles.add((self.player.x, self.player.y)) 
-                                self.draw()
-                            instance.close()
-                # --
-                if menu == "Add Item >":
-                    match item:
-                        case "Whetstone":
-                            self.player.add_item(WeaponRepairTool("whetstone"))
-                            instance.close()
-                # -- 
-                if menu ==  "Generate Enemies >":
-                    dx, dy = self.player.get_forward_direction()
-                    dx = 2*dx 
-                    dy = 2*dy
-                    match item:                        
-                        case "Zombie":
-                            self.map.generate_enemy_at(self.player.x+dx, self.player.y+dy, Zombie)
-                            self.dirty_tiles.add((self.player.x+dx, self.player.y+dy)) 
-                            self.draw()
-                            instance.close()
-                        case "Bear":
-                            self.map.generate_enemy_at(self.player.x+dx, self.player.y+dy, Bear)
-                            self.dirty_tiles.add((self.player.x+dx, self.player.y+dy)) 
-                            self.draw()
-                            instance.close()
-                        case "Rogue":
-                            self.map.generate_enemy_at(self.player.x+dx, self.player.y+dy, Rogue)
-                            self.dirty_tiles.add((self.player.x+dx, self.player.y+dy)) 
-                            self.draw()
-                            instance.close()
-                        case "Mercenary":
-                            self.map.generate_enemy_at(self.player.x+dx, self.player.y+dy, Mercenary)
-                            self.dirty_tiles.add((self.player.x+dx, self.player.y+dy)) 
-                            self.draw()
-                            instance.close()
-                            
             SB = SelectionBox(parent=self, item_list = [
                 "[ DEBUG MENU ]",
                 "Set Day 100", 
@@ -1143,18 +979,28 @@ class Game(QGraphicsView, Serializable):
                 "Generate Enemies >", 
                 "Restore Status",
                 "Generate Dungeon Entrance", 
+                "Add a Cosmetic Layer >",
                 "Exit"
-            ], action = debugging_menu)
+            ], action = debugging_menu, game_instance = self)
             SB.add_list("Add Item >",[
                 "Whetstone",
-                "Return"
+                "Mace",
+                "Long Sword",
+                ".."
             ])
             SB.add_list("Generate Enemies >",[
                 "Zombie",
                 "Bear",
                 "Rogue",
                 "Mercenary",
-                "Return"
+                ".."
+            ])
+            SB.add_list("Add a Cosmetic Layer >", [
+                "House",
+                "Castle",
+                "Lumber Mill",
+                "Clear", 
+                ".."
             ])
             SB.show()        
         else:
@@ -1176,14 +1022,8 @@ class Game(QGraphicsView, Serializable):
                     old_x, old_y = self.player.x, self.player.y
                     if self.player.move(dx, dy, self.map):
                         self.events.append(MoveEvent(self.player, old_x, old_y))
-                        #if tile.items:
-                        #    for item in tile.items[:]:
-                        #        if self.player.pickup_item(item):
-                        #            tile.remove_item(item)
                         self.dirty_tiles.add((old_x, old_y))
-                        self.dirty_tiles.add((self.player.x, self.player.y))
-            
-                
+                        self.dirty_tiles.add((self.player.x, self.player.y))    
             self.game_iteration()
     
     # -- Reactive Events Handlers
@@ -1222,7 +1062,8 @@ class Game(QGraphicsView, Serializable):
             primary_attacker = event.attacker.primary_hand 
             if primary and primary_attacker:
                 if isinstance(primary, Sword):
-                    if random.random() < primary.get_player_parry_chance(self.player, event.attacker, event.damage):
+                    print(f"Defense Factor : {self.player.calculate_defense_factor():.5f}")
+                    if random.random() < primary.get_player_parry_chance(self.player, event.attacker, event.damage) + self.player.calculate_defense_factor():
                         self.add_message(f"You parry the incoming attack ...")
                         self.player.stamina -= event.damage
                     else:
@@ -1248,8 +1089,8 @@ class Game(QGraphicsView, Serializable):
             self.Event_PlayerDeath()
         else:
             event.target.drop_on_death()
-            if self.current_map in self.enemies and event.target in self.enemies[self.current_map]:
-                self.enemies[self.current_map].remove(event.target)
+            if event.target in self.map.enemies:
+                self.map.enemies.remove(event.target)
             event.target.current_tile.current_char = None
             
 # --- END 

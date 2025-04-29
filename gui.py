@@ -10,10 +10,11 @@ import os
 from datetime import datetime
 
 # third-party
-from PyQt5.QtWidgets import QWidget, QListWidget, QVBoxLayout, QPushButton, QHBoxLayout, QMenu, QDialog, QLabel, QTextEdit, QSizePolicy
+from PyQt5.QtWidgets import QWidget, QListWidget, QVBoxLayout, QPushButton, QHBoxLayout, QMenu, QDialog, QLabel, QTextEdit, QSizePolicy, QInputDialog
 from PyQt5.QtCore import Qt, QEvent
 from PyQt5.QtGui import QTextCursor, QColor
 
+# Classes 
 class JournalWindow(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -332,9 +333,10 @@ class MessagePopup(QDialog):
             self.parent().setFocus()
 
 class SelectionBox(QWidget):
-    def __init__(self, item_list = [f"Option {i}" for i in range(5)], action = lambda x, instance: instance.close(), parent=None):
+    def __init__(self, item_list = [f"Option {i}" for i in range(5)], action = lambda x, instance: instance.close(), parent=None, **kwargs):
         super().__init__(parent)
         self.action = action 
+        self.kw = kwargs
         self.list_dictionary = { "main": item_list }
         self.current_key = "main"
         self.setAttribute(Qt.WA_TranslucentBackground)
@@ -359,13 +361,14 @@ class SelectionBox(QWidget):
         """)
         self.list_widget.setSelectionMode(QListWidget.SingleSelection)
         self.list_widget.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.list_widget.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         # self.list_widget.itemDoubleClicked.connect(self.action)
         self.list_widget.installEventFilter(self) # now the list_widget will use the keyPressEvent function 
-        self.set_list()
-        self.list_widget.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)        
+        #self.list_widget.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)        
         self.list_widget.setCurrentRow(len(self.list_widget)//2)
         self.layout.addWidget(self.list_widget)
         self.setLayout(self.layout)
+        self.set_list()
         self.setFocus()
         self.list_widget.setFocus()
     def get_current_list(self):
@@ -384,11 +387,11 @@ class SelectionBox(QWidget):
         spacing = self.list_widget.spacing()
         frame = 2 * self.list_widget.frameWidth()
         total_height = row_height * row_count + spacing + frame
-        self.list_widget.setFixedHeight(total_height)
+        #self.list_widget.setFixedHeight(total_height)
         # Get max width of all items
         max_width = max(self.list_widget.sizeHintForIndex(self.list_widget.model().index(i, 0)).width() for i in range(row_count)) if row_count > 0 else 100
-        self.list_widget.setFixedWidth(max_width + 100)
-        
+        #self.list_widget.setFixedWidth(max_width + 100)
+        self.list_widget.resize(max_width+100, total_height)
     def eventFilter(self, obj, event):
         if obj == self.list_widget and event.type() == QEvent.KeyPress:
             if event.key() in (Qt.Key_Return, Qt.Key_Enter):
@@ -415,7 +418,7 @@ class SelectionBox(QWidget):
     def do_enter_action(self, item=None):
         if not item: 
             item = self.list_widget.currentItem()
-        self.action(self.current_key, item.text(),self)
+        self.action(self.current_key, item.text(),self, **self.kw)
             
 class InventoryWindow(QDialog):
     def __init__(self, parent=None):
@@ -661,6 +664,258 @@ class InventoryWindow(QDialog):
             self.parent().game_iteration() 
         self.parent().setFocus()  # Return focus to game    
 
+# Menus 
+def main_menu(menu, item, instance, game_instance):
+    if menu == "main":
+        match item:
+            case "Resume": instance.close()
+            case "Start New Game": 
+                new_name = QInputDialog.getText(instance, 'Input Dialog', 'Character Name :')
+                if new_name[0]:
+                    game_instance.start_new_game(new_name[0])
+                    instance.close()
+            case "Load Game >": instance.set_list("Load Game >")
+            case "Save Game >": instance.set_list("Save Game >")
+            case "Quit to Desktop": game_instance.close()
+            case "Character Settings >": instance.set_list("Character Settings >")
+    elif menu == "Character Settings >":
+        match item:
+            case "..": instance.set_list()
+            case "Select Player Sprite >": 
+                instance.set_list("Select Player Sprite >")
+                instance.list_widget.setFixedHeight(MAP_HEIGHT*TILE_SIZE)
+            case "Select Player Character >": instance.set_list("Select Player Character >")
+            case "Change Current Character Name":
+                new_name = QInputDialog.getText(instance, 'Input Dialog', 'New Character Name :')
+                if new_name[0]:
+                    if game_instance.set_player_name(game_instance.current_player, new_name[0]):
+                        game_instance.current_player = new_name[0]
+                        game_instance.save_current_game(slot = game_instance.current_slot)
+                        instance.close()
+    elif menu == "Load Game >":
+        match item:
+            case "Slot 1": 
+                try:
+                    game_instance.load_current_game(slot = 1)
+                    instance.close()
+                except:
+                    pass
+            case "Slot 2": 
+                try:
+                    game_instance.load_current_game(slot = 2)
+                    instance.close()
+                except:
+                    pass 
+            case "..":
+                instance.set_list("main")
+    elif menu == "Save Game >":
+        match item:
+            case "Slot 1":
+                game_instance.save_current_game(slot = 1)
+                instance.close()
+            case "Slot 2":
+                game_instance.save_current_game(slot = 2)
+                instance.close()
+            case "..":
+                instance.set_list("main")
+    elif menu == "Select Player Sprite >":
+        if item == "..":
+            instance.set_list()
+        elif item != "[ Character Settings > Select Sprite ]":
+            game_instance.player.sprite = item
+            game_instance.draw()
+            instance.close()
+    elif menu == "Select Player Character >":
+        if item == "..":
+            instance.set_list()
+        elif item != "[ Character Settings > Character Selection ]":
+            game_instance.set_player(item) # will not load the actual position of the new character, that must be changed !!! 
+            game_instance.draw()
+            instance.close()
+            
+def primary_menu(menu, item, instance, game_instance, list_of_weapons):
+    if item == "Exit": instance.close()
+    for wp in list_of_weapons:
+        if item == wp[1]:
+            game_instance.player.equip_item(wp[0], wp[0].slot)
+            game_instance.update_inv_window()
+            instance.close()
+            
+def skill_menu(menu, item, instance, game_instance, stamina_bound):
+    if item == "Exit": instance.close()
+    if "Dodge" in item: 
+        if game_instance.current_day >= 5:
+            dx = 0
+            dy = 0
+            if game_instance.player.stamina<stamina_bound:
+                game_instance.add_message("I'm exhausted ... I need to take a breathe")
+            x = game_instance.player.x 
+            y = game_instance.player.y
+            fx, fy = game_instance.player.get_forward_direction()
+            bx = -fx 
+            by = -fy
+            b_is_walkable = True 
+            tile = game_instance.map.get_tile(x+bx,y+by)
+            if tile and game_instance.player.stamina>stamina_bound:
+                if tile.walkable:
+                    tile2 = game_instance.map.get_tile(x+2*bx,y+2*by)
+                    if tile2:
+                        if tile2.walkable:
+                            dx = 2*bx 
+                            dy = 2*by
+                            game_instance.player.stamina -= stamina_bound
+                        else:
+                            b_is_walkable = False
+                    else:
+                        b_is_walkable = False
+                else:
+                    b_is_walkable = False
+            else:
+                b_is_walkable = False
+            if not b_is_walkable:
+                game_instance.game_iteration()
+            if dx or dy:
+                target_x, target_y = game_instance.player.x + dx, game_instance.player.y + dy
+                tile = game_instance.map.get_tile(target_x, target_y)
+                if target_x <0 or target_x > game_instance.grid_width-1 or target_y<0 or target_y> game_instance.grid_height-1:
+                    game_instance.horizontal_map_transition(target_x, target_y)  # Add this
+                    instance.close()
+                if tile and tile.walkable:
+                    if tile.current_char:
+                        if b_isForwarding:
+                            damage = game_instance.player.calculate_damage_done()
+                            game_instance.events.append(AttackEvent(game_instance.player, tile.current_char, damage))
+                    else:
+                        old_x, old_y = game_instance.player.x, game_instance.player.y
+                        if game_instance.player.move(dx, dy, game_instance.map):
+                            game_instance.events.append(MoveEvent(game_instance.player, old_x, old_y))
+                            game_instance.dirty_tiles.add((old_x, old_y))
+                            game_instance.dirty_tiles.add((game_instance.player.x, game_instance.player.y))
+                game_instance.game_iteration()
+            instance.close()
+    if "Power Attack" in item: 
+        if game_instance.current_day >= 15:
+            tx, ty = game_instance.player.get_forward_direction()
+            tile0 = game_instance.map.get_tile(game_instance.player.x+tx, game_instance.player.y+ty)
+            if tile0:
+                if not tile0.walkable:
+                    game_instance.add_message("Can't find a target ...")
+                    instance.close()
+                if tile0.current_char:
+                    game_instance.add_message("The enemy is too close to perform this attack ...")
+                    instance.close()
+            tile1 = game_instance.map.get_tile(game_instance.player.x+2*tx, game_instance.player.y+2*ty)
+            if tile1:
+                if tile1.current_char:
+                    if game_instance.player.primary_hand:
+                        if game_instance.player.stamina<stamina_bound:
+                            game_instance.add_message("I'm exhausted ... I need to take a breathe")
+                        else:
+                            game_instance.add_message("Powerful Strike ...")
+                            game_instance.events.append(
+                                AttackEvent(
+                                    game_instance.player, tile1.current_char, d(game_instance.player.primary_hand.damage,3*game_instance.player.primary_hand.damage) 
+                                ) 
+                            )
+                            game_instance.player.stamina -= stamina_bound
+                            game_instance.game_iteration()
+                            instance.close()
+                else:
+                    game_instance.add_message("Can't find a target ...")
+            instance.close()
+    if "Weapon Special Attack" in item: 
+        primary = game_instance.player.primary_hand
+        if primary:
+            if hasattr(primary,"use_special"):
+                if primary.use_special(game_instance.player, game_instance.map, game_instance):
+                    game_instance.game_iteration()
+                    instance.close() 
+                else:
+                    game_instance.add_message("Can't Use Special Skill Right Now ...")
+            instance.close()            
+
+def debugging_menu(menu,item, instance, game_instance):
+    if item == "..": instance.set_list()
+    # -- 
+    if menu == "main":
+        match item:
+            case "Exit": 
+                instance.close()
+            case "Add Item >": 
+                instance.set_list("Add Item >")
+            case "Restore Status":
+                game_instance.player.reset_stats()
+                instance.close()
+            case "Set Day 100":
+                game_instance.current_day = 100
+                instance.close()
+            case "Generate Enemies >":
+                instance.set_list("Generate Enemies >")
+            case "Generate Dungeon Entrance":
+                if game_instance.map.add_dungeon_entrance_at(game_instance.player.x, game_instance.player.y):
+                    game_instance.dirty_tiles.add((game_instance.player.x, game_instance.player.y)) 
+                    game_instance.draw()
+                instance.close()
+            case "Add a Cosmetic Layer >":
+                instance.set_list("Add a Cosmetic Layer >")
+    # --
+    if menu == "Add Item >":
+        match item:
+            case "Whetstone":
+                game_instance.player.add_item(WeaponRepairTool("whetstone"))
+                instance.close()
+            case "Mace":
+                game_instance.player.add_item(Mace())
+                instance.close()    
+            case "Long Sword":
+                game_instance.player.add_item(Sword(name = "Long_Sword"))
+                instance.close()    
+    # -- 
+    if menu == "Generate Enemies >":
+        dx, dy = game_instance.player.get_forward_direction()
+        dx = 2*dx 
+        dy = 2*dy
+        match item:                        
+            case "Zombie":
+                game_instance.map.generate_enemy_at(game_instance.player.x+dx, game_instance.player.y+dy, Zombie)
+                game_instance.dirty_tiles.add((game_instance.player.x+dx, game_instance.player.y+dy)) 
+                game_instance.draw()    
+                instance.close()                            
+            case "Bear":
+                game_instance.map.generate_enemy_at(game_instance.player.x+dx, game_instance.player.y+dy, Bear)
+                game_instance.dirty_tiles.add((game_instance.player.x+dx, game_instance.player.y+dy)) 
+                game_instance.draw()
+                instance.close()
+            case "Rogue":
+                game_instance.map.generate_enemy_at(game_instance.player.x+dx, game_instance.player.y+dy, Rogue)
+                game_instance.dirty_tiles.add((game_instance.player.x+dx, game_instance.player.y+dy)) 
+                game_instance.draw()    
+                instance.close()                            
+            case "Mercenary":
+                game_instance.map.generate_enemy_at(game_instance.player.x+dx, game_instance.player.y+dy, Mercenary)
+                game_instance.dirty_tiles.add((game_instance.player.x+dx, game_instance.player.y+dy)) 
+                game_instance.draw()
+                instance.close()
+    # --
+    if menu == "Add a Cosmetic Layer >":
+        tile = game_instance.player.current_tile
+        match item:
+            case "House":
+                tile.add_layer("house")
+                game_instance.draw()    
+                instance.close()                            
+            case "Castle":
+                tile.add_layer("castle")
+                game_instance.draw()    
+                instance.close()                            
+            case "Lumber Mill":
+                tile.add_layer("lumber_mill")
+                game_instance.draw()    
+                instance.close()                            
+            case "Clear":
+                tile.remove_layer()
+                game_instance.draw()    
+                instance.close()
 
 
 

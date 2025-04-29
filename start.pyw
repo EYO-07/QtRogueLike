@@ -1,9 +1,28 @@
 # start.pyw
+    # (game.py) 
+        # gui.py
+        # mapping.py
+            # reality.py
+            # events.py 
+            # globals_variables.py 
+            # serialization.py 
+            # performance.py 
 
 # built-in
 import os, sys, re, ast
 import importlib.util
 
+# project
+from game import Game
+
+# third-party
+from PyQt5.QtWidgets import QApplication
+
+# Set working directory to the script's directory
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
+mod_dir = "./mods"
+
+# --- mod loader 
 restricted_modules = {
     'os', 'sys', 'subprocess', 'shutil', 'socket', 'pathlib',
     'multiprocessing', 'threading', 'ctypes', 'inspect', 'platform',
@@ -141,16 +160,7 @@ def import_module_from_path(path, module_name=None):
     spec.loader.exec_module(module)
     return module
 
-# project
-from game import Game
-
-# third-party
-from PyQt5.QtWidgets import QApplication
-
-# Set working directory to the script's directory
-os.chdir(os.path.dirname(os.path.abspath(__file__)))
-mod_dir = "./mods"
-
+# --- Entry Point 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     game_instance = Game()

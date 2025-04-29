@@ -55,7 +55,8 @@ SPRITE_NAMES_CHARACTERS = [
     "zombie", 
     "rogue",
     "bear",
-    "mercenary"
+    "mercenary",
+    "player_female"
 ]
 SPRITE_NAMES_FOODS = [
     "food", 
@@ -80,7 +81,11 @@ SPRITE_NAMES_TILES = [
 SPRITE_NAMES = SPRITE_NAMES_WEAPONS + SPRITE_NAMES_CHARACTERS + SPRITE_NAMES_FOODS + SPRITE_NAMES_TILES + [
     "sack",
     "HUD_arrow",
-    "whetstone"
+    "whetstone",
+    "house", # +
+    "castle", # +
+    "lumber_mill", #+
+    "quarry"
 ]
 
 # loot
