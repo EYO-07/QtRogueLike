@@ -157,6 +157,12 @@ class Game(QGraphicsView, Serializable):
         player.name = new_name 
         self.players.update({new_name:player})
         return True
+    def place_players(self):
+        for k,v in iter(self.players.items()):
+            if v is self.player: continue
+            if v.current_map != self.current_map: continue 
+            self.map.place_character(v)
+        return self.map.place_character(self.player)
     
     # -- overrides
     def from_dict(self, dictionary):
@@ -418,11 +424,12 @@ class Game(QGraphicsView, Serializable):
         toc(T1,"Game.vertical_map_transition() ||")
     
     # -- save and load from file - try to use the already created map    
-    def start_new_game(self, new_character_name = "Main Character"):
+    def start_new_game(self, new_character_name = "Main Character", b_clear_players = True):
         """Reset the game to a new state."""
         self.scene.clear()
         self.tile_items.clear()
         self.current_map = (0, 0, 0)
+        if b_clear_players: self.players.clear()
         self.try_load_map_or_create_new()
         xy = self.map.get_random_walkable_tile()
         if not xy: xy = (50,50)
@@ -431,7 +438,8 @@ class Game(QGraphicsView, Serializable):
         self.player.hunger = 200
         self.player.max_hunger = 1000
         self.events = []
-        self.map.place_character(self.player)
+        self.place_players()
+        #self.map.place_character(self.player)
         self.turn = 0
         self.current_day = 0
         
@@ -522,7 +530,7 @@ class Game(QGraphicsView, Serializable):
         # Load current map
         self.try_load_map_or_create_new()
         # Place characters
-        if not self.map.place_character(self.player):
+        if not self.place_players(): #self.map.place_character(self.player):
             self.add_message(f"Warning: Could not place player at ({self.player.x}, {self.player.y})")
             self.player.x, self.player.y = self.grid_width // 2, self.grid_height // 2
             self.map.place_character(self.player)
@@ -704,6 +712,9 @@ class Game(QGraphicsView, Serializable):
         self.events.clear()
     def update_players(self):
         self.player.update(self)
+        for k,v in iter(self.players.items()):
+            if v is self.player: continue 
+            v.npc_update(self)
     def update_enemies(self): # maybe more maps could be updated, like maps with alive players 
         self.map.update_enemies(self)
                            
@@ -878,12 +889,17 @@ class Game(QGraphicsView, Serializable):
             return    
         elif key == Qt.Key_C:  # Interact with stair
             tile = self.map.get_tile(self.player.x, self.player.y)
-            if tile and tile.stair:
-                if tile.default_sprite_key == "dungeon_entrance":
-                    self.vertical_map_transition(tile.stair, False)
-                else:
-                    self.vertical_map_transition(tile.stair, tile.default_sprite_key == "stair_up")
-                return
+            if tile:
+                if tile.stair:
+                    if tile.default_sprite_key == "dungeon_entrance":
+                        self.vertical_map_transition(tile.stair, False)
+                    else:
+                        self.vertical_map_transition(tile.stair, tile.default_sprite_key == "stair_up")
+                    return
+                elif isinstance(tile, TileBuilding):
+                    SB = SelectionBox( tile.menu_list, action = tile.action(), parent = self, game_instance = self )
+                    tile.update_menu_list(SB)
+                    SB.show()
         elif key in (Qt.Key_Up, Qt.Key_W):
             dx, dy = self.rotated_direction(0, -1)
             b_isForwarding = True
@@ -962,7 +978,7 @@ class Game(QGraphicsView, Serializable):
                 "enemy",
                 ".."
             ])
-            SB.add_list("Select Player Character >", ["[ Character Settings > Character Selection ]"] + [ k for k in self.players.keys() ] + [".."])
+            SB.add_list("Select Player Character >", ["[ Character Settings > Character Selection ]"] + [ k for k,v in self.players.items() if v.current_map == self.player.current_map ] + [".."])
             SB.add_list("Character Settings >", [
                 "[ Main Menu > Character Settings ]",
                 "Select Player Sprite >",
@@ -993,6 +1009,7 @@ class Game(QGraphicsView, Serializable):
                 "Bear",
                 "Rogue",
                 "Mercenary",
+                "Player",
                 ".."
             ])
             SB.add_list("Add a Cosmetic Layer >", [
@@ -1015,7 +1032,7 @@ class Game(QGraphicsView, Serializable):
                 return
             if tile and tile.walkable:
                 if tile.current_char:
-                    if b_isForwarding:
+                    if b_isForwarding and not isinstance(tile.current_char, Player):
                         damage = self.player.calculate_damage_done()
                         self.events.append(AttackEvent(self.player, tile.current_char, damage))
                 else:
@@ -1076,7 +1093,8 @@ class Game(QGraphicsView, Serializable):
         else: # player attack
             if hasattr(event.target, "description"): self.last_encounter_description = getattr(event.target,"description")
             event.target.hp -= event.damage
-            self.add_message(f"{event.attacker.name} deals {event.damage:.1f} damage to {event.target.name}")
+            if self.player is event.attacker:
+                self.add_message(f"{event.attacker.name} deals {event.damage:.1f} damage to {event.target.name}")
             if primary:
                 if isinstance(primary, Weapon):
                     primary.stats_update(self.player)
@@ -1091,6 +1109,9 @@ class Game(QGraphicsView, Serializable):
             event.target.drop_on_death()
             if event.target in self.map.enemies:
                 self.map.enemies.remove(event.target)
+            if event.target.name in self.players.keys():
+                print("Removing :",event.target.name)
+                self.players.pop(event.target.name)
             event.target.current_tile.current_char = None
             
 # --- END 

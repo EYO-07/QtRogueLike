@@ -288,11 +288,21 @@ class Map(Serializable):
     def update_enemies(self, game_instance):        
         for enemy in self.enemies:
             # check distance to player, should be generalized to npc players detection 
+            player = game_instance.player
             distance = abs(enemy.x - game_instance.player.x) + abs(enemy.y - game_instance.player.y)
+            for k,v in iter(game_instance.players.items()):
+                if not v.current_tile: continue
+                tile = self.get_tile(v.x,v.y)
+                if not tile: continue
+                if not tile.current_char is v: continue 
+                new_distance = abs(enemy.x - v.x) + abs(enemy.y - v.y)
+                if new_distance < distance:
+                    player = v
+                    distance = new_distance
             if distance >= 25: continue
             # if distance less than 25 pursue the player 
             old_x, old_y = enemy.x, enemy.y
-            enemy.update(game_instance.player, self, game_instance)
+            enemy.update(player, self, game_instance)
             if (enemy.x, enemy.y) != (old_x, old_y):
                 game_instance.events.append(MoveEvent(enemy, old_x, old_y))
                 game_instance.dirty_tiles.add((old_x, old_y))

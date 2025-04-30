@@ -400,6 +400,9 @@ class Player(Character): # could be the actual player or a playable npc
                 self.stamina -= 4
             return moved
         return False
+        
+    def npc_move(self, dx, dy, game_map):
+        return super().move(dx, dy, game_map)
     
     def calculate_damage_done(self):
         damage = 1
@@ -500,6 +503,58 @@ class Player(Character): # could be the actual player or a playable npc
                 game_instance.add_message("Game Over: Starvation! Reloading last save...")
                 game_instance.Event_PlayerDeath()
                 return    
+
+    def npc_update(self, game_instance):
+        if self.current_map != game_instance.map.coords: return 
+        self.regenerate_stamina()
+        self.regenerate_health()
+        # get closest enemy 
+        enemy = None
+        distance = None
+        if len(game_instance.map.enemies)>0:
+            enemy = game_instance.map.enemies[0]
+            distance = abs(enemy.x - self.x) + abs(enemy.y - self.y)
+            for v in game_instance.map.enemies:
+                if not v.current_tile: continue
+                tile = game_instance.map.get_tile(v.x,v.y)
+                if not tile: continue
+                if not tile.current_char is v: continue 
+                new_distance = abs(self.x - v.x) + abs(self.y - v.y)
+                if new_distance < distance:
+                    enemy = v
+                    distance = new_distance
+        if enemy and distance and distance <= 7:
+            path = game_instance.map.find_path(self.x, self.y, enemy.x, enemy.y)
+            #print(path)
+            if path:
+                next_x, next_y = path[0]
+                dx, dy = next_x - self.x, next_y - self.y
+                tile = game_instance.map.get_tile(next_x, next_y)
+                if tile:
+                    if tile.walkable and not tile.current_char:
+                        if self.move(dx, dy, game_instance.map):
+                            pass #print(f"Enemy {self.name} moved to ({self.x}, {self.y}) via pathfinding")
+                    elif tile.current_char is enemy:
+                        game_instance.events.append(AttackEvent(self, enemy, self.calculate_damage_done()))
+                        print(f"NPC {self.name} attacking enemy")
+        else:
+            # Random movement
+            if self.current_map != game_instance.current_map: 
+                print(self, "not in the map")
+                return 
+            if random.random() < 0.4:
+                dx, dy = random.choice([(1, 0), (-1, 0), (0, 1), (0, -1), (0, 0)])
+                target_x, target_y = self.x + dx, self.y + dy
+                tile = game_instance.map.get_tile(target_x, target_y)
+                if tile:
+                    #print(f"Random move to ({target_x}, {target_y}): walkable={tile.walkable}, occupied={tile.current_char is not None}")
+                    if tile.walkable and not tile.current_char:
+                        if self.npc_move(dx, dy, game_instance.map):
+                            pass #print(f"Enemy {self.name} randomly moved to ({self.x}, {self.y})")
+                        else:
+                            pass #print(f"Enemy {self.name} failed to randomly move to ({target_x}, {target_y})")
+                else:
+                    pass #print(f"Invalid random move tile ({target_x}, {target_y})")
 
 class Enemy(Character):
     __serialize_only__ = Character.__serialize_only__+["type","stance","canSeeCharacter","patrol_direction"]
@@ -721,13 +776,59 @@ class Tile(Container):
         if not sprite_key: return 
         self.cosmetic_layer_sprite_keys.append(sprite_key)
 
-class Stair(Tile):
+class ActionTile(Tile): # tile which the player can interact - interface class
+    def __init__(self, front_sprite, walkable=True, sprite_key="grass"):
+        super().__init__(walkable=walkable, sprite_key=sprite_key)
+        self.add_layer( front_sprite )
+
+class Stair(ActionTile): # not used yet 
     pass 
     
-class Building(Tile):
-    pass 
-    
-class Resource(Tile):
+class TileBuilding(ActionTile): # interface class
+    __serialize_only__ = Tile.__serialize_only__ + ["villagers", "villagers_max", "food", "stone", "metal"]
+    def __init__(self, front_sprite, walkable=True, sprite_key="grass"):
+        super().__init__( front_sprite = front_sprite, walkable=walkable, sprite_key=sprite_key )
+        self.villagers = 0 
+        self.villagers_max = 100
+        self.food = 0
+        self.wood = 0
+        self.stone = 0
+        self.metal = 0
+    def production(self):
+        self.villagers = min( 1.05*self.villagers, self.villagers_max )
+    def consumption(self):
+        self.food = max( self.food - self.villagers, 0 )
+        self.wood = max( self.wood - d(0,self.villagers), 0 )
+        self.stone = max( self.stone - d(0,self.villagers), 0 )
+        self.metal = max( self.metal - d(0,self.villagers), 0 )
+    def update(self):
+        self.production()
+        self.consumption()
+        
+class Castle(TileBuilding):
+    __serialize_only__ = TileBuilding.__serialize_only__ + ["name","heroes"]
+    def __init__(self, name = "Home"):
+        super().__init__(front_sprite = "castle", walkable=True, sprite_key="grass")
+        self.name = name 
+        self.heroes = []
+        self.menu_list = []
+        self.update_menu_list()
+    def action(self):
+        def f(current_menu, current_item, menu_instance, game_instance):
+            self.update_menu_list()
+            menu_instance.close()
+        return f
+    def update_menu_list(self, selection_box_instance = None):
+        self.menu_list.clear()
+        self.menu_list += [
+            f"Castle [{self.name}]",
+            f"-> Food {self.food:.0f}, Wood {self.wood:.0f}, Stone {self.stone:.0f}, Metal {self.metal:.0f}",
+            f"-> Villagers {self.villagers:.0f}",
+            "Select a Hero >",
+            "Purchase a Hero"
+        ]
+        
+class Resource(ActionTile):
     pass 
 
 # --- END 

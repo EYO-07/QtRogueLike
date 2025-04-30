@@ -896,6 +896,12 @@ def debugging_menu(menu,item, instance, game_instance):
                 game_instance.dirty_tiles.add((game_instance.player.x+dx, game_instance.player.y+dy)) 
                 game_instance.draw()
                 instance.close()
+            case "Player":
+                npc_name = "npc"+str(random.randint(0,9))+str(random.randint(0,9))+str(random.randint(0,9))+str(random.randint(0,9))+str(random.randint(0,9))
+                game_instance.add_player(key = npc_name, name = npc_name, x = game_instance.player.x+dx, y = game_instance.player.y+dy)
+                game_instance.dirty_tiles.add((game_instance.player.x+dx, game_instance.player.y+dy)) 
+                game_instance.draw()
+                instance.close()
     # --
     if menu == "Add a Cosmetic Layer >":
         tile = game_instance.player.current_tile
@@ -905,7 +911,8 @@ def debugging_menu(menu,item, instance, game_instance):
                 game_instance.draw()    
                 instance.close()                            
             case "Castle":
-                tile.add_layer("castle")
+                #tile.add_layer("castle")
+                game_instance.map.set_tile(game_instance.player.x, game_instance.player.y, Castle())
                 game_instance.draw()    
                 instance.close()                            
             case "Lumber Mill":
