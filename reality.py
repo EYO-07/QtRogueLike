@@ -378,7 +378,7 @@ class Character(Container, Entity2D):
     
 class Player(Character): # could be the actual player or a playable npc 
     __serialize_only__ = Character.__serialize_only__+[
-        "stamina","max_stamina","hunger","max_hunger","rotation", "field_of_view", "current_map"
+        "stamina","max_stamina","hunger","max_hunger","rotation", "field_of_view", "current_map","days_survived"
     ]
     def __init__(self, name="", hp=PLAYER_MAX_HP, x=MAP_WIDTH//2, y=MAP_HEIGHT//2, b_generate_items = False, sprite = "player", current_map = (0,0,0)):
         super().__init__(name, hp, x, y)
@@ -391,6 +391,7 @@ class Player(Character): # could be the actual player or a playable npc
         self.max_hunger = PLAYER_MAX_HUNGER
         self.sprite = sprite
         self.current_map = current_map
+        self.days_survived = 0
         if b_generate_items: self.generate_initial_items()
     
     def move(self, dx, dy, game_map):
@@ -810,14 +811,14 @@ class Castle(TileBuilding):
     def __init__(self, name = "Home"):
         super().__init__(front_sprite = "castle", walkable=True, sprite_key="grass")
         self.name = name 
-        self.heroes = []
+        self.heroes = {}
         self.num_heroes = 0
         self.max_heroes = 3
         self.menu_list = []
         self.update_menu_list()
     def action(self):
         def f(current_menu, current_item, menu_instance, game_instance):
-            self.update_menu_list()
+            self.update_menu_list(menu_instance)
             if current_item == "Exit": menu_instance.close()
             if current_item == "New Hero":
                 if self.num_heroes < self.max_heroes:
@@ -826,15 +827,52 @@ class Castle(TileBuilding):
                 else:
                     game_instance.add_message("Max Number of Heroes")
                 menu_instance.close()
+            if current_item == "Garrison+":
+                self.heroes.update({ game_instance.player.name : game_instance.player})
+                game_instance.remove_player()
+                game_instance.place_players()
+                game_instance.draw()
+                menu_instance.close()
+            if current_item == "Garrison-":
+                if len( list( self.heroes.keys()) )>0:
+                    menu_instance.set_list("Garrison-")
+            if current_menu == "Garrison-":
+                if current_item:
+                    hero = self.heroes.get(current_item)
+                    if not hero: 
+                        menu_instance.close()
+                        return 
+                    dx, dy = game_instance.player.get_forward_direction()
+                    player = game_instance.player 
+                    spawn_tile = game_instance.map.get_tile(player.x+dx, player.y + dy)
+                    if not spawn_tile:
+                        game_instance.add_message("Can't generate player at this position, please rotate the current character")
+                        menu_instance.close()
+                        return 
+                    if spawn_tile.current_char:
+                        game_instance.add_message("Can't generate player at this position, please rotate the current character")
+                        menu_instance.close()
+                        return 
+                    hero.x = player.x+dx
+                    hero.y = player.y + dy
+                    game_instance.players.update({current_item: self.heroes.pop(current_item)})
+                    # game_instance.set_player(current_item)
+                    game_instance.place_players()
+                    game_instance.draw()
+                    menu_instance.close()
         return f
     def update_menu_list(self, selection_box_instance = None):
         self.menu_list.clear()
         self.menu_list += [
             f"Castle [{self.name}]",
+            f"-> heroes: {len(list(self.heroes.keys()))}",
             "New Hero",
+            "Garrison+",
+            "Garrison-",
             "Exit"
         ]
-    
+        if selection_box_instance:
+            selection_box_instance.add_list("Garrison-", self.heroes)
     def new_npc(self, game_instance):
         if self.num_heroes >= self.max_heroes:
             return False

@@ -163,6 +163,16 @@ class Game(QGraphicsView, Serializable):
             if v.current_map != self.current_map: continue 
             self.map.place_character(v)
         return self.map.place_character(self.player)
+    def remove_player(self, key = None):
+        if len(list(self.players.keys())) <= 1: 
+            self.add_message("Must have at least one adventurer ...")
+            return 
+        if not key: key = self.current_player
+        self.map.remove_character(self.players[key])
+        self.players.pop(self.current_player)
+        new_key_name = random.choice( list(self.players.keys()) )
+        if not new_key_name: return 
+        self.set_player(new_key_name)
     
     # -- overrides
     def from_dict(self, dictionary):
@@ -1055,6 +1065,7 @@ class Game(QGraphicsView, Serializable):
             self.add_message(f"Day : {self.current_day} Turn : {self.turn}")
     def Event_NewDay(self):
         print(f"Day {self.current_day}")
+        self.player.days_survived += 1
         if self.current_day == 5:
             self.journal_window.append_text("(Skill - 5 days) I'm in full shape now, I'm feeling agile, use Ctrl to dodge and move two tiles backward ...") 
         if self.current_day == 20:
