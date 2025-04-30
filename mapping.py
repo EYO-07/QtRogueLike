@@ -115,14 +115,18 @@ class Map(Serializable):
         self.starting_x = None
         self.starting_y = None
         self.rooms = None # could be tuple (x,y,w,h) of rectangular room of could be a Room instance 
+        self.buildings = set()
         if b_generate: self.generate()
     
+    # override
     def from_dict(self, dictionary):
         if not super().from_dict(dictionary):
             return False
         # Place characters after loading grid
         for enemy in self.enemies:
             self.place_character(enemy)
+        self.buildings = [ self.grid[y][x] for y in range(self.height) for x in range(self.width) if isinstance(self.grid[y][x], TileBuilding) ]
+        print("Buildings :", len(self.buildings))
         return True
     
     def generate(self):
@@ -863,22 +867,5 @@ class Map(Serializable):
             if tile and tile.blocks_sight:
                 return False
         return True    
-
-# Town Management 
-class Building(Serializable, Entity2D):
-    __serialize_only__ = ["coords"]
-    def __init__(self, coords):
-        self.coords = coords 
-        self.x = 50
-        self.y = 50
-        self.current_tile = None
-        self.flag = 0
-        self.food = 0
-        self.wood = 0
-        self.stone = 0
-        self.metal = 0
-        self.raid_interval = 30 # 30 days 
-        self.workers = 0
-        self.map = None
 
 # --- END

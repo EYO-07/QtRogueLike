@@ -380,7 +380,7 @@ class SelectionBox(QWidget):
         for it in self.list_dictionary[key]:
             self.list_widget.addItem(it)
         self.current_key = key
-        self.list_widget.setCurrentRow(0)
+        self.list_widget.setCurrentRow(len(self.list_widget)//2)
         # Set fixed size to fit items exactly
         row_count = self.list_widget.count()
         row_height = self.list_widget.sizeHintForRow(0) if row_count > 0 else 20
@@ -870,6 +870,9 @@ def debugging_menu(menu,item, instance, game_instance):
             case "Long Sword":
                 game_instance.player.add_item(Sword(name = "Long_Sword"))
                 instance.close()    
+            case "Food":
+                game_instance.player.add_item(Food(name = "bread", nutrition = 150))
+                instance.close()
     # -- 
     if menu == "Generate Enemies >":
         dx, dy = game_instance.player.get_forward_direction()

@@ -807,32 +807,36 @@ class TileBuilding(ActionTile): # interface class
         self.consumption()
         
 class Castle(TileBuilding):
-    __serialize_only__ = TileBuilding.__serialize_only__ + ["name","heroes","num_heroes","max_heroes"]
+    __serialize_only__ = TileBuilding.__serialize_only__ + ["name","heroes","num_heroes"]
     def __init__(self, name = "Home"):
         super().__init__(front_sprite = "castle", walkable=True, sprite_key="grass")
         self.name = name 
         self.heroes = {}
         self.num_heroes = 0
-        self.max_heroes = 3
         self.menu_list = []
-        self.update_menu_list()
     def action(self):
+        self.update_menu_list()
         def f(current_menu, current_item, menu_instance, game_instance):
             self.update_menu_list(menu_instance)
+            menu_instance.add_list("Garrison-", self.heroes)
+            foods = { f"{e.name} : {e.nutrition}" : e for e in game_instance.player.items if isinstance(e, Food) }
+            menu_instance.add_list("Food+", list(foods.keys()) )
             if current_item == "Exit": menu_instance.close()
-            if current_item == "New Hero":
-                if self.num_heroes < self.max_heroes:
+            if current_item == "New Hero (2000 Food)":
+                if self.food >= 2000:
                     if self.new_npc(game_instance):
                         self.num_heroes += 1
+                        self.food -= 2000 
                 else:
-                    game_instance.add_message("Max Number of Heroes")
+                    game_instance.add_message("Can't afford to purchase new heroes ...")
                 menu_instance.close()
             if current_item == "Garrison+":
-                self.heroes.update({ game_instance.player.name : game_instance.player})
-                game_instance.remove_player()
-                game_instance.place_players()
-                game_instance.draw()
-                menu_instance.close()
+                if len(game_instance.players) > 1: 
+                    self.heroes.update({ game_instance.player.name : game_instance.player})
+                    game_instance.remove_player()
+                    game_instance.place_players()
+                    game_instance.draw()
+                    menu_instance.close()
             if current_item == "Garrison-":
                 if len( list( self.heroes.keys()) )>0:
                     menu_instance.set_list("Garrison-")
@@ -860,22 +864,35 @@ class Castle(TileBuilding):
                     game_instance.place_players()
                     game_instance.draw()
                     menu_instance.close()
+            if current_item == "Food+": 
+                if len(foods) >0:
+                    menu_instance.set_list("Food+")
+            if current_item == "Food-":
+                if self.food >= 100:
+                    self.food -= 100
+                    game_instance.player.add_item(Food(name = "bread", nutrition = 100))
+                    game_instance.update_inv_window()
+                    menu_instance.close()
+            if current_menu == "Food+":
+                self.food += foods[current_item].nutrition 
+                game_instance.player.remove_item(foods[current_item])
+                game_instance.update_inv_window()
+                menu_instance.close()
         return f
     def update_menu_list(self, selection_box_instance = None):
         self.menu_list.clear()
         self.menu_list += [
             f"Castle [{self.name}]",
-            f"-> heroes: {len(list(self.heroes.keys()))}",
-            "New Hero",
+            f"-> heroes: {len(self.heroes)}",
+            f"-> food: {self.food:.0f}",
+            "New Hero (2000 Food)",
             "Garrison+",
             "Garrison-",
+            "Food+",
+            "Food-",
             "Exit"
         ]
-        if selection_box_instance:
-            selection_box_instance.add_list("Garrison-", self.heroes)
     def new_npc(self, game_instance):
-        if self.num_heroes >= self.max_heroes:
-            return False
         dx, dy = game_instance.player.get_forward_direction()
         player = game_instance.player 
         spawn_tile = game_instance.map.get_tile(player.x+dx, player.y + dy)
@@ -895,7 +912,7 @@ class Castle(TileBuilding):
             name = npc_name, 
             x = game_instance.player.x+dx, 
             y = game_instance.player.y+dy, 
-            b_generate_items = True, 
+            b_generate_items = False, 
             current_map = game_instance.current_map,
             sprite = random.choice(SPRITE_NAMES_PLAYABLES)
         )
@@ -908,7 +925,10 @@ class Castle(TileBuilding):
     def new(cls, game_instance, x = None,y = None):
         if not x: x = game_instance.player.x
         if not y: y = game_instance.player.y
-        game_instance.map.set_tile(x, y, Castle())
+        obj = Castle()
+        obj.food = 2000 
+        game_instance.map.set_tile(x, y, obj)
+        game_instance.map.buildings.add(obj)
         game_instance.draw()
         
 class Resource(ActionTile):

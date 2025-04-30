@@ -146,7 +146,9 @@ class Game(QGraphicsView, Serializable):
         
     # -- players - players and allies are the same 
     def add_player(self, key, **kwargs): # add a player or ally in dictionary 
-        self.players.update({ key : Player(**kwargs) })
+        obj = Player(**kwargs)
+        self.players.update({ key : obj })
+        return obj 
     def set_player(self, name): # set the Game.player by dictionary name  
         self.player = self.players.get(name)
         self.current_player = name 
@@ -1011,6 +1013,7 @@ class Game(QGraphicsView, Serializable):
                 "Whetstone",
                 "Mace",
                 "Long Sword",
+                "Food",
                 ".."
             ])
             SB.add_list("Generate Enemies >",[
