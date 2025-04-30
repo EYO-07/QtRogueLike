@@ -430,11 +430,14 @@ class Game(QGraphicsView, Serializable):
         self.tile_items.clear()
         self.current_map = (0, 0, 0)
         if b_clear_players: self.players.clear()
-        self.try_load_map_or_create_new()
+        b_is_new = False
+        if self.try_load_map_or_create_new():
+            b_is_new = True
         xy = self.map.get_random_walkable_tile()
         if not xy: xy = (50,50)
         self.add_player(new_character_name, name = new_character_name, hp = 100, x=xy[0], y=xy[1], b_generate_items=True)
         self.set_player(new_character_name)
+        if b_is_new: Castle.new(self)
         self.player.hunger = 200
         self.player.max_hunger = 1000
         self.events = []
@@ -502,6 +505,8 @@ class Game(QGraphicsView, Serializable):
         toc(T1, "Game.save_current_game() ||")
     
     def try_load_map_or_create_new(self):
+        """ return True if create a new map, return False otherwise """
+        b_result = False
         saves_dir = "./saves"
         map_file = os.path.join(saves_dir, f"map_{'_'.join(map(str, self.current_map))}_{self.current_slot}.json")
         self.map = Map("default", coords=self.current_map)
@@ -509,7 +514,9 @@ class Game(QGraphicsView, Serializable):
             self.add_message(f"No map save file found for slot {self.current_slot}")
             print(f"No map save file found: {map_file}")
             self.new_map_from_current_coords()
+            b_result = True
         self.maps[self.current_map] = self.map
+        return b_result
     
     def load_current_game(self, slot=1):
         """Load player state and current map from their respective JSON files."""
@@ -969,15 +976,7 @@ class Game(QGraphicsView, Serializable):
             ], action = main_menu, game_instance = self)
             SB.add_list("Load Game >", ["[ Main Menu > Load Game ]","Slot 1", "Slot 2", ".."])
             SB.add_list("Save Game >", ["[ Main Menu > Save Game ]","Slot 1", "Slot 2", ".."])
-            SB.add_list("Select Player Sprite >", [
-                "[ Character Settings > Select Sprite ]",
-                "player",
-                "rogue",
-                "mercenary",
-                "player_female",
-                "enemy",
-                ".."
-            ])
+            SB.add_list("Select Player Sprite >", ["[ Character Settings > Select Sprite ]"] + SPRITE_NAMES_PLAYABLES + [".."])
             SB.add_list("Select Player Character >", ["[ Character Settings > Character Selection ]"] + [ k for k,v in self.players.items() if v.current_map == self.player.current_map ] + [".."])
             SB.add_list("Character Settings >", [
                 "[ Main Menu > Character Settings ]",

@@ -49,14 +49,19 @@ SPRITE_NAMES_WEAPONS = [
     "wand", # +
     "staff" # +
 ]
-SPRITE_NAMES_CHARACTERS = [
-    "player", 
-    "enemy", 
+
+SPRITE_NAMES_PLAYABLES = [
+    "player",
+    "player_2",
+    "player_3"
+]
+
+SPRITE_NAMES_CHARACTERS = SPRITE_NAMES_PLAYABLES + [
     "zombie", 
-    "rogue",
     "bear",
-    "mercenary",
-    "player_female"
+    "enemy", 
+    "rogue",
+    "mercenary"
 ]
 SPRITE_NAMES_FOODS = [
     "food", 

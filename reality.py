@@ -15,7 +15,7 @@ from itertools import product
 # third-party 
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QPixmap, QPainter
-from PyQt5.QtWidgets import QGraphicsPixmapItem
+from PyQt5.QtWidgets import QGraphicsPixmapItem, QInputDialog
 import noise  # Use python-perlin-noise instead of pynoise
 
 # --- Entity2D
@@ -523,7 +523,7 @@ class Player(Character): # could be the actual player or a playable npc
                 if new_distance < distance:
                     enemy = v
                     distance = new_distance
-        if enemy and distance and distance <= 7:
+        if enemy and distance and distance <= 3:
             path = game_instance.map.find_path(self.x, self.y, enemy.x, enemy.y)
             #print(path)
             if path:
@@ -536,13 +536,13 @@ class Player(Character): # could be the actual player or a playable npc
                             pass #print(f"Enemy {self.name} moved to ({self.x}, {self.y}) via pathfinding")
                     elif tile.current_char is enemy:
                         game_instance.events.append(AttackEvent(self, enemy, self.calculate_damage_done()))
-                        print(f"NPC {self.name} attacking enemy")
+                        #print(f"NPC {self.name} attacking enemy")
         else:
             # Random movement
             if self.current_map != game_instance.current_map: 
                 print(self, "not in the map")
                 return 
-            if random.random() < 0.4:
+            if random.random() < 0.15:
                 dx, dy = random.choice([(1, 0), (-1, 0), (0, 1), (0, -1), (0, 0)])
                 target_x, target_y = self.x + dx, self.y + dy
                 tile = game_instance.map.get_tile(target_x, target_y)
@@ -806,27 +806,72 @@ class TileBuilding(ActionTile): # interface class
         self.consumption()
         
 class Castle(TileBuilding):
-    __serialize_only__ = TileBuilding.__serialize_only__ + ["name","heroes"]
+    __serialize_only__ = TileBuilding.__serialize_only__ + ["name","heroes","num_heroes","max_heroes"]
     def __init__(self, name = "Home"):
         super().__init__(front_sprite = "castle", walkable=True, sprite_key="grass")
         self.name = name 
         self.heroes = []
+        self.num_heroes = 0
+        self.max_heroes = 3
         self.menu_list = []
         self.update_menu_list()
     def action(self):
         def f(current_menu, current_item, menu_instance, game_instance):
             self.update_menu_list()
-            menu_instance.close()
+            if current_item == "Exit": menu_instance.close()
+            if current_item == "New Hero":
+                if self.num_heroes < self.max_heroes:
+                    if self.new_npc(game_instance):
+                        self.num_heroes += 1
+                else:
+                    game_instance.add_message("Max Number of Heroes")
+                menu_instance.close()
         return f
     def update_menu_list(self, selection_box_instance = None):
         self.menu_list.clear()
         self.menu_list += [
             f"Castle [{self.name}]",
-            f"-> Food {self.food:.0f}, Wood {self.wood:.0f}, Stone {self.stone:.0f}, Metal {self.metal:.0f}",
-            f"-> Villagers {self.villagers:.0f}",
-            "Select a Hero >",
-            "Purchase a Hero"
+            "New Hero",
+            "Exit"
         ]
+    
+    def new_npc(self, game_instance):
+        if self.num_heroes >= self.max_heroes:
+            return False
+        dx, dy = game_instance.player.get_forward_direction()
+        player = game_instance.player 
+        spawn_tile = game_instance.map.get_tile(player.x+dx, player.y + dy)
+        if not spawn_tile:
+            game_instance.add_message("Can't generate player at this position, please rotate the current character")
+            return False
+        if spawn_tile.current_char:
+            game_instance.add_message("Can't generate player at this position, please rotate the current character")
+            return False
+        new_name = QInputDialog.getText(game_instance, 'Input Dialog', 'Character Name :')
+        if new_name:
+            npc_name = new_name[0]
+        if not npc_name:
+            npc_name = "NPC_"+str(random.randint(0,9))+str(random.randint(0,9))+str(random.randint(0,9))+str(random.randint(0,9))+str(random.randint(0,9))
+        game_instance.add_player(
+            key = npc_name, 
+            name = npc_name, 
+            x = game_instance.player.x+dx, 
+            y = game_instance.player.y+dy, 
+            b_generate_items = True, 
+            current_map = game_instance.current_map,
+            sprite = random.choice(SPRITE_NAMES_PLAYABLES)
+        )
+        game_instance.place_players()
+        game_instance.dirty_tiles.add((game_instance.player.x+dx, game_instance.player.y+dy))
+        game_instance.draw()
+        return True
+    
+    @classmethod
+    def new(cls, game_instance, x = None,y = None):
+        if not x: x = game_instance.player.x
+        if not y: y = game_instance.player.y
+        game_instance.map.set_tile(x, y, Castle())
+        game_instance.draw()
         
 class Resource(ActionTile):
     pass 
