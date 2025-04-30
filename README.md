@@ -22,7 +22,7 @@ You can add any track you want on music folder, the game will randomly select an
 3. LEFT, RIGHT : Rotates de Camera
 4. R : Use whetstone to repair weapons
 5. E : Eat the first food in inventory
-6. C : Interact with stairs
+6. C : Interact with stairs or Buildings 
 7. F, CTRL, END : Special Skills which you gain surviving on day count.
 8. SPACE : Rest
 9. G : Get items on the floor
