@@ -66,6 +66,8 @@ class Game(QGraphicsView, Serializable):
         self.player = None # Player()
         self.current_player = None # string key identifier
         self.players = {} # players storage 
+        self.prior_next_index = 0
+        self.prior_next_players = []
         self.current_map = (0,0,0) # Current map coordinates
         self.map = Map()
         self.maps = {(0,0,0):self.map}  # Store Map objects with coordinate keys
@@ -150,8 +152,10 @@ class Game(QGraphicsView, Serializable):
         self.players.update({ key : obj })
         return obj 
     def set_player(self, name): # set the Game.player by dictionary name  
+        if not self.players.get(name): return 
         self.player = self.players.get(name)
         self.current_player = name 
+        self.player.party = False
     def set_player_name(self,key,new_name):
         player = self.players.get(key,None)
         if not player: return False
@@ -162,6 +166,7 @@ class Game(QGraphicsView, Serializable):
     def place_players(self):
         for k,v in iter(self.players.items()):
             if v is self.player: continue
+            if v.party: continue 
             if v.current_map != self.current_map: continue 
             self.map.place_character(v)
         return self.map.place_character(self.player)
@@ -171,10 +176,13 @@ class Game(QGraphicsView, Serializable):
             return 
         if not key: key = self.current_player
         self.map.remove_character(self.players[key])
-        self.players.pop(self.current_player)
+        self.players.pop(key)
         new_key_name = random.choice( list(self.players.keys()) )
         if not new_key_name: return 
         self.set_player(new_key_name)
+    def update_prior_next_selection(self):
+        self.prior_next_index = 0
+        self.prior_next_players = [self.player.name]+[ key for key,value in iter(self.players.items()) if (value.party == False and value.current_map == self.current_map and (not value is self.player)) ]
     
     # -- overrides
     def from_dict(self, dictionary):
@@ -297,6 +305,7 @@ class Game(QGraphicsView, Serializable):
         self.load_random_music()
         self.player.current_map = new_map_coord
         self.current_map = new_map_coord
+        self.move_party()
         if new_map_coord not in self.maps: 
             self.maps[self.current_map] = Map(coords=self.current_map)
             self.map = self.maps[self.current_map]
@@ -693,6 +702,31 @@ class Game(QGraphicsView, Serializable):
     def rotated_direction(self, dx, dy):
         return self.rotate_vector_for_movement(dx, dy)
     
+    # --
+    def move_party(self):
+        for k,v in iter(self.players.items()):
+            if v is self.player: continue 
+            if not v.party: continue 
+            v.current_map = self.current_map
+    def release_party(self, diff_moves = CROSS_DIFF_MOVES_1x1):
+        print("releasing from party")
+        x = self.player.x 
+        y = self.player.y 
+        for dx,dy in diff_moves:
+            if not self.map.can_place_character_at(x+dx,y+dy): continue 
+            # if not self.map.is_adjacent_walkable_at(x+dx,y+dy): continue 
+            if dx == 0 and dy == 0: continue
+            for key,value in iter(self.players.items()):
+                if value.party:
+                    value.x = x+dx 
+                    value.y = y+dy 
+                    value.current_map = self.current_map # ? 
+                    value.party = False 
+                    self.map.place_character(value)
+                    self.draw()
+                    break 
+        self.update_prior_next_selection()
+    
     # -- game iteration 
     def game_iteration(self):
         self.turn += 1
@@ -733,6 +767,10 @@ class Game(QGraphicsView, Serializable):
         self.player.update(self)
         for k,v in iter(self.players.items()):
             if v is self.player: continue 
+            if v.party:
+                if v.is_placed_on_map(self.map):
+                    self.map.remove_character(v)
+                continue 
             v.npc_update(self)
     def update_enemies(self): # maybe more maps could be updated, like maps with alive players 
         self.map.update_enemies(self)
@@ -777,7 +815,25 @@ class Game(QGraphicsView, Serializable):
         dx, dy = 0, 0
         b_isForwarding = False
         stamina_bound = 20
-        if key == Qt.Key_1:
+        if key == Qt.Key_PageUp:
+            if len(self.prior_next_players) > 0:
+                if self.prior_next_index>0:
+                    self.prior_next_index -= 1 
+                else:
+                    self.prior_next_index = len(self.prior_next_players)-1
+                self.set_player( self.prior_next_players[self.prior_next_index] )
+                self.draw()
+                return 
+        elif key == Qt.Key_PageDown:
+            if len(self.prior_next_players) > 0:
+                if self.prior_next_index<len(self.prior_next_players)-1:
+                    self.prior_next_index += 1 
+                else:
+                    self.prior_next_index = 0
+                self.set_player( self.prior_next_players[self.prior_next_index] )
+                self.draw()
+                return 
+        elif key == Qt.Key_1:
             list_of_weapons = [ [wp, f"{wp.name} {wp.damage:.1f} [dmg]"] for wp in self.player.items if isinstance(wp, Weapon) ]
             if self.player.primary_hand and hasattr(self.player.primary_hand, "damage"):
                 SB = SelectionBox( 
@@ -794,10 +850,13 @@ class Game(QGraphicsView, Serializable):
             pass
         elif key == Qt.Key_X: # skill menu            
             SB = SelectionBox(parent = self, item_list = [
-                f"[ Avaiable Skills ](days survived: {self.current_day})",
-                f"Dodge: { self.current_day>=5 }",
-                f"Power Attack: { self.current_day>=15 }",
-                f"Weapon Special Attack: { self.current_day>=20 }",
+                f"[ Avaiable Skills ](days survived: {self.player.days_survived})",
+                f"-> Current Map: { self.player.current_map[0]}, {-self.player.current_map[1] }, {-self.player.current_map[2] }",
+                f"-> Map Position: { self.player.x}, {-self.player.y }",
+                f"Release Party: { len([ i for i in self.players if self.players[i].party ]) }",
+                f"Dodge: { self.player.days_survived>=5 }",
+                f"Power Attack: { self.player.days_survived>=15 }",
+                f"Weapon Special Attack: { self.player.days_survived>=20 }",
                 "Exit"
             ], action = skill_menu, game_instance = self, stamina_bound = stamina_bound)
             SB.show()
@@ -805,7 +864,7 @@ class Game(QGraphicsView, Serializable):
             self.player.use_first_item_of(WeaponRepairTool, self)
             return
         elif key == Qt.Key_End:
-            if self.current_day >= 15:
+            if self.player.days_survived >= 15:
                 tx, ty = self.player.get_forward_direction()
                 tile0 = self.map.get_tile(self.player.x+tx, self.player.y+ty)
                 if tile0:
@@ -837,7 +896,7 @@ class Game(QGraphicsView, Serializable):
                 self.journal_window.append_text("With 'end' key you activate de power strike skill, you must be one tile of distance to the target, if the target is too close there is no much space to perform that skill, in order to use it you must survive at least 15 days ...")
                 self.add_message("I don't feel well enough to exercise ... maybe tomorrow I'll feel better.")
         elif key == Qt.Key_Control: # dodge backward
-            if self.current_day >= 5:
+            if self.player.days_survived >= 5:
                 if self.player.stamina<stamina_bound:
                     self.add_message("I'm exhausted ... I need to take a breathe")
                 x = self.player.x 
@@ -919,6 +978,21 @@ class Game(QGraphicsView, Serializable):
                     SB = SelectionBox( tile.menu_list, action = tile.action(), parent = self, game_instance = self )
                     tile.update_menu_list(SB)
                     SB.show()
+                    return 
+            px, py = self.player.get_forward_direction()
+            tile2 = self.map.get_tile(self.player.x+px, self.player.y+py)
+            if tile:
+                char = tile2.current_char
+                if char and isinstance(char, Player):
+                    SB = SelectionBox( [
+                        f"[ {char.name} ]",
+                        "Add to Party",
+                        "items+",
+                        "items-",
+                        "Exit"
+                    ], action = player_menu, parent = self, game_instance = self, npc = char )
+                    SB.show()
+                    return 
         elif key in (Qt.Key_Up, Qt.Key_W):
             dx, dy = self.rotated_direction(0, -1)
             b_isForwarding = True
@@ -989,7 +1063,7 @@ class Game(QGraphicsView, Serializable):
             SB.add_list("Load Game >", ["[ Main Menu > Load Game ]","Slot 1", "Slot 2", ".."])
             SB.add_list("Save Game >", ["[ Main Menu > Save Game ]","Slot 1", "Slot 2", ".."])
             SB.add_list("Select Player Sprite >", ["[ Character Settings > Select Sprite ]"] + SPRITE_NAMES_PLAYABLES + [".."])
-            SB.add_list("Select Player Character >", ["[ Character Settings > Character Selection ]"] + [ k for k,v in self.players.items() if v.current_map == self.player.current_map ] + [".."])
+            SB.add_list("Select Player Character >", ["[ Character Settings > Character Selection ]"] + [ k for k,v in self.players.items() if v.current_map == self.player.current_map and not v.party ] + [".."])
             SB.add_list("Character Settings >", [
                 "[ Main Menu > Character Settings ]",
                 "Select Player Sprite >",
@@ -1029,6 +1103,7 @@ class Game(QGraphicsView, Serializable):
                 "Castle",
                 "Lumber Mill",
                 "Clear", 
+                "Mill",
                 ".."
             ])
             SB.show()        
@@ -1075,15 +1150,29 @@ class Game(QGraphicsView, Serializable):
             self.journal_window.append_text("(Skill - 20 days) My body remembered how to use a sword properly, now I can perform deadly blows with F key. Whenever the enemy stay in L position like a knight chess I can swing my sword hit taking him off-guard ...") 
     def Event_PlayerDeath(self):
         print("Game Over!")
-        try:
-            self.load_current_game()
-            self.add_message("Last Save Reloaded")
-        except FileNotFoundError:
-            self.add_message("No Save File Found, Starting New Game")
-            self.start_new_game()
-        except Exception as e:
-            self.add_message(f"Error Reloading Game: {e}, Starting New Game")
-            self.start_new_game()
+        self.player.drop_on_death()
+        if self.player.name in self.players.keys():
+            print("Removing :",self.player.name)
+            self.players.pop(self.player.name)
+        self.player.current_tile.current_char = None
+        self.release_party(SQUARE_DIFF_MOVES_5x5)
+        # -- 
+        if len(self.players) <= 0:
+            try:
+                self.load_current_game()
+                self.add_message("Last Save Reloaded")
+            except FileNotFoundError:
+                self.add_message("No Save File Found, Starting New Game")
+                self.start_new_game()
+            except Exception as e:
+                self.add_message(f"Error Reloading Game: {e}, Starting New Game")
+                self.start_new_game()
+        else:
+            for k,v in iter(self.players.items()):
+                if isinstance(v, Player):
+                    self.set_player(v.name)
+                    self.draw()
+                    break 
     def Event_DoAttack(self, event):
         primary = self.player.primary_hand
         # swords have the parry property in the player perspective, they will try to consume the stamina first 

@@ -482,6 +482,13 @@ class Map(Serializable):
                 if not tile_2.walkable: return False
         return True
     
+    def is_adjacent_walkable_at(self,x,y):
+        for dx,dy in CROSS_DIFF_MOVES:
+            tile_2 = self.get_tile(x+dx,y+dy)
+            if tile_2:
+                if not tile_2.walkable: return False
+        return True
+    
     def get_random_walkable_tile(self, border_factor = 0.0):
         dx = int(border_factor*self.width)
         dy = int(border_factor*self.height)
@@ -661,7 +668,10 @@ class Map(Serializable):
                     self.grid[i][j] = Tile(walkable=False, sprite_key="tree")
                 elif random.random() < 0.01:
                     self.grid[i][j].add_item(Food("Apple", nutrition=10))
-                    
+        xy = self.get_random_walkable_tile()
+        if xy:
+            self.set_tile( xy[0], xy[1], Mill() )
+        
     def generate_procedural_road(self):
         self.enemy_type = "road"
         self.grid_init_uniform("grass",True)
@@ -679,7 +689,9 @@ class Map(Serializable):
             for j in range(self.height):
                 if random.random() < 0.1 and abs(j - road_x) > 2:
                     self.grid[i][j] = Tile(walkable=False, sprite_key="tree")
-    
+        xy = self.get_random_walkable_tile()
+        if xy:
+            self.set_tile( xy[0], xy[1], Mill() )
     def generate_procedural_lake(self):
         self.enemy_type = "lake"
         self.grid_init_uniform("grass", True)
@@ -711,6 +723,16 @@ class Map(Serializable):
 
     def set_tile(self, x, y, tile):
         self.grid[y][x] = tile
+
+    def can_place_character(self, char):
+        tile = self.get_tile(char.x, char.y)
+        if not tile: return False 
+        return (tile.walkable and not tile.current_char)
+    
+    def can_place_character_at(self, x, y):
+        tile = self.get_tile(x, y)
+        if not tile: return False 
+        return (tile.walkable and not tile.current_char)
 
     def place_character(self, char):
         try:

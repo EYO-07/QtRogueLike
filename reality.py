@@ -378,7 +378,7 @@ class Character(Container, Entity2D):
     
 class Player(Character): # could be the actual player or a playable npc 
     __serialize_only__ = Character.__serialize_only__+[
-        "stamina","max_stamina","hunger","max_hunger","rotation", "field_of_view", "current_map","days_survived"
+        "stamina","max_stamina","hunger","max_hunger","rotation", "field_of_view", "current_map","days_survived", "party"
     ]
     def __init__(self, name="", hp=PLAYER_MAX_HP, x=MAP_WIDTH//2, y=MAP_HEIGHT//2, b_generate_items = False, sprite = "player", current_map = (0,0,0)):
         super().__init__(name, hp, x, y)
@@ -392,8 +392,33 @@ class Player(Character): # could be the actual player or a playable npc
         self.sprite = sprite
         self.current_map = current_map
         self.days_survived = 0
+        self.party = False # {} # can put heroes or helping npcs 
         if b_generate_items: self.generate_initial_items()
     
+    # -- 
+    # def add_to_party(self, char, game_instance):
+        # if len(char.party) > 0: 
+            # print("Can't nest parties ...")
+            # return 
+        # game_instance.remove_player(char.name)
+        # self.party.update({char.name : char})
+        
+    # def remove_from_party(self,key, game_instance):
+        # char = self.party.get(key, None)
+        # if char:
+            # self.party.pop(key)
+            # game_instance.players.update( {} )
+    
+    # def set_map_coords(self, coords):
+        # self.current_map = coords
+        # for k,v in iter(self.party.items()):
+            # if v:
+                # v.current_map = coords 
+                
+    # def release_party(self): # used to remove members for self.party, must be called whenever the player is close to death 
+        # pass 
+    
+    # --
     def move(self, dx, dy, game_map):
         if self.stamina >= 10:
             moved = game_map.move_character(self, dx, dy)
@@ -489,6 +514,16 @@ class Player(Character): # could be the actual player or a playable npc
                     S += df_item.defense_factor
         return S 
 
+    def is_rendered_on_map(self, game_map): 
+        tile = game_map.get_tile(self.x, self.y)
+        if not tile: return False 
+        return tile.current_char is self 
+        
+    def is_placed_on_map(self, game_map):
+        tile = game_map.get_tile(self.x, self.y)
+        if not tile: return False 
+        return (tile.current_char is self) and (self.current_tile is tile) 
+
     def update(self, game_instance): # on turn 
         self.regenerate_stamina()
         self.regenerate_health()
@@ -524,7 +559,7 @@ class Player(Character): # could be the actual player or a playable npc
                 if new_distance < distance:
                     enemy = v
                     distance = new_distance
-        if enemy and distance and distance <= 3:
+        if enemy and distance and distance <= 2:
             path = game_instance.map.find_path(self.x, self.y, enemy.x, enemy.y)
             #print(path)
             if path:
@@ -543,7 +578,7 @@ class Player(Character): # could be the actual player or a playable npc
             if self.current_map != game_instance.current_map: 
                 print(self, "not in the map")
                 return 
-            if random.random() < 0.15:
+            if random.random() < 0.05:
                 dx, dy = random.choice([(1, 0), (-1, 0), (0, 1), (0, -1), (0, 0)])
                 target_x, target_y = self.x + dx, self.y + dy
                 tile = game_instance.map.get_tile(target_x, target_y)
@@ -931,7 +966,60 @@ class Castle(TileBuilding):
         game_instance.map.buildings.add(obj)
         game_instance.draw()
         
-class Resource(ActionTile):
-    pass 
+class Mill(TileBuilding):
+    __serialize_only__ = TileBuilding.__serialize_only__ + ["name"]
+    def __init__(self, name = "Farm"):
+        super().__init__(front_sprite = "mill", walkable=True, sprite_key="grass")
+        self.name = name 
+        self.menu_list = []
+        self.food = d(500,2000)
+    def action(self):
+        self.update_menu_list()
+        def f(current_menu, current_item, menu_instance, game_instance):
+            self.update_menu_list(menu_instance)
+            if current_item == "Exit": menu_instance.close()
+            if current_item == "Food-":
+                if self.food >= 500:
+                    self.food -= 500
+                    game_instance.player.add_item(Food(name = "meat", nutrition = 500))
+                    game_instance.update_inv_window()
+                    menu_instance.close()
+        return f
+    def update_menu_list(self, selection_box_instance = None):
+        self.menu_list.clear()
+        self.menu_list += [
+            f"Resource [{self.name}]",
+            f"-> food: {self.food:.0f}",
+            "Food-",
+            "Exit"
+        ]
+
+class LumberMill(TileBuilding):
+    __serialize_only__ = TileBuilding.__serialize_only__ + ["name"]
+    def __init__(self, name = "Lumber Mill"):
+        super().__init__(front_sprite = "lumber_mill", walkable=True, sprite_key="grass")
+        self.name = name 
+        self.menu_list = []
+        self.wood = d(500,2000)
+    def action(self):
+        self.update_menu_list()
+        def f(current_menu, current_item, menu_instance, game_instance):
+            self.update_menu_list(menu_instance)
+            if current_item == "Exit": menu_instance.close()
+            if current_item == "Wood-":
+                if self.wood >= 500:
+                    #self.wood -= 500
+                    #game_instance.player.add_item(Food(name = "meat", nutrition = 500))
+                    #game_instance.update_inv_window()
+                    menu_instance.close()
+        return f
+    def update_menu_list(self, selection_box_instance = None):
+        self.menu_list.clear()
+        self.menu_list += [
+            f"Resource [{self.name}]",
+            f"-> wood: {self.wood:.0f}",
+            "Wood-",
+            "Exit"
+        ]
 
 # --- END 

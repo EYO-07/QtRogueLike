@@ -743,8 +743,12 @@ def primary_menu(menu, item, instance, game_instance, list_of_weapons):
             
 def skill_menu(menu, item, instance, game_instance, stamina_bound):
     if item == "Exit": instance.close()
+    if "Release Party" in item:
+        game_instance.release_party()
+        instance.close()
+        return 
     if "Dodge" in item: 
-        if game_instance.current_day >= 5:
+        if game_instance.player.days_survived >= 5:
             dx = 0
             dy = 0
             if game_instance.player.stamina<stamina_bound:
@@ -794,7 +798,7 @@ def skill_menu(menu, item, instance, game_instance, stamina_bound):
                 game_instance.game_iteration()
             instance.close()
     if "Power Attack" in item: 
-        if game_instance.current_day >= 15:
+        if game_instance.player.days_survived >= 15:
             tx, ty = game_instance.player.get_forward_direction()
             tile0 = game_instance.map.get_tile(game_instance.player.x+tx, game_instance.player.y+ty)
             if tile0:
@@ -847,7 +851,7 @@ def debugging_menu(menu,item, instance, game_instance):
                 game_instance.player.reset_stats()
                 instance.close()
             case "Set Day 100":
-                game_instance.current_day = 100
+                game_instance.player.days_survived = 100
                 instance.close()
             case "Generate Enemies >":
                 instance.set_list("Generate Enemies >")
@@ -919,14 +923,50 @@ def debugging_menu(menu,item, instance, game_instance):
                 game_instance.draw()    
                 instance.close()                            
             case "Lumber Mill":
-                tile.add_layer("lumber_mill")
+                game_instance.map.set_tile(game_instance.player.x, game_instance.player.y, LumberMill())
                 game_instance.draw()    
                 instance.close()                            
+            case "Mill":
+                game_instance.map.set_tile(game_instance.player.x, game_instance.player.y, Mill())
+                game_instance.draw()    
+                instance.close()     
             case "Clear":
                 tile.remove_layer()
                 game_instance.draw()    
                 instance.close()
 
+def player_menu(menu,item, instance, game_instance, npc):
+    player_items = { it.name : it for it in game_instance.player.items }
+    npc_items = { it.name : it for it in npc.items }
+    instance.add_list("items+", list( player_items.keys() ) )
+    instance.add_list("items-", list( npc_items.keys() ) )
+    if item == "Exit": 
+        instance.close()
+        return 
+    if item == "Add to Party":
+        npc.party = True
+        game_instance.map.remove_character(npc)
+        game_instance.draw()
+        instance.close()
+        return 
+    if item == "items+": 
+        if len( player_items ) > 0:
+            instance.set_list("items+")
+    if item == "items-": 
+        if len( npc_items ) > 0:
+            instance.set_list("items-")
+    if menu == "items+":
+        obj = player_items[item]
+        npc.add_item( obj ) 
+        game_instance.player.remove_item(obj)
+        instance.close()
+        return 
+    if menu == "items-":
+        obj = npc_items[item]
+        npc.remove_item( obj ) 
+        game_instance.player.add_item(obj)
+        instance.close()
+        return 
 
 
 

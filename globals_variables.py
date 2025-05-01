@@ -39,6 +39,9 @@ CROSS_DIFF_MOVES = [
     (1,0), (2,0), (3,0),
     (-1,0), (-2,0), (-3,0)
 ]
+CROSS_DIFF_MOVES_1x1 = [
+    (0,1), (0,-1), (1,0), (-1,0)
+]
 
 # sprite names
 SPRITE_NAMES_WEAPONS = [
@@ -90,7 +93,8 @@ SPRITE_NAMES = SPRITE_NAMES_WEAPONS + SPRITE_NAMES_CHARACTERS + SPRITE_NAMES_FOO
     "house", # +
     "castle", # +
     "lumber_mill", #+
-    "quarry"
+    "quarry",
+    "mill"
 ]
 
 # loot
