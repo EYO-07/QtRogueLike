@@ -14,6 +14,25 @@ from PyQt5.QtWidgets import QWidget, QListWidget, QVBoxLayout, QPushButton, QHBo
 from PyQt5.QtCore import Qt, QEvent
 from PyQt5.QtGui import QTextCursor, QColor
 
+def quality(game_item):
+    if not hasattr(game_item, "durability_factor"): return ""
+    qlt = game_item.durability_factor
+    if qlt>=0.998: 
+        return "master-crafted"
+    elif qlt>=0.95:
+        return "durable"
+    elif qlt>=0.90:
+        return "bad-quality"
+    else:
+        return "junk"
+
+def info(game_item):
+    if isinstance(game_item, Weapon):
+        return f"{game_item.name} : {game_item.damage:.1f}[dmg] ({ quality(game_item) })"
+    if isinstance(game_item, Food):
+        return f"{game_item.name} : {game_item.nutrition:.1f}[ntr]"
+    return game_item.name
+
 # Classes 
 class JournalWindow(QDialog):
     def __init__(self, parent=None):
@@ -936,8 +955,8 @@ def debugging_menu(menu,item, instance, game_instance):
                 instance.close()
 
 def player_menu(menu,item, instance, game_instance, npc):
-    player_items = { it.name : it for it in game_instance.player.items }
-    npc_items = { it.name : it for it in npc.items }
+    player_items = { info(it) : it for it in game_instance.player.items }
+    npc_items = { info(it) : it for it in npc.items }
     instance.add_list("items+", list( player_items.keys() ) )
     instance.add_list("items-", list( npc_items.keys() ) )
     if item == "Exit": 

@@ -63,7 +63,9 @@ class Game(QGraphicsView, Serializable):
         self.init_viewport()
         self.init_gui()
         # -- 
-        self.player = None # Player()
+        #xy = self.map.get_random_walkable_tile()
+        #if not xy: xy = (50,50)
+        self.player = None #Player() # 
         self.current_player = None # string key identifier
         self.players = {} # players storage 
         self.prior_next_index = 0
@@ -152,8 +154,7 @@ class Game(QGraphicsView, Serializable):
         self.players.update({ key : obj })
         return obj 
     def set_player(self, name): # set the Game.player by dictionary name  
-        if not self.players.get(name): return 
-        self.player = self.players.get(name)
+        self.player = self.players[name]
         self.current_player = name 
         self.player.party = False
     def set_player_name(self,key,new_name):
@@ -541,14 +542,19 @@ class Game(QGraphicsView, Serializable):
     
     def load_current_game(self, slot=1):
         """Load player state and current map from their respective JSON files."""
-        print("Current Player :", self.current_player)
         #T1 = tic()
         saves_dir = "./saves"
         player_file = os.path.join(saves_dir, f"player_state_{slot}.json")
         if not self.Load_JSON(player_file):
             print(f"Failed to Load or no File Found: {player_file}")
             self.start_new_game()
-            return 
+            return         
+        print("Current Player :", self.current_player)
+        if not self.current_player:
+            for k,v in iter(self.players.items()):
+                if k and v:
+                    self.current_player = k
+                    break 
         self.set_player(self.current_player)
         # Clear current state
         self.scene.clear()
@@ -557,11 +563,13 @@ class Game(QGraphicsView, Serializable):
         self.maps.clear()
         # Load current map
         self.try_load_map_or_create_new()
-        # Place characters
-        if not self.place_players(): #self.map.place_character(self.player):
+        # place current character
+        if not self.map.place_character(self.player):
             self.add_message(f"Warning: Could not place player at ({self.player.x}, {self.player.y})")
-            self.player.x, self.player.y = self.grid_width // 2, self.grid_height // 2
+            self.player.x, self.player.y = self.map.get_random_walkable_tile()
             self.map.place_character(self.player)
+        # Place characters
+        self.place_players()
         # Redraw
         self.draw_grid()
         self.draw_hud()
@@ -851,8 +859,8 @@ class Game(QGraphicsView, Serializable):
         elif key == Qt.Key_X: # skill menu            
             SB = SelectionBox(parent = self, item_list = [
                 f"[ Avaiable Skills ](days survived: {self.player.days_survived})",
-                f"-> Current Map: { self.player.current_map[0]}, {-self.player.current_map[1] }, {-self.player.current_map[2] }",
-                f"-> Map Position: { self.player.x}, {-self.player.y }",
+                f"-> Current Map: { self.player.current_map[0]}, {-self.player.current_map[1] }, {self.player.current_map[2] }",
+                f"-> Map Position: { self.player.x}, { self.map.height -self.player.y }",
                 f"Release Party: { len([ i for i in self.players if self.players[i].party ]) }",
                 f"Dodge: { self.player.days_survived>=5 }",
                 f"Power Attack: { self.player.days_survived>=15 }",
