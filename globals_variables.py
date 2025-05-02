@@ -70,7 +70,8 @@ SPRITE_NAMES_CHARACTERS = SPRITE_NAMES_PLAYABLES + [
     "enemy", 
     "rogue",
     "mercenary",
-    "swordman"
+    "swordman",
+    "mounted_knight"
 ]
 SPRITE_NAMES_FOODS = [
     "food", 

@@ -494,6 +494,7 @@ class Game(QGraphicsView, Serializable):
             else:
                 print("Music not ready in start_new_game, waiting for LoadedMedia")
         
+        self.update_prior_next_selection()
         self.dirty_tiles = set()
         self.draw_grid()
         self.draw_hud()
@@ -532,7 +533,6 @@ class Game(QGraphicsView, Serializable):
             if os.path.exists(os.path.join(saves_dir, f"player_state_{slot}.json.bak")):
                 shutil.copy(os.path.join(saves_dir, f"player_state_{slot}.json.bak"), player_file)  # Restore backup
         toc(T1, "Game.save_current_game() ||")
-    
     def try_load_map_or_create_new(self):
         """ return True if create a new map, return False otherwise """
         b_result = False
@@ -546,7 +546,6 @@ class Game(QGraphicsView, Serializable):
             b_result = True
         self.maps[self.current_map] = self.map
         return b_result
-    
     def load_current_game(self, slot=1):
         """Load player state and current map from their respective JSON files."""
         #T1 = tic()
@@ -557,7 +556,10 @@ class Game(QGraphicsView, Serializable):
             self.start_new_game()
             return         
         print("Current Player :", self.current_player)
-        if not self.current_player:
+        if len(self.players) == 0:
+            self.start_new_game()
+            return 
+        if (not self.current_player) or (not self.current_player in self.players.keys()):
             for k,v in iter(self.players.items()):
                 if k and v:
                     self.current_player = k
@@ -577,6 +579,7 @@ class Game(QGraphicsView, Serializable):
             self.map.place_character(self.player)
         # Place characters
         self.place_players()
+        self.update_prior_next_selection()
         # Redraw
         self.draw_grid()
         self.draw_hud()
@@ -1187,6 +1190,13 @@ class Game(QGraphicsView, Serializable):
         if self.current_day == 20:
             self.journal_window.append_text("(Skill - 20 days) My body remembered how to use a sword properly, now I can perform deadly blows with F key. Whenever the enemy stay in L position like a knight chess I can swing my sword hit taking him off-guard ...") 
     def Event_PlayerDeath(self):
+        # SANITY COMMENTS
+        # 1. You lose your character on death and drop all items
+        # 2. The map keeps the same, you must delete the maps on saves folder to start a full fresh game.
+        # 3. If there is no characters on self.players then the game will start a new game character
+        # 4. If there is characters on self.players then the game will try to take control of that character (what would happen if the character is on other map?)
+        # 5. ... The game will try to load with that character set 
+        # 6. Garrisoned Characters will not be available on death, but will stay saved on building map. 
         print("Game Over!")
         self.player.drop_on_death()
         if self.player.name in self.players.keys():
@@ -1197,8 +1207,8 @@ class Game(QGraphicsView, Serializable):
         # -- 
         if len(self.players) <= 0:
             try:
-                self.load_current_game()
-                self.add_message("Last Save Reloaded")
+                self.add_message("You died, starting new game")
+                self.start_new_game()
             except FileNotFoundError:
                 self.add_message("No Save File Found, Starting New Game")
                 self.start_new_game()
@@ -1209,6 +1219,7 @@ class Game(QGraphicsView, Serializable):
             for k,v in iter(self.players.items()):
                 if isinstance(v, Player):
                     self.set_player(v.name)
+                    self.load_current_game(slot = self.current_slot)
                     self.draw()
                     break 
     def Event_DoAttack(self, event):

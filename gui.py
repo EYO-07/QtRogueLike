@@ -743,7 +743,6 @@ def main_menu(menu, item, instance, game_instance):
             game_instance.set_player(item) # will not load the actual position of the new character, that must be changed !!! 
             game_instance.draw()
             instance.close()
-
 def build_menu(menu, item, instance, game_instance):
     if item == "Exit": instance.close()
     if item != "[ Certificates ]":
@@ -772,7 +771,6 @@ def build_menu(menu, item, instance, game_instance):
                 game_instance.draw()    
                 instance.close()     
                 return 
-            
 def primary_menu(menu, item, instance, game_instance, list_of_weapons):
     if item == "Exit": instance.close()
     for wp in list_of_weapons:
@@ -780,7 +778,6 @@ def primary_menu(menu, item, instance, game_instance, list_of_weapons):
             game_instance.player.equip_item(wp[0], wp[0].slot)
             game_instance.update_inv_window()
             instance.close()
-            
 def skill_menu(menu, item, instance, game_instance, stamina_bound):
     if item == "Exit": instance.close()
     if "Release Party" in item:
@@ -877,7 +874,6 @@ def skill_menu(menu, item, instance, game_instance, stamina_bound):
                 else:
                     game_instance.add_message("Can't Use Special Skill Right Now ...")
             instance.close()            
-
 def debugging_menu(menu,item, instance, game_instance):
     if item == "..": instance.set_list()
     # -- 

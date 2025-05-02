@@ -543,7 +543,7 @@ class Player(Character): # could be the actual player or a playable npc
                 if new_distance < distance:
                     enemy = v
                     distance = new_distance
-        if enemy and distance and distance <= 2:
+        if enemy and distance and distance <= 4:
             path = game_instance.map.find_path(self.x, self.y, enemy.x, enemy.y)
             #print(path)
             if path:
@@ -822,16 +822,24 @@ class TileBuilding(ActionTile): # interface class
         self.metal += d(0,self.villagers/10.0)
     def update(self):
         self.production()
-        
-class Castle(TileBuilding):
-    __serialize_only__ = TileBuilding.__serialize_only__ + ["name","heroes","num_heroes"]
-    def __init__(self, name = "Home"):
-        super().__init__(front_sprite = "castle", walkable=True, sprite_key="grass")
-        self.name = name 
-        self.heroes = {}
-        self.num_heroes = 0
-        self.menu_list = []
-    
+    def retrieve_food(self, game_instance, quantity = 500):
+        if self.food >= quantity:
+            self.food -= quantity
+            game_instance.player.add_item(Food(name = "Meat", nutrition = quantity))
+            game_instance.update_inv_window()
+            return True 
+        return False
+    def retrieve_wood(self, game_instance, quantity = 500):
+        if self.wood >= quantity:
+            self.wood -= quantity
+            game_instance.player.add_item(Resource(name = "wood", value = quantity))
+            game_instance.update_inv_window()
+            return True 
+        return False
+    def retrieve_metal(self, game, quantity = 500):
+        pass 
+    def retrieve_stone(self, game, quantity = 500):
+        pass 
     def store_resource(self, res, game_instance):
         if isinstance(res, Food):
             self.food += res.nutrition 
@@ -839,45 +847,142 @@ class Castle(TileBuilding):
         elif res.type == "wood":
             self.wood += res.value
             game_instance.player.remove_item(res)
-    
+        elif res.type == "stone":
+            self.stone += res.value
+            game_instance.player.remove_item(res)
+        elif res.type == "metal":
+            self.metal += res.value
+            game_instance.player.remove_item(res)
+    def menu_garrison(self, current_menu, current_item, menu_instance, game_instance):
+        """ return True means that the menu should close """
+        if not hasattr( self,"heroes" ): return False # not meant to be used without that attribute 
+        # -- select and build the menu garrison on runtime
+        if current_item == "Garrison >":
+            menu_instance.add_list("Garrison >",[ "Garrison+", "Garrison-", ".." ])
+            menu_instance.set_list("Garrison >")
+        # --
+        if current_menu == "Garrison >":
+            if current_item == "..":
+                menu_instance.set_list()
+                return False
+            if current_item == "Garrison+":
+                if len(game_instance.players) > 1: 
+                    self.heroes.update({ game_instance.player.name : game_instance.player})
+                    game_instance.remove_player() 
+                    game_instance.place_players() # maybe not necessary 
+                    game_instance.draw() 
+                    return True 
+            if current_item == "Garrison-":
+                if len( list( self.heroes.keys()) )>0:
+                    menu_instance.add_list("Garrison-", self.heroes)
+                    menu_instance.set_list("Garrison-")
+                    return False
+        if current_menu == "Garrison-":
+            if current_item:
+                hero = self.heroes.get(current_item)
+                if not hero: 
+                    menu_instance.close()
+                    return True
+                dx, dy = game_instance.player.get_forward_direction()
+                player = game_instance.player 
+                spawn_tile = game_instance.map.get_tile(player.x+dx, player.y + dy)
+                if not spawn_tile:
+                    game_instance.add_message("Can't generate player at this position, please rotate the current character")
+                    menu_instance.close()
+                    return True
+                if spawn_tile.current_char:
+                    game_instance.add_message("Can't generate player at this position, please rotate the current character")
+                    menu_instance.close()
+                    return True 
+                hero.x = player.x+dx
+                hero.y = player.y + dy
+                game_instance.players.update({current_item: self.heroes.pop(current_item)})
+                game_instance.place_players()
+                game_instance.draw()
+                return True
+        return False
+    def menu_resources(self, current_menu, current_item, menu_instance, game_instance):
+        """ return True means that the menu should close """
+        from gui import info 
+        counter = [0]
+        def resource_counter(obj, counter):
+            if isinstance(obj, Food) or isinstance(obj, Resource):
+                counter[0] += 1
+                return True
+            else:
+                return False
+        resources = { f"{counter[0]}. {info(e)[0]}" : e for e in game_instance.player.items if resource_counter(e, counter) }
+        # -- 
+        if current_item == "Resources >":
+            menu_instance.add_list("Resources >",[ f"-> food: {self.food:.0f}", f"-> wood: {self.wood:.0f}", "Resources+", "Resources++", "Food-", "Wood-", ".." ])
+            menu_instance.set_list("Resources >")
+        # -- 
+        if current_menu == "Resources >":
+            if current_item == "..":
+                menu_instance.set_list()
+                return False
+            if current_item == "Resources+": 
+                if len(resources) >0:
+                    menu_instance.add_list("Resources+", list(resources.keys()) )
+                    menu_instance.set_list("Resources+")
+            if current_item == "Resources++": 
+                if len(resources) >0:
+                    for k,v in iter(resources.items()):
+                        self.store_resource(v, game_instance)
+                    game_instance.update_inv_window()
+                    return True 
+            if current_item == "Food-":
+                if self.retrieve_food(game_instance):
+                    return True 
+            if current_item == "Wood-":
+                if self.retrieve_wood(game_instance):
+                    return True 
+        if current_menu == "Resources+":
+            res_obj = resources[current_item]
+            self.store_resource(res_obj, game_instance)
+            game_instance.update_inv_window()
+            return True 
+        return False 
+
+class Castle(TileBuilding):
+    __serialize_only__ = TileBuilding.__serialize_only__ + ["name","heroes","num_heroes"]
+    def __init__(self, name = "Home"):
+        super().__init__(front_sprite = "castle", walkable=True, sprite_key="grass")
+        self.name = name 
+        self.heroes = {}
+        self.num_heroes = 0
+        self.menu_list = []    
+    def production(self):
+        self.villagers = min( 1.005*self.villagers, self.villagers_max )
+        self.food += d(0,self.villagers/10.0)
     def action(self):
         from gui import info 
         self.update_menu_list()
         def f(current_menu, current_item, menu_instance, game_instance):
             self.update_menu_list(menu_instance)
-            menu_instance.add_list("Garrison-", self.heroes)
-            counter = [0]
-            def resource_counter(obj, counter):
-                if isinstance(obj, Food) or isinstance(obj, Resource):
-                    counter[0] += 1
-                    return True
-                else:
-                    return False
-            resources = { f"{counter[0]}. {info(e)[0]}" : e for e in game_instance.player.items if resource_counter(e, counter) }
-            menu_instance.add_list("Resources+", list(resources.keys()) )
             if current_item == "Exit": menu_instance.close()
-            if current_item == "Guard Tower (2000 Wood, 2500 Food)":
+            if "Guard Tower" in current_item:
                 if self.wood >= 2000 and self.food >= 2500:
                     self.wood -= 2000 
                     self.food -= 2500
                     game_instance.certificates.append("Guard Tower")
                     menu_instance.close()
                     return 
-            if current_item == "Lumber Mill (500 Wood, 250 Food)":
+            if "Lumber Mill" in current_item:
                 if self.wood >= 500 and self.food >= 250:
                     self.wood -= 500 
                     self.food -= 250
                     game_instance.certificates.append("Lumber Mill")
                     menu_instance.close()
                     return 
-            if current_item == "Farm (500 Wood, 500 Food)":
+            if "Farm" in current_item:
                 if self.wood >= 500 and self.food >= 500:
                     self.wood -= 500 
                     self.food -= 500
                     game_instance.certificates.append("Farm")
                     menu_instance.close()
                     return 
-            if current_item == "New Hero (2000 Food)":
+            if "New Hero" in current_item:
                 if self.food >= 2000:
                     if self.new_npc(game_instance):
                         self.num_heroes += 1
@@ -885,66 +990,12 @@ class Castle(TileBuilding):
                 else:
                     game_instance.add_message("Can't afford to purchase new heroes ...")
                 menu_instance.close()
-            if current_item == "Garrison+":
-                if len(game_instance.players) > 1: 
-                    self.heroes.update({ game_instance.player.name : game_instance.player})
-                    game_instance.remove_player()
-                    game_instance.place_players()
-                    game_instance.draw()
-                    menu_instance.close()
-            if current_item == "Garrison-":
-                if len( list( self.heroes.keys()) )>0:
-                    menu_instance.set_list("Garrison-")
-            if current_menu == "Garrison-":
-                if current_item:
-                    hero = self.heroes.get(current_item)
-                    if not hero: 
-                        menu_instance.close()
-                        return 
-                    dx, dy = game_instance.player.get_forward_direction()
-                    player = game_instance.player 
-                    spawn_tile = game_instance.map.get_tile(player.x+dx, player.y + dy)
-                    if not spawn_tile:
-                        game_instance.add_message("Can't generate player at this position, please rotate the current character")
-                        menu_instance.close()
-                        return 
-                    if spawn_tile.current_char:
-                        game_instance.add_message("Can't generate player at this position, please rotate the current character")
-                        menu_instance.close()
-                        return 
-                    hero.x = player.x+dx
-                    hero.y = player.y + dy
-                    game_instance.players.update({current_item: self.heroes.pop(current_item)})
-                    # game_instance.set_player(current_item)
-                    game_instance.place_players()
-                    game_instance.draw()
-                    menu_instance.close()
-            if current_item == "Resources+": 
-                if len(resources) >0:
-                    menu_instance.set_list("Resources+")
-            if current_item == "Resources++": 
-                if len(resources) >0:
-                    for k,v in iter(resources.items()):
-                        self.store_resource(v, game_instance)
-                    game_instance.update_inv_window()
-                    menu_instance.close()
-            if current_item == "Food-":
-                if self.food >= 100:
-                    self.food -= 100
-                    game_instance.player.add_item(Food(name = "bread", nutrition = 100))
-                    game_instance.update_inv_window()
-                    menu_instance.close()
-            if current_item == "Wood-":
-                if self.wood >= 100:
-                    self.wood -= 100
-                    game_instance.player.add_item(Resource(name = "wood", value = 100))
-                    game_instance.update_inv_window()
-                    menu_instance.close()        
-            if current_menu == "Resources+":
-                res_obj = resources[current_item]
-                self.store_resource(res_obj, game_instance)
-                game_instance.update_inv_window()
+            if self.menu_garrison(current_menu, current_item, menu_instance, game_instance):
                 menu_instance.close()
+                return 
+            if self.menu_resources(current_menu, current_item, menu_instance, game_instance):
+                menu_instance.close()
+                return 
         return f
     def update_menu_list(self, selection_box_instance = None):
         self.menu_list.clear()
@@ -954,12 +1005,8 @@ class Castle(TileBuilding):
             f"-> food: {self.food:.0f}",
             f"-> wood: {self.wood:.0f}",
             "New Hero (2000 Food)",
-            "Garrison+",
-            "Garrison-",
-            "Resources++",
-            "Resources+",
-            "Food-",
-            "Wood-",
+            "Garrison >",
+            "Resources >",
             "Lumber Mill (500 Wood, 250 Food)",
             "Farm (500 Wood, 500 Food)",
             "Guard Tower (2000 Wood, 2500 Food)",
@@ -1016,21 +1063,21 @@ class Mill(TileBuilding):
         def f(current_menu, current_item, menu_instance, game_instance):
             self.update_menu_list(menu_instance)
             if current_item == "Exit": menu_instance.close()
-            if current_item == "Food-":
-                if self.food >= 500:
-                    self.food -= 500
-                    game_instance.player.add_item(Food(name = "meat", nutrition = 500))
-                    game_instance.update_inv_window()
-                    menu_instance.close()
+            if self.menu_resources(current_menu, current_item, menu_instance, game_instance):
+                menu_instance.close()
+                return 
         return f
     def update_menu_list(self, selection_box_instance = None):
         self.menu_list.clear()
         self.menu_list += [
             f"Resource [{self.name}]",
             f"-> food: {self.food:.0f}",
-            "Food-",
+            "Resources >",
             "Exit"
         ]
+    def production(self):
+        self.villagers = min( 1.005*self.villagers, self.villagers_max )
+        self.food += d(0,2*self.villagers/10.0)
 
 class LumberMill(TileBuilding):
     __serialize_only__ = TileBuilding.__serialize_only__ + ["name"]
@@ -1044,21 +1091,21 @@ class LumberMill(TileBuilding):
         def f(current_menu, current_item, menu_instance, game_instance):
             self.update_menu_list(menu_instance)
             if current_item == "Exit": menu_instance.close()
-            if current_item == "Wood-":
-                if self.wood >= 500:
-                    self.wood -= 500
-                    game_instance.player.add_item(Resource(name = "wood", value = 500))
-                    game_instance.update_inv_window()
-                    menu_instance.close()
+            if self.menu_resources(current_menu, current_item, menu_instance, game_instance):
+                menu_instance.close()
+                return 
         return f
     def update_menu_list(self, selection_box_instance = None):
         self.menu_list.clear()
         self.menu_list += [
             f"Resource [{self.name}]",
             f"-> wood: {self.wood:.0f}",
-            "Wood-",
+            "Resources >",
             "Exit"
         ]
+    def production(self):
+        self.villagers = min( 1.005*self.villagers, self.villagers_max )
+        self.wood += d(0,2*self.villagers/10.0)
 
 class GuardTower(TileBuilding):
     __serialize_only__ = TileBuilding.__serialize_only__ + ["name","heroes","num_heroes"]
@@ -1068,30 +1115,13 @@ class GuardTower(TileBuilding):
         self.heroes = {}
         self.num_heroes = 0
         self.menu_list = []
-    def store_resource(self, res, game_instance):
-        if isinstance(res, Food):
-            self.food += res.nutrition 
-            game_instance.player.remove_item(res)
-        elif res.type == "wood":
-            self.wood += res.value
-            game_instance.player.remove_item(res)
     def action(self):
         from gui import info 
         self.update_menu_list()
         def f(current_menu, current_item, menu_instance, game_instance):
             self.update_menu_list(menu_instance)
-            menu_instance.add_list("Garrison-", self.heroes)
-            counter = [0]
-            def resource_counter(obj, counter):
-                if isinstance(obj, Food) or isinstance(obj, Resource):
-                    counter[0] += 1
-                    return True
-                else:
-                    return False
-            resources = { f"{counter[0]}. {info(e)[0]}" : e for e in game_instance.player.items if resource_counter(e, counter) }
-            menu_instance.add_list("Resources+", list(resources.keys()) )
             if current_item == "Exit": menu_instance.close()
-            if current_item == "Recruit Swordman (500 Food)":
+            if "Recruit Swordman" in current_item:
                 if self.food >= 500:
                     if self.new_swordman(game_instance):
                         self.num_heroes += 1
@@ -1099,66 +1129,21 @@ class GuardTower(TileBuilding):
                 else:
                     game_instance.add_message("Can't afford to purchase Swordman ...")
                 menu_instance.close()
-            if current_item == "Garrison+":
-                if len(game_instance.players) > 1: 
-                    self.heroes.update({ game_instance.player.name : game_instance.player})
-                    game_instance.remove_player()
-                    game_instance.place_players()
-                    game_instance.draw()
-                    menu_instance.close()
-            if current_item == "Garrison-":
-                if len( list( self.heroes.keys()) )>0:
-                    menu_instance.set_list("Garrison-")
-            if current_menu == "Garrison-":
-                if current_item:
-                    hero = self.heroes.get(current_item)
-                    if not hero: 
-                        menu_instance.close()
-                        return 
-                    dx, dy = game_instance.player.get_forward_direction()
-                    player = game_instance.player 
-                    spawn_tile = game_instance.map.get_tile(player.x+dx, player.y + dy)
-                    if not spawn_tile:
-                        game_instance.add_message("Can't generate player at this position, please rotate the current character")
-                        menu_instance.close()
-                        return 
-                    if spawn_tile.current_char:
-                        game_instance.add_message("Can't generate player at this position, please rotate the current character")
-                        menu_instance.close()
-                        return 
-                    hero.x = player.x+dx
-                    hero.y = player.y + dy
-                    game_instance.players.update({current_item: self.heroes.pop(current_item)})
-                    # game_instance.set_player(current_item)
-                    game_instance.place_players()
-                    game_instance.draw()
-                    menu_instance.close()
-            if current_item == "Resources+": 
-                if len(resources) >0:
-                    menu_instance.set_list("Resources+")
-            if current_item == "Resources++": 
-                if len(resources) >0:
-                    for k,v in iter(resources.items()):
-                        self.store_resource(v, game_instance)
-                    game_instance.update_inv_window()
-                    menu_instance.close()
-            if current_item == "Food-":
-                if self.food >= 100:
-                    self.food -= 100
-                    game_instance.player.add_item(Food(name = "bread", nutrition = 100))
-                    game_instance.update_inv_window()
-                    menu_instance.close()
-            if current_item == "Wood-":
-                if self.wood >= 100:
-                    self.wood -= 100
-                    game_instance.player.add_item(Resource(name = "wood", value = 100))
-                    game_instance.update_inv_window()
-                    menu_instance.close()        
-            if current_menu == "Resources+":
-                res_obj = resources[current_item]
-                self.store_resource(res_obj, game_instance)
-                game_instance.update_inv_window()
+            if "Recruit Mounted Knight" in current_item:
+                if self.food >= 700 and self.wood >= 1200:
+                    if self.new_mounted_knight(game_instance):
+                        self.num_heroes += 1
+                        self.food -= 700 
+                        self.wood -= 1200 
+                else:
+                    game_instance.add_message("Can't afford to purchase Mounted Knight ...")
                 menu_instance.close()
+            if self.menu_garrison(current_menu, current_item, menu_instance, game_instance):
+                menu_instance.close()
+                return 
+            if self.menu_resources(current_menu, current_item, menu_instance, game_instance):
+                menu_instance.close()
+                return 
         return f
     def update_menu_list(self, selection_box_instance = None):
         self.menu_list.clear()
@@ -1168,12 +1153,9 @@ class GuardTower(TileBuilding):
             f"-> food: {self.food:.0f}",
             f"-> wood: {self.wood:.0f}",
             "Recruit Swordman (500 Food)",
-            "Garrison+",
-            "Garrison-",
-            "Resources++",
-            "Resources+",
-            "Food-",
-            "Wood-",
+            "Recruit Mounted Knight (700 Food 1200 Wood)",
+            "Garrison >",
+            "Resources >",
             "Exit"
         ]
     def new_swordman(self, game_instance):
@@ -1203,5 +1185,34 @@ class GuardTower(TileBuilding):
         game_instance.dirty_tiles.add((game_instance.player.x+dx, game_instance.player.y+dy))
         game_instance.draw()
         return True
-    
+    def new_mounted_knight(self, game_instance): # not used yet 
+        dx, dy = game_instance.player.get_forward_direction()
+        player = game_instance.player 
+        spawn_tile = game_instance.map.get_tile(player.x+dx, player.y + dy)
+        if not spawn_tile:
+            game_instance.add_message("Can't generate player at this position, please rotate the current character")
+            return False
+        if spawn_tile.current_char:
+            game_instance.add_message("Can't generate player at this position, please rotate the current character")
+            return False
+        npc_name = "Knight_"+rn(7)
+        npc_obj = game_instance.add_player(
+            key = npc_name, 
+            name = npc_name, 
+            hp = 80,
+            x = game_instance.player.x+dx, 
+            y = game_instance.player.y+dy, 
+            b_generate_items = False, 
+            current_map = game_instance.current_map,
+            sprite = "mounted_knight"
+        )
+        npc_obj.equip_item( Sword(name="Long_Sword", damage=8.5, durability_factor=0.9995), "primary_hand" )
+        npc_obj.hunger = npc_obj.max_hunger
+        game_instance.place_players()
+        game_instance.dirty_tiles.add((game_instance.player.x+dx, game_instance.player.y+dy))
+        game_instance.draw()
+        return True    
+    def production(self):
+        self.villagers = min( 1.005*self.villagers, self.villagers_max )
+
 # --- END 
