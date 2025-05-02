@@ -43,7 +43,8 @@ class Game(QGraphicsView, Serializable):
         "low_hunger_triggered",
         "current_day",
         "is_music_muted",
-        "current_player"
+        "current_player",
+        "certificates"
     ]
     # -- inits
     def __init__(self):
@@ -58,6 +59,7 @@ class Game(QGraphicsView, Serializable):
         self.low_hp_triggered = False  # Flag for low HP event
         self.low_hunger_triggered = False  # Flag for low hunger event
         self.last_encounter_description = ""
+        self.certificates = []
         # --
         self.is_music_muted = False
         self.init_viewport()
@@ -152,6 +154,7 @@ class Game(QGraphicsView, Serializable):
     def add_player(self, key, **kwargs): # add a player or ally in dictionary 
         obj = Player(**kwargs)
         self.players.update({ key : obj })
+        self.update_prior_next_selection()
         return obj 
     def set_player(self, name): # set the Game.player by dictionary name  
         self.player = self.players[name]
@@ -181,9 +184,13 @@ class Game(QGraphicsView, Serializable):
         new_key_name = random.choice( list(self.players.keys()) )
         if not new_key_name: return 
         self.set_player(new_key_name)
+        self.update_prior_next_selection()
     def update_prior_next_selection(self):
         self.prior_next_index = 0
-        self.prior_next_players = [self.player.name]+[ key for key,value in iter(self.players.items()) if (value.party == False and value.current_map == self.current_map and (not value is self.player)) ]
+        try:
+            self.prior_next_players = [self.player.name]+[ key for key,value in iter(self.players.items()) if (value.party == False and value.current_map == self.current_map and (not value is self.player)) ]
+        except:
+            self.prior_next_players = []
     
     # -- overrides
     def from_dict(self, dictionary):
@@ -635,6 +642,7 @@ class Game(QGraphicsView, Serializable):
         self.scene.setSceneRect(0, 0, self.view_width * self.tile_size, self.view_height * self.tile_size)
         self.dirty_tiles.clear() 
     def draw_hud(self):
+        oppacity = 180
         hud_width = self.view_width * self.tile_size
         hud_height = 50
         hud_y = self.view_height * self.tile_size - hud_height
@@ -645,19 +653,19 @@ class Game(QGraphicsView, Serializable):
         # HP Bar (Red)
         hp_ratio = self.player.hp / self.player.max_hp
         hp_bar = QGraphicsRectItem(10, hud_y + padding, bar_width * hp_ratio, bar_height)
-        hp_bar.setBrush(QColor("red"))
+        hp_bar.setBrush(QColor(255,0,0,oppacity))
         if hp_ratio<0.8: self.scene.addItem(hp_bar)
 
         # Stamina Bar (Blue)
         stamina_ratio = self.player.stamina / self.player.max_stamina
         stamina_bar = QGraphicsRectItem(10 + bar_width + padding, hud_y + padding, bar_width * stamina_ratio, bar_height)
-        stamina_bar.setBrush(QColor("blue"))
+        stamina_bar.setBrush(QColor(0,0,255,oppacity))
         if stamina_ratio<0.8: self.scene.addItem(stamina_bar)
 
         # Hunger Bar (Yellow)
         hunger_ratio = self.player.hunger / self.player.max_hunger
         hunger_bar = QGraphicsRectItem(10 + 2 * (bar_width + padding), hud_y + padding, bar_width * hunger_ratio, bar_height)
-        hunger_bar.setBrush(QColor("yellow"))
+        hunger_bar.setBrush(QColor(255,255,0,oppacity))
         if hunger_ratio<0.8: self.scene.addItem(hunger_bar)
         
         # North Arrow
@@ -734,6 +742,12 @@ class Game(QGraphicsView, Serializable):
                     self.draw()
                     break 
         self.update_prior_next_selection()
+    def count_party(self):
+        S = 0
+        for i in self.players:
+            if self.players[i].party == True:
+                S += 1
+        return S
     
     # -- game iteration 
     def game_iteration(self):
@@ -742,6 +756,7 @@ class Game(QGraphicsView, Serializable):
         self.process_events() 
         self.update_players() # which include player and allies 
         self.update_enemies()
+        self.update_buildings()
         self.update_messages() # Critical: Update message window 
         self.draw()
     def process_events(self):
@@ -782,7 +797,10 @@ class Game(QGraphicsView, Serializable):
             v.npc_update(self)
     def update_enemies(self): # maybe more maps could be updated, like maps with alive players 
         self.map.update_enemies(self)
-                           
+    def update_buildings(self):
+        for b in self.map.buildings:
+            b.update()
+                          
     # -- Qt Events
     def closeEvent(self, event):
         """Save the game state when the window is closed."""
@@ -824,6 +842,11 @@ class Game(QGraphicsView, Serializable):
         b_isForwarding = False
         stamina_bound = 20
         if key == Qt.Key_PageUp:
+            if self.count_party() > 0: 
+                self.add_message("Release Party to Change Character")
+                return 
+            if len(self.prior_next_players) <= 1:
+                self.update_prior_next_selection()
             if len(self.prior_next_players) > 0:
                 if self.prior_next_index>0:
                     self.prior_next_index -= 1 
@@ -833,6 +856,11 @@ class Game(QGraphicsView, Serializable):
                 self.draw()
                 return 
         elif key == Qt.Key_PageDown:
+            if self.count_party() > 0: 
+                self.add_message("Release Party to Change Character")
+                return 
+            if len(self.prior_next_players) <= 1:
+                self.update_prior_next_selection()
             if len(self.prior_next_players) > 0:
                 if self.prior_next_index<len(self.prior_next_players)-1:
                     self.prior_next_index += 1 
@@ -855,13 +883,14 @@ class Game(QGraphicsView, Serializable):
                 SB = SelectionBox( parent=self, item_list = ["[ Weapon Selection ]"]+[ i[1] for i in list_of_weapons ]+["Exit"], action = primary_menu, game_instance = self, list_of_weapons = list_of_weapons )
             SB.show()
         elif key == Qt.Key_B: # build menu 
-            pass
+            SB = SelectionBox(parent = self, item_list = [ "[ Certificates ]" ]+self.certificates+["Exit"], action = build_menu, game_instance = self )
+            SB.show()
         elif key == Qt.Key_X: # skill menu            
             SB = SelectionBox(parent = self, item_list = [
-                f"[ Avaiable Skills ](days survived: {self.player.days_survived})",
+                f"[ Available Skills ](days survived: {self.player.days_survived})",
                 f"-> Current Map: { self.player.current_map[0]}, {-self.player.current_map[1] }, {self.player.current_map[2] }",
                 f"-> Map Position: { self.player.x}, { self.map.height -self.player.y }",
-                f"Release Party: { len([ i for i in self.players if self.players[i].party ]) }",
+                f"Release Party: { self.count_party() }",
                 f"Dodge: { self.player.days_survived>=5 }",
                 f"Power Attack: { self.player.days_survived>=15 }",
                 f"Weapon Special Attack: { self.player.days_survived>=20 }",
@@ -973,7 +1002,7 @@ class Game(QGraphicsView, Serializable):
             self.music_player.setVolume(volume)
             self.add_message(f"Music volume: {volume}%")
             return    
-        elif key == Qt.Key_C:  # Interact with stair
+        elif key == Qt.Key_C:  # Interact with stair or special tile 
             tile = self.map.get_tile(self.player.x, self.player.y)
             if tile:
                 if tile.stair:
@@ -1112,6 +1141,7 @@ class Game(QGraphicsView, Serializable):
                 "Lumber Mill",
                 "Clear", 
                 "Mill",
+                "Tower",
                 ".."
             ])
             SB.show()        
@@ -1215,6 +1245,7 @@ class Game(QGraphicsView, Serializable):
     def Event_CharacterDeath(self, event):
         if event.target is self.player:
             self.Event_PlayerDeath()
+            self.update_prior_next_selection()
         else:
             event.target.drop_on_death()
             if event.target in self.map.enemies:
@@ -1222,6 +1253,7 @@ class Game(QGraphicsView, Serializable):
             if event.target.name in self.players.keys():
                 print("Removing :",event.target.name)
                 self.players.pop(event.target.name)
+                self.update_prior_next_selection()
             event.target.current_tile.current_char = None
             
 # --- END 

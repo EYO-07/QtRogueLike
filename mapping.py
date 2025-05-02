@@ -115,8 +115,11 @@ class Map(Serializable):
         self.starting_x = None
         self.starting_y = None
         self.rooms = None # could be tuple (x,y,w,h) of rectangular room of could be a Room instance 
-        self.buildings = set()
+        self.buildings = []
         if b_generate: self.generate()
+    
+    def update_buildings_list(self):
+        self.buildings = [ self.grid[y][x] for y in range(self.height) for x in range(self.width) if isinstance(self.grid[y][x], TileBuilding) ]
     
     # override
     def from_dict(self, dictionary):

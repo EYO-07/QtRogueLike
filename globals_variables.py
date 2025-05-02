@@ -10,6 +10,11 @@ def d(a,b = None): # float dice
     else:
         return random.uniform(a,b)
 
+def rn(num = 5):
+    if num == 1:
+        return str(random.randint(0,9))
+    return str(random.randint(0,9))+rn(num-1)
+
 # Global Variables
 
 # map configuration 
@@ -56,7 +61,7 @@ SPRITE_NAMES_WEAPONS = [
 SPRITE_NAMES_PLAYABLES = [
     "player",
     "player_2",
-    "player_3"
+    "player_3"    
 ]
 
 SPRITE_NAMES_CHARACTERS = SPRITE_NAMES_PLAYABLES + [
@@ -64,7 +69,8 @@ SPRITE_NAMES_CHARACTERS = SPRITE_NAMES_PLAYABLES + [
     "bear",
     "enemy", 
     "rogue",
-    "mercenary"
+    "mercenary",
+    "swordman"
 ]
 SPRITE_NAMES_FOODS = [
     "food", 
@@ -94,7 +100,9 @@ SPRITE_NAMES = SPRITE_NAMES_WEAPONS + SPRITE_NAMES_CHARACTERS + SPRITE_NAMES_FOO
     "castle", # +
     "lumber_mill", #+
     "quarry",
-    "mill"
+    "mill",
+    "wood",
+    "tower"
 ]
 
 # loot

@@ -27,11 +27,17 @@ def quality(game_item):
         return "junk"
 
 def info(game_item):
-    if isinstance(game_item, Weapon):
-        return f"{game_item.name} : {game_item.damage:.1f}[dmg] ({ quality(game_item) })"
-    if isinstance(game_item, Food):
-        return f"{game_item.name} : {game_item.nutrition:.1f}[ntr]"
-    return game_item.name
+    if isinstance(game_item, Weapon): # < equippable < item
+        return f"{game_item.name} : {game_item.damage:.1f} [dmg] ({ quality(game_item) })", QColor("white")
+    if isinstance(game_item, Equippable): # < item 
+        return f"{game_item.name} : {game_item.slot}", QColor("cyan")    
+    if isinstance(game_item, WeaponRepairTool): # < item
+        return f"{game_item.name} : {game_item.uses} [uses]", QColor("white")
+    if isinstance(game_item, Food): # < item
+        return f"{game_item.name} : {game_item.nutrition:.1f} [ntr]", QColor("yellow")
+    if isinstance(game_item, Resource): # < item 
+        return f"{game_item.name} : {game_item.value:.1f} [val]", QColor(0,255,0,255) # green 
+    return game_item.name, QColor("white")
 
 # Classes 
 class JournalWindow(QDialog):
@@ -532,21 +538,7 @@ class InventoryWindow(QDialog):
             return "junk"
 
     def label_for(self,game_item):
-        if isinstance(game_item, WeaponRepairTool):
-            return f"{game_item.name} : {game_item.uses} [uses]", QColor("white")
-        # Food
-        if isinstance(game_item, Food):
-            return f"{game_item.name} : {game_item.nutrition} [nutrition]", QColor("yellow")
-        # Weapon
-        if isinstance(game_item, Weapon):
-            return f"{game_item.name} : {game_item.damage:.1f} [dmg] ({self.get_quality(game_item)})", QColor("white")
-        # Common Equippable 
-        if isinstance(game_item, Equippable):
-            return f"{game_item.name} : {game_item.slot}", QColor("cyan")
-        # Common Item
-        if isinstance(game_item, Item):
-            return f"{game_item.name}", QColor("white")
-        return "Default Label", QColor("white")
+        return info(game_item)
     
     def update_inventory(self, player):
         """Update the list with the player's current items."""
@@ -751,6 +743,35 @@ def main_menu(menu, item, instance, game_instance):
             game_instance.set_player(item) # will not load the actual position of the new character, that must be changed !!! 
             game_instance.draw()
             instance.close()
+
+def build_menu(menu, item, instance, game_instance):
+    if item == "Exit": instance.close()
+    if item != "[ Certificates ]":
+        match item:
+            case "Guard Tower":
+                game_instance.certificates.remove("Guard Tower") 
+                game_instance.map.set_tile(game_instance.player.x, game_instance.player.y, GuardTower())
+                game_instance.map.update_buildings_list()
+                game_instance.map.place_character(game_instance.player)
+                game_instance.draw() 
+                instance.close()
+                return 
+            case "Lumber Mill":
+                game_instance.certificates.remove("Lumber Mill") 
+                game_instance.map.set_tile(game_instance.player.x, game_instance.player.y, LumberMill(wood=0))
+                game_instance.map.update_buildings_list()
+                game_instance.map.place_character(game_instance.player)
+                game_instance.draw() 
+                instance.close()
+                return 
+            case "Farm":
+                game_instance.certificates.remove("Farm") 
+                game_instance.map.set_tile(game_instance.player.x, game_instance.player.y, Mill(food=0))
+                game_instance.map.update_buildings_list()
+                game_instance.map.place_character(game_instance.player)
+                game_instance.draw()    
+                instance.close()     
+                return 
             
 def primary_menu(menu, item, instance, game_instance, list_of_weapons):
     if item == "Exit": instance.close()
@@ -953,10 +974,13 @@ def debugging_menu(menu,item, instance, game_instance):
                 tile.remove_layer()
                 game_instance.draw()    
                 instance.close()
-
+            case "Tower":
+                game_instance.map.set_tile(game_instance.player.x, game_instance.player.y, GuardTower())
+                game_instance.draw()    
+                instance.close()     
 def player_menu(menu,item, instance, game_instance, npc):
-    player_items = { info(it) : it for it in game_instance.player.items }
-    npc_items = { info(it) : it for it in npc.items }
+    player_items = { info(it)[0] : it for it in game_instance.player.items }
+    npc_items = { info(it)[0] : it for it in npc.items }
     instance.add_list("items+", list( player_items.keys() ) )
     instance.add_list("items-", list( npc_items.keys() ) )
     if item == "Exit": 
@@ -965,6 +989,7 @@ def player_menu(menu,item, instance, game_instance, npc):
     if item == "Add to Party":
         npc.party = True
         game_instance.map.remove_character(npc)
+        game_instance.update_prior_next_selection()
         game_instance.draw()
         instance.close()
         return 
