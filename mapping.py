@@ -85,6 +85,39 @@ class Room:
     def add_random_loot(self, loot_table):
         pass 
 
+# Map.__init__() || { .generate } || { .generate_procedural_dungeon, .generate_procedural_field, .generate_procedural_road, .generate_procedural_lake, .generate_procedural_forest, ._generate_default }
+# Map.from_dict() || { Serializable.from_dict | .place_character } || { }
+# Map.generate() || { .generate_procedural_dungeon | .generate_procedural_field | .generate_procedural_road | .generate_procedural_lake | .generate_procedural_forest | ._generate_default } || { .grid_init_uniform, .add_patches, .add_trees, .add_rocks, .add_rooms_with_connectors, .ensure_connection, .add_dungeon_loot }
+# Map.generate_enemy_by_chance_by_list_at() || { .generate_enemy_by_chance_at } || { Character.add_item_by_chance }
+# Map.generate_enemy_at() || { .generate_enemy_by_chance_by_list_at | .place_character } || { .generate_enemy_by_chance_at, Character.add_item_by_chance }
+# Map.fill_enemies() || { .get_tile | .generate_enemy_at } || { .generate_enemy_by_chance_by_list_at, .place_character, .generate_enemy_by_chance_at, Character.add_item_by_chance }
+# Map.update_enemies() || { .get_tile | Character.update | .place_character | .fill_enemies } || { .generate_enemy_by_chance_by_list_at, .generate_enemy_at, .generate_enemy_by_chance_at, Character.add_item_by_chance }
+# Map.add_rooms_with_connectors() || { .add_rooms | .add_L_shaped_connectors | .repaint_floor_rooms } || { .foreach_rooms_tiles }
+# Map.foreach_rooms_tiles() || { .get_tile } || { }
+# Map.repaint_floor_rooms() || { .foreach_rooms_tiles } || { .get_tile, .set_tile }
+# Map.get_random_tile_from_rooms() || { } || { .foreach_rooms_tiles }
+# Map.get_random_tiles_from_rooms() || { } || { .foreach_rooms_tiles }
+# Map.add_dungeon_loot() || { .get_random_tiles_from_rooms } || { .foreach_rooms_tiles, Tile.add_item_by_chance }
+# Map.is_adjacent_walkable() || { .get_tile } || { }
+# Map.is_adjacent_walkable_at() || { .get_tile } || { }
+# Map.get_random_walkable_tile() || { .is_adjacent_walkable } || { .get_tile }
+# Map.add_dungeon_entrance() || { .get_random_walkable_tile } || { .is_adjacent_walkable, .get_tile }
+# Map.add_dungeon_entrance_at() || { .get_tile | .get_default_pixmap | .Save_JSON } || { }
+# Map.ensure_connection() || { .carve_corridor } || { }
+# Map._generate_default() || { .grid_init_uniform | .add_patches | .add_trees | .add_rocks } || { }
+# Map.generate_procedural_forest() || { .grid_init_uniform | .add_rooms_with_connectors | .add_patches | .ensure_connection | .add_dungeon_loot } || { .add_rooms, .add_L_shaped_connectors, .repaint_floor_rooms, .foreach_rooms_tiles, .get_random_tiles_from_rooms, Tile.add_item_by_chance }
+# Map.generate_procedural_dungeon() || { .grid_init_uniform | .add_rooms_with_connectors } || { .add_rooms, .add_L_shaped_connectors, .repaint_floor_rooms, .foreach_rooms_tiles }
+# Map.generate_procedural_field() || { .grid_init_uniform | .add_patches | .add_rocks | .get_random_walkable_tile | .set_tile } || { .is_adjacent_walkable, .get_tile }
+# Map.generate_procedural_road() || { .grid_init_uniform | .add_patches | .get_random_walkable_tile | .set_tile } || { .is_adjacent_walkable, .get_tile }
+# Map.generate_procedural_lake() || { .grid_init_uniform | .add_patches | .add_dungeon_entrance } || { .get_random_walkable_tile, .is_adjacent_walkable, .get_tile }
+# Map.get_char() || { .get_tile } || { }
+# Map.can_place_character() || { .get_tile } || { }
+# Map.can_place_character_at() || { .get_tile } || { }
+# Map.place_character() || { .get_tile } || { }
+# Map.remove_character() || { .get_tile } || { }
+# Map.move_character() || { .get_tile | .place_character } || { }
+# Map.find_path() || { .get_tile } || { }
+# Map.line_of_sight() || { .get_tile } || { }
 class Map(Serializable):
     __serialize_only__ = ["width","height","filename","grid","enemy_type","coords","enemies"]
     def __init__(
@@ -724,6 +757,11 @@ class Map(Serializable):
             print(f"Error accessing tile ({x}, {y}): {e}")
             return None
 
+    def get_char(self, x, y):
+        tile = self.get_tile(x,y)
+        if not tile: return None 
+        return tile.current_char
+
     def set_tile(self, x, y, tile):
         self.grid[y][x] = tile
 
@@ -743,7 +781,8 @@ class Map(Serializable):
             if tile and tile.walkable and not tile.current_char:
                 tile.current_char = char
                 char.current_tile = tile
-                #print(f"Placed {char.name} at ({char.x}, {char.y}), tile walkable={tile.walkable}")
+                if isinstance(char, Player): 
+                    char.current_map = self.coords
                 return True
             #print(f"Cannot place {char.name} at ({char.x}, {char.y}): Invalid or occupied tile")
             return False
@@ -755,6 +794,8 @@ class Map(Serializable):
         try:
             tile = self.get_tile(char.x, char.y)
             if tile and tile.current_char == char:
+                if char in self.enemies:
+                    self.enemies.remove(char)
                 tile.current_char = None
                 char.current_tile = None
                 print(f"Removed {char.name} from ({char.x}, {char.y})")

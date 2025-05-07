@@ -29,97 +29,17 @@ from PyQt5.QtWidgets import QGraphicsView, QGraphicsScene, QGraphicsRectItem, QG
 from PyQt5.QtCore import Qt, QRectF, QUrl, QPropertyAnimation, QTimer
 from PyQt5.QtGui import QColor, QTransform, QFont
 
-# Main Window Class 
-class Game(QGraphicsView, Serializable):
-    # -- class variables
-    __serialize_only__ = [
-        "version",
-        "rotation",
-        "players",
-        "current_map", # map coords
-        "turn",
-        "current_slot",
-        "low_hp_triggered",
-        "low_hunger_triggered",
-        "current_day",
-        "is_music_muted",
-        "current_player",
-        "certificates"
-    ]
-    # -- inits
+class Game_SOUNDMANAGER:
     def __init__(self):
-        super().__init__()
-        self.setWindowFlags(Qt.FramelessWindowHint)
-        self.alt_pressed = False
-        self.version = "1.0.0"
-        # --
-        self.turn = 0
-        self.current_day = 0
-        self.turns_per_day = 1000
-        self.low_hp_triggered = False  # Flag for low HP event
-        self.low_hunger_triggered = False  # Flag for low hunger event
-        self.last_encounter_description = ""
-        self.certificates = []
-        # --
         self.is_music_muted = False
-        self.init_viewport()
-        self.init_gui()
-        # -- 
-        #xy = self.map.get_random_walkable_tile()
-        #if not xy: xy = (50,50)
-        self.player = None #Player() # 
-        self.current_player = None # string key identifier
-        self.players = {} # players storage 
-        self.prior_next_index = 0
-        self.prior_next_players = []
-        self.current_map = (0,0,0) # Current map coordinates
-        self.map = Map()
-        self.maps = {(0,0,0):self.map}  # Store Map objects with coordinate keys
-        # Create and place characters
-        self.events = []  # Initialize events list
-        # Initial render
-        self.dirty_tiles = set()  # Track tiles that need redrawing
-        self.tile_items = {}  # For optimized rendering
-        self.current_slot = 1  # Track current save slot
-        Tile._load_sprites()
-        self.load_current_game()
-    def init_viewport(self):
-        self.grid_width = MAP_WIDTH
-        self.grid_height = MAP_HEIGHT
-        self.rotation = 0  # degrees: 0, 90, 180, 270
-        self.view_width = VIEW_WIDTH_IN_TILES
-        self.view_height = VIEW_HEIGHT_IN_TILES
-        self.scene = QGraphicsScene()
-        self.setScene(self.scene)
-        self.tile_size = TILE_SIZE 
-    def init_gui(self):
-        # init_view_port() | init_gui() 
-        self.setFocusPolicy(Qt.StrongFocus)  # Ensure Game accepts focus
-        self.setWindowTitle("PyQt Rogue Like")
-        self.setFixedSize(self.view_width * self.tile_size, self.view_height * self.tile_size)
-        # --
-        self.inventory_window = None  # Initialize later on demand
-        # Initialize message window
-        self.message_popup = MessagePopup(self)  # Set Game as parent
-        self.messages = []  # List of (message, turns_remaining) tuples
-        # Add journal window
-        self.journal_window = None
-        # Initialize music player
-        self.music_player = None
-        self.load_random_music()
-
-    # -- music
     def get_random_music_filename(self,directory="music", pattern=""):
         # Compile the regex pattern
         regex = re.compile(pattern)
-
         # List all files in the directory
         all_files = os.listdir(directory)
         if len(all_files)==0: return None
-
         # Filter files that match the pattern
         matching_files = [ os.path.join(directory, f) for f in all_files if regex.match(f) ]
-
         # Return a random file or None if no matches
         return random.choice(matching_files) if matching_files else None
     def load_music(self, music_path):
@@ -149,8 +69,188 @@ class Game(QGraphicsView, Serializable):
     def load_random_music(self):
         if self.is_music_muted: return None
         return self.load_music( self.get_random_music_filename() )
+    def handle_media_status(self, status):
+        """Handle media status changes to start playback when loaded."""
+        if status == QMediaPlayer.LoadedMedia and not self.is_music_muted:
+            self.music_player.play()
+            print("Music started: Media loaded")
+        elif status == QMediaPlayer.InvalidMedia:
+            self.add_message("Music failed: Invalid media")
+            print("Music failed: Invalid media")
+    def toggle_music(self):
+        """Toggle music mute state."""
+        self.is_music_muted = not self.is_music_muted
+        if self.is_music_muted:
+            self.music_player.stop()
+            self.add_message("Music muted")
+        else:
+            # Check if media is loaded before playing
+            if self.music_player.mediaStatus() in (QMediaPlayer.LoadedMedia, QMediaPlayer.BufferedMedia):
+                self.music_player.play()
+                self.add_message("Music unmuted")
+            else:
+                self.add_message("Music not ready, will play when loaded")
+                print("Music not ready, waiting for LoadedMedia state")
+            
+class Game_VIEWPORT:
+    def __init__(self):
+        self.rotation = 0  # degrees: 0, 90, 180, 270
+        self.grid_width = MAP_WIDTH
+        self.grid_height = MAP_HEIGHT
+        self.view_width = VIEW_WIDTH_IN_TILES
+        self.view_height = VIEW_HEIGHT_IN_TILES
+        self.tile_size = TILE_SIZE 
+        # -- 
+        self.dirty_tiles = set()  # Track tiles that need redrawing
+        self.tile_items = {}  # For optimized rendering
+        # -- 
+        self.scene = QGraphicsScene()
+        self.setScene(self.scene)
+        Tile._load_sprites()
+    def draw(self):
+        self.draw_grid()
+        self.draw_hud()
+    def draw_grid(self):        
+        if not self.dirty_tiles:  # Full redraw
+            self.scene.clear()
+            tiles_to_draw = [(x, y) for y in range(self.grid_height) for x in range(self.grid_width)]
+            #print("Full redraw: all tiles")
+        else:
+            self.scene.clear()  # Clear scene to remove stale sprites
+            tiles_to_draw = set(self.dirty_tiles)  # Start with dirty tiles (includes MoveEvent old positions)
+            # Add all tiles in the 7x7 viewport
+            px, py = self.player.x, self.player.y
+            view_range_x = range(-self.view_width // 2, self.view_width // 2 + 1)  # -3 to 3
+            view_range_y = range(-self.view_height // 2 - 1, self.view_height // 2)  # -4 to 2, adjusted for anchor
+            for dy in view_range_y:
+                for dx in view_range_x:
+                    # Reverse rotation to get world coordinates
+                    if self.rotation == 0:
+                        wx, wy = dx, dy
+                    elif self.rotation == 90:
+                        wx, wy = -dy, dx
+                    elif self.rotation == 180:
+                        wx, wy = -dx, -dy
+                    elif self.rotation == 270:
+                        wx, wy = dy, -dx
+                    x, y = px + wx, py + wy
+                    if 0 <= x < self.grid_width and 0 <= y < self.grid_height:
+                        tiles_to_draw.add((x, y))
+            tiles_to_draw = list(tiles_to_draw)
+            #print(f"Partial redraw: tiles_to_draw={tiles_to_draw}")
+
+        px, py = self.player.x, self.player.y
+        anchor_screen_x = (self.view_width // 2) * self.tile_size  # Center x
+        anchor_screen_y = (self.view_height - 2) * self.tile_size  # Player at y=5
+
+        player_rendered = False
+        for x, y in tiles_to_draw:
+            dx, dy = x - px, y - py
+            rx, ry = self.rotate_vector_for_camera(dx, dy)
+            screen_x = anchor_screen_x + rx * self.tile_size
+            screen_y = anchor_screen_y + ry * self.tile_size
+            # Relax bounds to include edge tiles
+            if (0 <= x < self.grid_width and 0 <= y < self.grid_height and 0 <= screen_x < self.view_width * self.tile_size and 0 <= screen_y < self.view_height * self.tile_size):
+                tile = self.map.get_tile(x, y)
+                if tile:
+                    if tile.current_char == self.player:
+                        if player_rendered:
+                            print(f"Warning: Multiple player renderings detected at ({x}, {y})")
+                        player_rendered = True
+                    tile.draw(self.scene, screen_x, screen_y, self.tile_size)
+        self.scene.setSceneRect(0, 0, self.view_width * self.tile_size, self.view_height * self.tile_size)
+        self.dirty_tiles.clear() 
+    def draw_hud(self):
+        oppacity = 180
+        hud_width = self.view_width * self.tile_size
+        hud_height = 50
+        hud_y = self.view_height * self.tile_size - hud_height
+        bar_width = (hud_width - 20) // 3
+        bar_height = 10
+        padding = 5
+
+        # HP Bar (Red)
+        hp_ratio = self.player.hp / self.player.max_hp
+        hp_bar = QGraphicsRectItem(10, hud_y + padding, bar_width * hp_ratio, bar_height)
+        hp_bar.setBrush(QColor(255,0,0,oppacity))
+        if hp_ratio<0.8: self.scene.addItem(hp_bar)
+
+        # Stamina Bar (Blue)
+        stamina_ratio = self.player.stamina / self.player.max_stamina
+        stamina_bar = QGraphicsRectItem(10 + bar_width + padding, hud_y + padding, bar_width * stamina_ratio, bar_height)
+        stamina_bar.setBrush(QColor(0,0,255,oppacity))
+        if stamina_ratio<0.8: self.scene.addItem(stamina_bar)
+
+        # Hunger Bar (Yellow)
+        hunger_ratio = self.player.hunger / self.player.max_hunger
+        hunger_bar = QGraphicsRectItem(10 + 2 * (bar_width + padding), hud_y + padding, bar_width * hunger_ratio, bar_height)
+        hunger_bar.setBrush(QColor(255,255,0,oppacity))
+        if hunger_ratio<0.8: self.scene.addItem(hunger_bar)
         
-    # -- players - players and allies are the same 
+        # North Arrow
+        arrow_size = 50  # Target size for scaling
+        arrow_x = hud_width / 2  # Desired center x-coordinate (middle of HUD)
+        arrow_y = 30  # Desired center y-coordinate
+        arrow_sprite = Tile.SPRITES.get("HUD_arrow", QPixmap())  # Get arrow sprite
+        if not arrow_sprite.isNull():
+            arrow_scaled = arrow_sprite.scaled(arrow_size, arrow_size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            arrow_item = QGraphicsPixmapItem(arrow_scaled)
+            # Rotate to point north (opposite of player rotation)
+            rotation_angle = -self.rotation
+            transform = QTransform().rotate(rotation_angle)
+            arrow_item.setTransform(transform)
+            # Calculate the center of the pixmap
+            center_x = arrow_scaled.width() / 2
+            center_y = arrow_scaled.height() / 2
+            # Convert rotation angle to radians
+            theta = math.radians(rotation_angle)
+            # Calculate the offset of the center after rotation
+            offset_x = center_x * math.cos(theta) - center_y * math.sin(theta)
+            offset_y = center_x * math.sin(theta) + center_y * math.cos(theta)
+            # Adjust position so the center of the pixmap is at (arrow_x, arrow_y)
+            adjusted_x = arrow_x - center_x - (center_x * (math.cos(theta) - 1) - center_y * math.sin(theta))
+            adjusted_y = arrow_y - center_y - (center_x * math.sin(theta) + center_y * (math.cos(theta) - 1))
+            arrow_item.setPos(adjusted_x, adjusted_y)
+            self.scene.addItem(arrow_item)
+        else:
+            print("Warning: Arrow sprite not found")
+    def rotate_vector_for_camera(self, dx, dy):
+        """ Rotation for drawing (camera)"""
+        if self.rotation == 0:
+            return dx, dy
+        elif self.rotation == 90:
+            return dy, -dx
+        elif self.rotation == 180:
+            return -dx, -dy
+        elif self.rotation == 270:
+            return -dy, dx    
+    def rotate_vector_for_movement(self, dx, dy):
+        """ Rotation for movement (world coordinates) """
+        if self.rotation == 0:
+            return dx, dy
+        elif self.rotation == 90:
+            return -dy, dx
+        elif self.rotation == 180:
+            return -dx, -dy
+        elif self.rotation == 270:
+            return dy, -dx            
+    def rotated_direction(self, dx, dy):
+        return self.rotate_vector_for_movement(dx, dy)
+
+class Game_PLAYERS:
+    def __init__(self):
+        self.turn = 0
+        self.current_day = 0
+        self.turns_per_day = 1000
+        self.low_hp_triggered = False  # Flag for low HP event
+        self.low_hunger_triggered = False  # Flag for low hunger event
+        self.last_encounter_description = ""
+        self.certificates = []
+        self.player = None 
+        self.current_player = None 
+        self.players = {} 
+        self.prior_next_index = 0
+        self.prior_next_players = []
     def add_player(self, key, **kwargs): # add a player or ally in dictionary 
         obj = Player(**kwargs)
         self.players.update({ key : obj })
@@ -191,74 +291,42 @@ class Game(QGraphicsView, Serializable):
             self.prior_next_players = [self.player.name]+[ key for key,value in iter(self.players.items()) if (value.party == False and value.current_map == self.current_map and (not value is self.player)) ]
         except:
             self.prior_next_players = []
-    
-    # -- overrides
-    def from_dict(self, dictionary):
-        if not super().from_dict(dictionary):
-            return False
-        if self.current_map in self.maps and self.player:
-            self.maps[self.current_map].place_character(self.player)
-        return True
-    
-    # -- gui helpers
-    def handle_media_status(self, status):
-        """Handle media status changes to start playback when loaded."""
-        if status == QMediaPlayer.LoadedMedia and not self.is_music_muted:
-            self.music_player.play()
-            print("Music started: Media loaded")
-        elif status == QMediaPlayer.InvalidMedia:
-            self.add_message("Music failed: Invalid media")
-            print("Music failed: Invalid media")
-    def toggle_music(self):
-        """Toggle music mute state."""
-        self.is_music_muted = not self.is_music_muted
-        if self.is_music_muted:
-            self.music_player.stop()
-            self.add_message("Music muted")
-        else:
-            # Check if media is loaded before playing
-            if self.music_player.mediaStatus() in (QMediaPlayer.LoadedMedia, QMediaPlayer.BufferedMedia):
-                self.music_player.play()
-                self.add_message("Music unmuted")
-            else:
-                self.add_message("Music not ready, will play when loaded")
-                print("Music not ready, waiting for LoadedMedia state")
-    def add_message(self, message, turns=15):
-        """Add a message to the queue."""
-        self.messages.append((message, turns))
-        # Update pop-up with all active messages
-        active_messages = [msg for msg, _ in self.messages]
-        self.message_popup.set_message(active_messages)
-    def update_messages(self):
-        """Update message queue and refresh pop-up."""
-        #print(f"Updating messages, current queue: {self.messages}")
-        if not self.messages:
-            self.message_popup.set_message([])
-            return
-        # Decrease turn counters and remove expired messages
-        self.messages = [(msg, turns - 1) for msg, turns in self.messages if turns > 1]
-        # Update pop-up with active messages
-        active_messages = [msg for msg, _ in self.messages]
-        self.message_popup.set_message(active_messages)
-    def update_inv_window(self):
-        if self.inventory_window: 
-            if self.inventory_window.isVisible():
-                self.inventory_window.update_inventory(self.player)
-                self.setFocus()
-    def take_note_on_diary(self):
-        if not self.journal_window:
-            self.journal_window = JournalWindow(self) 
-        if self.journal_window.isVisible():
-            self.journal_window.log_quick_diary_entry()
-        else:
-            self.journal_window.load_journal(self.current_slot)  # Refresh contents
-            self.journal_window.log_quick_diary_entry()
-            self.journal_window.show()
-            self.journal_window.update_position()
-        self.journal_window.save_journal()
-        self.setFocus()
-    
-    # -- map transition helpers
+    # --
+    def move_party(self):
+        for k,v in iter(self.players.items()):
+            if v is self.player: continue 
+            if not v.party: continue 
+            v.current_map = self.current_map
+    def release_party(self, diff_moves = CROSS_DIFF_MOVES_1x1):
+        print("releasing from party")
+        x = self.player.x 
+        y = self.player.y 
+        for dx,dy in diff_moves:
+            if not self.map.can_place_character_at(x+dx,y+dy): continue 
+            # if not self.map.is_adjacent_walkable_at(x+dx,y+dy): continue 
+            if dx == 0 and dy == 0: continue
+            for key,value in iter(self.players.items()):
+                if value.party:
+                    value.x = x+dx 
+                    value.y = y+dy 
+                    value.current_map = self.current_map # ? 
+                    value.party = False 
+                    self.map.place_character(value)
+                    self.draw()
+                    break 
+        self.update_prior_next_selection()
+    def count_party(self):
+        S = 0
+        for i in self.players:
+            if self.players[i].party == True:
+                S += 1
+        return S
+            
+class Game_MAPTRANSITION:
+    def __init__(self):
+        self.current_map = (0,0,0) # Current map coordinates
+        self.map = Map()
+        self.maps = {(0,0,0):self.map}  # Store Map objects with coordinate keys
     def player_new_x_y_horizontal(self, out_of_bounds_x, out_of_bounds_y):
         new_map_coord = None
         new_x = out_of_bounds_x
@@ -351,8 +419,6 @@ class Game(QGraphicsView, Serializable):
             if not b_placed:
                 char.x, char.y = self.map.width // 2, self.map.height // 2
                 self.map.place_character(char)
-    
-    # -- map transitions 
     def horizontal_map_transition(self,x,y):
         T1 = tic()
         self.events.clear()
@@ -373,27 +439,9 @@ class Game(QGraphicsView, Serializable):
         # check if the map already in self.maps
         map_type = random.choice(["procedural_lake", "procedural_field", "procedural_road", "procedural_forest"])
         #map_type = "procedural_lake" # debug 
-        
         self.map_transition(new_map_file, new_map_coord, map_type)
         # placing character to the new map 
         self.safely_place_character_to_new_map()
-        # if not self.map.place_character(self.player):
-            # print(f"Error: Failed to place player at ({self.player.x}, {self.player.y})")
-            # old_x = self.player.x
-            # old_y = self.player.y
-            # b_placed = False
-            # for dx,dy in SQUARE_DIFF_MOVES_5x5:
-                # tile = self.map.get_tile(old_x+dx , old_y+dy)
-                # if not tile: continue
-                # if self.map.is_adjacent_walkable(tile, old_x+dx, old_y+dy):
-                    # self.player.x = old_x+dx 
-                    # self.player.y = old_y+dy
-                    # if self.map.place_character(self.player): 
-                        # b_placed = True 
-                        # break 
-            # if not b_placed:
-                # self.player.x, self.player.y = self.map.width // 2, self.map.height // 2
-                # self.map.place_character(self.player)
         self.scene.clear()
         self.dirty_tiles.clear()
         self.draw_grid()
@@ -451,8 +499,16 @@ class Game(QGraphicsView, Serializable):
         self.draw_grid()
         self.draw_hud()
         toc(T1,"Game.vertical_map_transition() ||")
-    
-    # -- save and load from file - try to use the already created map    
+        
+class Game_DATA:
+    def __init__(self):
+        self.current_slot = 1  # Track current save slot
+    def from_dict(self, dictionary):
+        if not super().from_dict(dictionary):
+            return False
+        if self.current_map in self.maps and self.player:
+            self.maps[self.current_map].place_character(self.player)
+        return True
     def start_new_game(self, new_character_name = "Main Character", b_clear_players = True):
         """Reset the game to a new state."""
         self.scene.clear()
@@ -589,170 +645,61 @@ class Game(QGraphicsView, Serializable):
             self.journal_window = JournalWindow(self)
         self.journal_window.load_journal(slot)
         self.player.rotation = self.rotation 
-        
-    # -- viewport draws 
-    def draw(self):
-        self.draw_grid()
-        self.draw_hud()
-    def draw_grid(self):        
-        if not self.dirty_tiles:  # Full redraw
-            self.scene.clear()
-            tiles_to_draw = [(x, y) for y in range(self.grid_height) for x in range(self.grid_width)]
-            #print("Full redraw: all tiles")
+
+class Game_GUI:
+    def __init__(self):
+        self.setWindowFlags(Qt.FramelessWindowHint)
+        self.setFocusPolicy(Qt.StrongFocus)  # Ensure Game accepts focus
+        self.setWindowTitle("PyQt Rogue Like")
+        self.setFixedSize(self.view_width * self.tile_size, self.view_height * self.tile_size)
+        # --
+        self.inventory_window = None  # Initialize later on demand
+        # Initialize message window
+        self.message_popup = MessagePopup(self)  # Set Game as parent
+        self.messages = []  # List of (message, turns_remaining) tuples
+        # Add journal window
+        self.journal_window = None
+        # Initialize music player
+        self.music_player = None
+        self.load_random_music()
+    def add_message(self, message, turns=15):
+        """Add a message to the queue."""
+        self.messages.append((message, turns))
+        # Update pop-up with all active messages
+        active_messages = [msg for msg, _ in self.messages]
+        self.message_popup.set_message(active_messages)
+    def update_messages(self):
+        """Update message queue and refresh pop-up."""
+        #print(f"Updating messages, current queue: {self.messages}")
+        if not self.messages:
+            self.message_popup.set_message([])
+            return
+        # Decrease turn counters and remove expired messages
+        self.messages = [(msg, turns - 1) for msg, turns in self.messages if turns > 1]
+        # Update pop-up with active messages
+        active_messages = [msg for msg, _ in self.messages]
+        self.message_popup.set_message(active_messages)
+    def update_inv_window(self):
+        if self.inventory_window: 
+            if self.inventory_window.isVisible():
+                self.inventory_window.update_inventory(self.player)
+                self.setFocus()
+    def take_note_on_diary(self):
+        if not self.journal_window:
+            self.journal_window = JournalWindow(self) 
+        if self.journal_window.isVisible():
+            self.journal_window.log_quick_diary_entry()
         else:
-            self.scene.clear()  # Clear scene to remove stale sprites
-            tiles_to_draw = set(self.dirty_tiles)  # Start with dirty tiles (includes MoveEvent old positions)
-            # Add all tiles in the 7x7 viewport
-            px, py = self.player.x, self.player.y
-            view_range_x = range(-self.view_width // 2, self.view_width // 2 + 1)  # -3 to 3
-            view_range_y = range(-self.view_height // 2 - 1, self.view_height // 2)  # -4 to 2, adjusted for anchor
-            for dy in view_range_y:
-                for dx in view_range_x:
-                    # Reverse rotation to get world coordinates
-                    if self.rotation == 0:
-                        wx, wy = dx, dy
-                    elif self.rotation == 90:
-                        wx, wy = -dy, dx
-                    elif self.rotation == 180:
-                        wx, wy = -dx, -dy
-                    elif self.rotation == 270:
-                        wx, wy = dy, -dx
-                    x, y = px + wx, py + wy
-                    if 0 <= x < self.grid_width and 0 <= y < self.grid_height:
-                        tiles_to_draw.add((x, y))
-            tiles_to_draw = list(tiles_to_draw)
-            #print(f"Partial redraw: tiles_to_draw={tiles_to_draw}")
-
-        px, py = self.player.x, self.player.y
-        anchor_screen_x = (self.view_width // 2) * self.tile_size  # Center x
-        anchor_screen_y = (self.view_height - 2) * self.tile_size  # Player at y=5
-
-        player_rendered = False
-        for x, y in tiles_to_draw:
-            dx, dy = x - px, y - py
-            rx, ry = self.rotate_vector_for_camera(dx, dy)
-            screen_x = anchor_screen_x + rx * self.tile_size
-            screen_y = anchor_screen_y + ry * self.tile_size
-            # Relax bounds to include edge tiles
-            if (0 <= x < self.grid_width and 0 <= y < self.grid_height and 0 <= screen_x < self.view_width * self.tile_size and 0 <= screen_y < self.view_height * self.tile_size):
-                tile = self.map.get_tile(x, y)
-                if tile:
-                    if tile.current_char == self.player:
-                        if player_rendered:
-                            print(f"Warning: Multiple player renderings detected at ({x}, {y})")
-                        player_rendered = True
-                    tile.draw(self.scene, screen_x, screen_y, self.tile_size)
-        self.scene.setSceneRect(0, 0, self.view_width * self.tile_size, self.view_height * self.tile_size)
-        self.dirty_tiles.clear() 
-    def draw_hud(self):
-        oppacity = 180
-        hud_width = self.view_width * self.tile_size
-        hud_height = 50
-        hud_y = self.view_height * self.tile_size - hud_height
-        bar_width = (hud_width - 20) // 3
-        bar_height = 10
-        padding = 5
-
-        # HP Bar (Red)
-        hp_ratio = self.player.hp / self.player.max_hp
-        hp_bar = QGraphicsRectItem(10, hud_y + padding, bar_width * hp_ratio, bar_height)
-        hp_bar.setBrush(QColor(255,0,0,oppacity))
-        if hp_ratio<0.8: self.scene.addItem(hp_bar)
-
-        # Stamina Bar (Blue)
-        stamina_ratio = self.player.stamina / self.player.max_stamina
-        stamina_bar = QGraphicsRectItem(10 + bar_width + padding, hud_y + padding, bar_width * stamina_ratio, bar_height)
-        stamina_bar.setBrush(QColor(0,0,255,oppacity))
-        if stamina_ratio<0.8: self.scene.addItem(stamina_bar)
-
-        # Hunger Bar (Yellow)
-        hunger_ratio = self.player.hunger / self.player.max_hunger
-        hunger_bar = QGraphicsRectItem(10 + 2 * (bar_width + padding), hud_y + padding, bar_width * hunger_ratio, bar_height)
-        hunger_bar.setBrush(QColor(255,255,0,oppacity))
-        if hunger_ratio<0.8: self.scene.addItem(hunger_bar)
-        
-        # North Arrow
-        arrow_size = 50  # Target size for scaling
-        arrow_x = hud_width / 2  # Desired center x-coordinate (middle of HUD)
-        arrow_y = 30  # Desired center y-coordinate
-        arrow_sprite = Tile.SPRITES.get("HUD_arrow", QPixmap())  # Get arrow sprite
-        if not arrow_sprite.isNull():
-            arrow_scaled = arrow_sprite.scaled(arrow_size, arrow_size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-            arrow_item = QGraphicsPixmapItem(arrow_scaled)
-            # Rotate to point north (opposite of player rotation)
-            rotation_angle = -self.rotation
-            transform = QTransform().rotate(rotation_angle)
-            arrow_item.setTransform(transform)
-            # Calculate the center of the pixmap
-            center_x = arrow_scaled.width() / 2
-            center_y = arrow_scaled.height() / 2
-            # Convert rotation angle to radians
-            theta = math.radians(rotation_angle)
-            # Calculate the offset of the center after rotation
-            offset_x = center_x * math.cos(theta) - center_y * math.sin(theta)
-            offset_y = center_x * math.sin(theta) + center_y * math.cos(theta)
-            # Adjust position so the center of the pixmap is at (arrow_x, arrow_y)
-            adjusted_x = arrow_x - center_x - (center_x * (math.cos(theta) - 1) - center_y * math.sin(theta))
-            adjusted_y = arrow_y - center_y - (center_x * math.sin(theta) + center_y * (math.cos(theta) - 1))
-            arrow_item.setPos(adjusted_x, adjusted_y)
-            self.scene.addItem(arrow_item)
-        else:
-            print("Warning: Arrow sprite not found")
-    def rotate_vector_for_camera(self, dx, dy):
-        """ Rotation for drawing (camera)"""
-        if self.rotation == 0:
-            return dx, dy
-        elif self.rotation == 90:
-            return dy, -dx
-        elif self.rotation == 180:
-            return -dx, -dy
-        elif self.rotation == 270:
-            return -dy, dx    
-    def rotate_vector_for_movement(self, dx, dy):
-        """ Rotation for movement (world coordinates) """
-        if self.rotation == 0:
-            return dx, dy
-        elif self.rotation == 90:
-            return -dy, dx
-        elif self.rotation == 180:
-            return -dx, -dy
-        elif self.rotation == 270:
-            return dy, -dx            
-    def rotated_direction(self, dx, dy):
-        return self.rotate_vector_for_movement(dx, dy)
-    
-    # --
-    def move_party(self):
-        for k,v in iter(self.players.items()):
-            if v is self.player: continue 
-            if not v.party: continue 
-            v.current_map = self.current_map
-    def release_party(self, diff_moves = CROSS_DIFF_MOVES_1x1):
-        print("releasing from party")
-        x = self.player.x 
-        y = self.player.y 
-        for dx,dy in diff_moves:
-            if not self.map.can_place_character_at(x+dx,y+dy): continue 
-            # if not self.map.is_adjacent_walkable_at(x+dx,y+dy): continue 
-            if dx == 0 and dy == 0: continue
-            for key,value in iter(self.players.items()):
-                if value.party:
-                    value.x = x+dx 
-                    value.y = y+dy 
-                    value.current_map = self.current_map # ? 
-                    value.party = False 
-                    self.map.place_character(value)
-                    self.draw()
-                    break 
-        self.update_prior_next_selection()
-    def count_party(self):
-        S = 0
-        for i in self.players:
-            if self.players[i].party == True:
-                S += 1
-        return S
-    
-    # -- game iteration 
+            self.journal_window.load_journal(self.current_slot)  # Refresh contents
+            self.journal_window.log_quick_diary_entry()
+            self.journal_window.show()
+            self.journal_window.update_position()
+        self.journal_window.save_journal()
+        self.setFocus()
+            
+class Game_ITERATION:
+    def __init__(self):
+        self.events = []  # Initialize events list
     def game_iteration(self):
         self.turn += 1
         self.Event_NewTurn()
@@ -803,8 +750,128 @@ class Game(QGraphicsView, Serializable):
     def update_buildings(self):
         for b in self.map.buildings:
             b.update()
-                          
-    # -- Qt Events
+    def Event_NewTurn(self):
+        # triggers the new day
+        # print(f"Turn {self.turn}")
+        if self.turn // self.turns_per_day + 1 > self.current_day:
+            self.current_day += 1
+            self.Event_NewDay()
+        if self.turn % 5 == 0: # refresh some variables 
+            self.last_encounter_description = ""
+        if self.turn % 100 == 0:
+            self.add_message(f"Day : {self.current_day} Turn : {self.turn}")
+    def Event_NewDay(self):
+        print(f"Day {self.current_day}")
+        self.player.days_survived += 1
+        if self.current_day == 5:
+            self.journal_window.append_text("(Skill - 5 days) I'm in full shape now, I'm feeling agile, use Ctrl to dodge and move two tiles backward ...") 
+        if self.current_day == 20:
+            self.journal_window.append_text("(Skill - 20 days) My body remembered how to use a sword properly, now I can perform deadly blows with F key. Whenever the enemy stay in L position like a knight chess I can swing my sword hit taking him off-guard ...") 
+    def Event_PlayerDeath(self):
+        # SANITY COMMENTS
+        # 1. If there is other characters on the map or on the party you still can load the save if you don't change the map. 
+        # 2. Travelling Alone will result in losing the Character on Death, you can't load the game. 
+        # 3. If you change the map before you load you will lose the character, because the game saves on map transition. 
+        
+        # DSL Logic 
+        # 1. Player Death () || Release Party | Drop on Death | Remove the Character | % Has Other Characters on the Map | % else 
+        # -> Player Death () || ... | % Has Other Characters on the Map || Take Control of Next Character on the Map 
+        # -> Player Death () || ... | % Has Other Characters on the Map | % else || Start New Game and Saves  
+        
+        print("Game Over!")
+        self.release_party(SQUARE_DIFF_MOVES_5x5)
+        self.player.drop_on_death()
+        if self.player.name in self.players.keys():
+            print("Removing :",self.player.name)
+            self.players.pop(self.player.name)
+        self.map.remove_character(self.player)
+        
+        # -- 
+        if len(self.players) > 0: # Has Other Characters on the Map
+            for k,v in iter(self.players.items()):
+                # take control of the first valid character 
+                if k and v and isinstance(v, Player):
+                    self.set_player(v.name)
+                    self.draw()
+                    break 
+        else:
+            self.add_message("You died, starting new game")
+            self.start_new_game(new_character_name = self.current_player, b_clear_players = False)
+            self.save_current_game(slot = self.current_slot)
+    def Event_DoAttack(self, event):
+        primary = self.player.primary_hand
+        # swords have the parry property in the player perspective, they will try to consume the stamina first 
+        if event.target is self.player: # player being attacked
+            self.last_encounter_description = getattr(event.attacker,"description")
+            primary_attacker = event.attacker.primary_hand 
+            if primary and primary_attacker:
+                if isinstance(primary, Sword):
+                    print(f"Defense Factor : {self.player.calculate_defense_factor():.5f}")
+                    if random.random() < primary.get_player_parry_chance(self.player, event.attacker, event.damage) + self.player.calculate_defense_factor():
+                        self.add_message(f"You parry the incoming attack ...")
+                        self.player.stamina -= event.damage
+                    else:
+                        self.add_message(f"You've being hit, your foe is skilled in sword combat ...")
+                        self.player.hp -= event.damage
+                else: 
+                    self.player.hp -= event.damage
+            else:
+                self.player.hp -= event.damage            
+        else: # player attack
+            if hasattr(event.target, "description"): self.last_encounter_description = getattr(event.target,"description")
+            event.target.hp -= event.damage
+            if self.player is event.attacker:
+                self.add_message(f"{event.attacker.name} deals {event.damage:.1f} damage to {event.target.name}")
+            if primary:
+                if isinstance(primary, Weapon):
+                    primary.stats_update(self.player)
+                    self.update_inv_window()
+        # in case of death 
+        if event.target.hp <= 0:
+            self.Event_CharacterDeath(event)
+    def Event_CharacterDeath(self, event):
+        if event.target is self.player:
+            self.Event_PlayerDeath()
+            self.update_prior_next_selection()
+        else:
+            event.target.drop_on_death()
+            if event.target in self.map.enemies:
+                self.map.enemies.remove(event.target)
+            if event.target.name in self.players.keys():
+                print("Removing :",event.target.name)
+                self.players.pop(event.target.name)
+                self.update_prior_next_selection()
+            event.target.current_tile.current_char = None
+            
+# Main Window Class 
+class Game(QGraphicsView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_PLAYERS, Game_MAPTRANSITION, Game_DATA, Game_GUI, Game_ITERATION):
+    __serialize_only__ = [
+        "version",
+        "rotation",
+        "players",
+        "current_map", # map coords
+        "turn",
+        "current_slot",
+        "low_hp_triggered",
+        "low_hunger_triggered",
+        "current_day",
+        "is_music_muted",
+        "current_player",
+        "certificates"
+    ]
+    def __init__(self):
+        QGraphicsView.__init__(self)
+        Serializable.__init__(self)
+        Game_VIEWPORT.__init__(self)
+        Game_SOUNDMANAGER.__init__(self)
+        Game_PLAYERS.__init__(self)
+        Game_MAPTRANSITION.__init__(self)
+        Game_DATA.__init__(self)
+        Game_GUI.__init__(self)
+        Game_ITERATION.__init__(self)
+        self.alt_pressed = False
+        self.version = "1.0.0"
+        self.load_current_game()
     def closeEvent(self, event):
         """Save the game state when the window is closed."""
         try:
@@ -1171,100 +1238,4 @@ class Game(QGraphicsView, Serializable):
                         self.dirty_tiles.add((self.player.x, self.player.y))    
             self.game_iteration()
     
-    # -- Reactive Events Handlers
-    def Event_NewTurn(self):
-        # triggers the new day
-        # print(f"Turn {self.turn}")
-        if self.turn // self.turns_per_day + 1 > self.current_day:
-            self.current_day += 1
-            self.Event_NewDay()
-        if self.turn % 5 == 0: # refresh some variables 
-            self.last_encounter_description = ""
-        if self.turn % 100 == 0:
-            self.add_message(f"Day : {self.current_day} Turn : {self.turn}")
-    def Event_NewDay(self):
-        print(f"Day {self.current_day}")
-        self.player.days_survived += 1
-        if self.current_day == 5:
-            self.journal_window.append_text("(Skill - 5 days) I'm in full shape now, I'm feeling agile, use Ctrl to dodge and move two tiles backward ...") 
-        if self.current_day == 20:
-            self.journal_window.append_text("(Skill - 20 days) My body remembered how to use a sword properly, now I can perform deadly blows with F key. Whenever the enemy stay in L position like a knight chess I can swing my sword hit taking him off-guard ...") 
-    def Event_PlayerDeath(self):
-        # SANITY COMMENTS
-        # 1. You lose your character on death and drop all items
-        # 2. The map keeps the same, you must delete the maps on saves folder to start a full fresh game.
-        # 3. If there is no characters on self.players then the game will start a new game character
-        # 4. If there is characters on self.players then the game will try to take control of that character (what would happen if the character is on other map?)
-        # 5. ... The game will try to load with that character set 
-        # 6. Garrisoned Characters will not be available on death, but will stay saved on building map. 
-        print("Game Over!")
-        self.player.drop_on_death()
-        if self.player.name in self.players.keys():
-            print("Removing :",self.player.name)
-            self.players.pop(self.player.name)
-        self.player.current_tile.current_char = None
-        self.release_party(SQUARE_DIFF_MOVES_5x5)
-        # -- 
-        if len(self.players) <= 0:
-            try:
-                self.add_message("You died, starting new game")
-                self.start_new_game()
-            except FileNotFoundError:
-                self.add_message("No Save File Found, Starting New Game")
-                self.start_new_game()
-            except Exception as e:
-                self.add_message(f"Error Reloading Game: {e}, Starting New Game")
-                self.start_new_game()
-        else:
-            for k,v in iter(self.players.items()):
-                if isinstance(v, Player):
-                    self.set_player(v.name)
-                    self.load_current_game(slot = self.current_slot)
-                    self.draw()
-                    break 
-    def Event_DoAttack(self, event):
-        primary = self.player.primary_hand
-        # swords have the parry property in the player perspective, they will try to consume the stamina first 
-        if event.target is self.player: # player being attacked
-            self.last_encounter_description = getattr(event.attacker,"description")
-            primary_attacker = event.attacker.primary_hand 
-            if primary and primary_attacker:
-                if isinstance(primary, Sword):
-                    print(f"Defense Factor : {self.player.calculate_defense_factor():.5f}")
-                    if random.random() < primary.get_player_parry_chance(self.player, event.attacker, event.damage) + self.player.calculate_defense_factor():
-                        self.add_message(f"You parry the incoming attack ...")
-                        self.player.stamina -= event.damage
-                    else:
-                        self.add_message(f"You've being hit, your foe is skilled in sword combat ...")
-                        self.player.hp -= event.damage
-                else: 
-                    self.player.hp -= event.damage
-            else:
-                self.player.hp -= event.damage            
-        else: # player attack
-            if hasattr(event.target, "description"): self.last_encounter_description = getattr(event.target,"description")
-            event.target.hp -= event.damage
-            if self.player is event.attacker:
-                self.add_message(f"{event.attacker.name} deals {event.damage:.1f} damage to {event.target.name}")
-            if primary:
-                if isinstance(primary, Weapon):
-                    primary.stats_update(self.player)
-                    self.update_inv_window()
-        # in case of death 
-        if event.target.hp <= 0:
-            self.Event_CharacterDeath(event)
-    def Event_CharacterDeath(self, event):
-        if event.target is self.player:
-            self.Event_PlayerDeath()
-            self.update_prior_next_selection()
-        else:
-            event.target.drop_on_death()
-            if event.target in self.map.enemies:
-                self.map.enemies.remove(event.target)
-            if event.target.name in self.players.keys():
-                print("Removing :",event.target.name)
-                self.players.pop(event.target.name)
-                self.update_prior_next_selection()
-            event.target.current_tile.current_char = None
-            
 # --- END 

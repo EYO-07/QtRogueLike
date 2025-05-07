@@ -444,7 +444,7 @@ class SelectionBox(QWidget):
         if not item: 
             item = self.list_widget.currentItem()
         self.action(self.current_key, item.text(),self, **self.kw)
-            
+        
 class InventoryWindow(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -622,7 +622,7 @@ class InventoryWindow(QDialog):
         if item:
             wdg_index = self.list_widget.row(item)
             game_item = self.list_widget_objects[wdg_index]
-            ply_index = self.player.getItemIndex(game_item)           
+            ply_index = self.player.get_item_index(game_item)           
             # print("equip_item()* || ... |", ply_index, wdg_index)
             if ply_index == wdg_index: # not equipped 
                 if isinstance(game_item, Equippable):

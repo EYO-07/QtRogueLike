@@ -5,7 +5,9 @@ def Generate_Square_Diffs(radius=3):
     return [ (x,y) for y in range(-radius+1,radius) for x in range(-radius+1,radius) ]
     
 def d(a,b = None): # float dice 
-    if not b:
+    if (a is None) and (b is None):
+        return random.random()
+    if b is None:
         return random.uniform(1,a)
     else:
         return random.uniform(a,b)
@@ -31,7 +33,10 @@ PLAYER_MAX_HP = 100
 PLAYER_MAX_STAMINA = 200
 PLAYER_MAX_HUNGER = 1000
 
+PROD_INV_FACTOR = 100.0 
+
 # cached diff moves 
+ADJACENT_DIFF_MOVES = [(1, 0), (-1, 0), (0, 1), (0, -1), (0, 0)]
 CHESS_KNIGHT_DIFF_MOVES = [
     (2, 1), (2, -1), (-2, 1), (-2, -1),
     (1, 2), (1, -2), (-1, 2), (-1, -2)
