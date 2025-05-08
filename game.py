@@ -256,6 +256,11 @@ class Game_PLAYERS:
         self.players.update({ key : obj })
         self.update_prior_next_selection()
         return obj 
+    def add_hero(self, key, **kwargs):
+        obj = Hero(**kwargs)
+        self.players.update({ key : obj })
+        self.update_prior_next_selection()
+        return obj 
     def set_player(self, name): # set the Game.player by dictionary name  
         self.player = self.players[name]
         self.current_player = name 
@@ -709,7 +714,7 @@ class Game_ITERATION:
         self.update_buildings()
         self.update_messages() # Critical: Update message window 
         self.draw()
-    def process_events(self):
+    def process_events(self): # delayed events 
         """Process events and trigger autosave for significant changes."""
         for event in sorted(self.events, key=lambda e: getattr(e, 'priority', 0)):
             if isinstance(event, AttackEvent):

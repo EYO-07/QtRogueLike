@@ -18,6 +18,9 @@ from PyQt5.QtGui import QPixmap, QPainter
 from PyQt5.QtWidgets import QGraphicsPixmapItem, QInputDialog
 import noise  # Use python-perlin-noise instead of pynoise
 
+TRANSPARENT_IMAGE = QPixmap(TILE_SIZE,TILE_SIZE)
+TRANSPARENT_IMAGE.fill(Qt.transparent)
+
 def is_enemy_of(char1, char2):
     if isinstance(char1, Player) and isinstance(char2, Player): return False 
     if isinstance(char1, Enemy) and isinstance(char2, Enemy): return False 
@@ -40,12 +43,12 @@ class Entity: # Interface : distance and painting on tile
     def get_sprite(self):
         if not self.sprite: 
             print(f"Warning: {self} sprite not found")
-            return QPixmap()
+            return TRANSPARENT_IMAGE 
         try:
             return Tile.SPRITES[self.sprite]
         except KeyError:
             print(f"Warning: {self} sprite not found")
-            return QPixmap()  # Fallback    
+            return TRANSPARENT_IMAGE # Fallback    
     def paint_to(self, painter):
         painter.drawPixmap(0, 0, self.get_sprite())
     def distance(self, entity):
@@ -226,7 +229,7 @@ class SpecialSkillWeapon: # Interface : use special skills
         return False     
 
 class Item(Serializable, Entity): # Primitive
-    __serialize_only__ = ["name","description","weight","sprite"]
+    __serialize_only__ = Entity.__serialize_only__ + ["name","description","weight"]
     def __init__(self, name="", description="", weight=1, sprite="item"):
         super().__init__()
         self.name = name
@@ -235,7 +238,10 @@ class Item(Serializable, Entity): # Primitive
         self.sprite = sprite
     def __str__(self):
         return f"{self.name} ({self.weight}kg): {self.description}"
-
+    def paint_to(self, painter, item_list=None):
+        if not item_list: return super().paint_to()
+        if len(item_list)<=1: return super().paint_to()
+        
 # Usable.use() || { Character.remove_item() } || {}
 class Usable(Item): # Interface : use item
     __serialize_only__ = Item.__serialize_only__+["uses"]
@@ -252,7 +258,7 @@ class Container(Serializable): # Primitive
     def __init__(self, current_char = None):
         super().__init__()
         self.items = []
-        self.current_char = current_char
+        self.current_char = current_char # necessary ? 
     def get_item_index(self, item):
         for index, i in enumerate(self.items):
             if item is i:
@@ -703,7 +709,7 @@ class Player(Character, RegenerativeCharacter): # player or playable npc
     def move(self, dx, dy, game_map):
         if self.stamina >= 10:
             moved = super().move(dx, dy, game_map)
-            if moved: self.stamina -= 4
+            if moved: self.stamina -= self.current_tile.get_stamina_consumption()
             return moved
         return False
     def generate_initial_items(self):
@@ -886,7 +892,7 @@ class Bear(Enemy):
 class Tile(Container):
     SPRITES = {}  # Class-level sprite cache
     list_sprites_names = list(SPRITE_NAMES)
-    __serialize_only__ = ["items", "walkable", "blocks_sight", "default_sprite_key", "stair", "stair_x", "stair_y", "cosmetic_layer_sprite_keys"]
+    __serialize_only__ = Container.__serialize_only__ + ["walkable", "blocks_sight", "default_sprite_key", "stair", "stair_x", "stair_y", "cosmetic_layer_sprite_keys", "stamina_consumption"]
     def __init__(self, walkable=True, sprite_key="grass"):
         super().__init__()
         self._load_sprites()
@@ -898,11 +904,11 @@ class Tile(Container):
         self.combined_sprite = None # is the final sprite rendered 
         # --
         self.current_char = None 
+        self.stamina_consumption = 4.0 
         # -- 
         self.stair = None # used to store a tuple map coord to connect between maps 
         self.stair_x = None # points to the stair tile from the map with coord self.stair
         self.stair_y = None # points to the stair tile from the map with coord self.stair 
-    
     def add_layer(self, sprite_key):
         self.cosmetic_layer_sprite_keys.append( sprite_key )
     def remove_layer(self, sprite_key = None):
@@ -910,7 +916,11 @@ class Tile(Container):
             self.cosmetic_layer_sprite_keys.clear()
             return 
         self.cosmetic_layer_sprite_keys.remove( sprite_key )
-        
+    def paint_items(self, painter):
+        if len(self.items) == 0: return 
+        if len(self.items) == 1: self.items[0].paint_to(painter)
+        if len(self.items) > 1:
+            painter.drawPixmap(0, 0, Tile.SPRITES.get("sack", base))
     def draw(self, scene, x, y, tile_size = TILE_SIZE):
         # BEGIN Painter
         combined = QPixmap(tile_size, tile_size) # will be changed with QPainter 
@@ -921,16 +931,10 @@ class Tile(Container):
         painter.drawPixmap(0, 0, base)
         for sprite_key in self.cosmetic_layer_sprite_keys:
             painter.drawPixmap(0, 0, Tile.SPRITES.get(sprite_key, base) )
-        # -- Char Paint or Item Paint
-        if self.current_char:
-            self.current_char.paint_to(painter)
-        elif self.items:
-            if len(self.items) > 1:
-                item_sprite = Tile.SPRITES.get("sack", base)
-            else:
-                item_sprite = Tile.SPRITES.get(self.items[0].sprite, base)
-            if not item_sprite.isNull():
-                painter.drawPixmap(0, 0, item_sprite)
+        # -- paint items 
+        self.paint_items(painter) 
+        # -- Char Paint 
+        if self.current_char: self.current_char.paint_to(painter) 
         # END Painter 
         painter.end()
         self.combined_sprite = combined
@@ -938,11 +942,16 @@ class Tile(Container):
         item = QGraphicsPixmapItem(self.combined_sprite)
         item.setPos(x, y)
         scene.addItem(item)
-        
     def can_place_character(self):
         return self.walkable and (not self.current_char )
+    def get_default_pixmap(self):
+        return self.SPRITES.get(self.default_sprite_key, QPixmap())
+    def add_cosmetic_sprite(self, sprite_key = None):
+        if not sprite_key: return 
+        self.cosmetic_layer_sprite_keys.append(sprite_key)
+    def get_stamina_consumption(self):
+        return self.stamina_consumption
 
-    # sprites handling 
     @classmethod
     def _try_load(cls, key):
         # cls.SPRITES will store the sprites in memory 
@@ -958,20 +967,17 @@ class Tile(Container):
         if not cls.SPRITES:
             for key in cls.list_sprites_names: cls._try_load(key)
         
-    def get_default_pixmap(self):
-        return self.SPRITES.get(self.default_sprite_key, QPixmap())
-
-    def add_cosmetic_sprite(self, sprite_key = None):
-        if not sprite_key: return 
-        self.cosmetic_layer_sprite_keys.append(sprite_key)
-
 class ActionTile(Tile): # tile which the player can interact - interface class
-    def __init__(self, front_sprite, walkable=True, sprite_key="grass"):
+    def __init__(self, front_sprite = "stair_up", walkable=True, sprite_key="grass"):
         super().__init__(walkable=walkable, sprite_key=sprite_key)
         self.add_layer( front_sprite )
 
 class Stair(ActionTile): # not used yet 
-    pass 
+    def __init__(self, front_sprite = "stair_up", walkable=True, sprite_key="grass"):
+        super().__init__(front_sprite = front_sprite, walkable = walkable, sprite_key = sprite_key)
+        self.stair = None # used to store a tuple map coord to connect between maps 
+        self.stair_x = None # points to the stair tile from the map with coord self.stair
+        self.stair_y = None # points to the stair tile from the map with coord self.stair 
     
 # TileBuilding.production() || { TileBuilding.villagers() } || {}
 # TileBuilding.update() || { TileBuilding.production() } || { TileBuilding.villagers() }
@@ -1014,26 +1020,15 @@ class TileBuilding(ActionTile): # interface class
         pass 
     def retrieve_stone(self, game, quantity = 500):
         pass 
-    def store_resource(self, res, game_instance):
-        if isinstance(res, Food):
-            self.food += res.nutrition 
-            game_instance.player.remove_item(res)
-        elif res.type == "wood":
-            self.wood += res.value
-            game_instance.player.remove_item(res)
-        elif res.type == "stone":
-            self.stone += res.value
-            game_instance.player.remove_item(res)
-        elif res.type == "metal":
-            self.metal += res.value
-            game_instance.player.remove_item(res)
+    def store_resource(self, res, char):
+        if isinstance(res, Resource): res.store(char, self)
     def menu_garrison(self, current_menu, current_item, menu_instance, game_instance):
         """ return True means that the menu should close """
         if not hasattr( self,"heroes" ): return False # not meant to be used without that attribute 
         # -- select and build the menu garrison on runtime
-        if current_item == "Garrison >":
-            menu_instance.add_list("Garrison >",[ "Garrison+", "Garrison-", ".." ])
-            menu_instance.set_list("Garrison >")
+        if current_item == "Garrison >": 
+            menu_instance.set_list("Garrison >", [ "Garrison+", "Garrison-", ".." ])
+            return False # necessary ? 
         # --
         if current_menu == "Garrison >":
             if current_item == "..":
@@ -1048,8 +1043,7 @@ class TileBuilding(ActionTile): # interface class
                     return True 
             if current_item == "Garrison-":
                 if len( list( self.heroes.keys()) )>0:
-                    menu_instance.add_list("Garrison-", self.heroes)
-                    menu_instance.set_list("Garrison-")
+                    menu_instance.set_list("Garrison-", self.heroes)
                     return False
         if current_menu == "Garrison-":
             if current_item:
@@ -1088,32 +1082,33 @@ class TileBuilding(ActionTile): # interface class
         resources = { f"{counter[0]}. {info(e)[0]}" : e for e in game_instance.player.items if resource_counter(e, counter) }
         # -- 
         if current_item == "Resources >":
-            menu_instance.add_list("Resources >",[ f"-> food: {self.food:.0f}", f"-> wood: {self.wood:.0f}", "Resources+", "Resources++", "Food-", "Wood-", ".." ])
-            menu_instance.set_list("Resources >")
+            menu_instance.set_list("Resources >",[ f"-> food: {self.food:.0f}", f"-> wood: {self.wood:.0f}", "Resources+", "Resources++", "Food-", "Wood-", ".." ])
+            return False 
         # -- 
         if current_menu == "Resources >":
-            if current_item == "..":
-                menu_instance.set_list()
-                return False
-            if current_item == "Resources+": 
-                if len(resources) >0:
-                    menu_instance.add_list("Resources+", list(resources.keys()) )
-                    menu_instance.set_list("Resources+")
-            if current_item == "Resources++": 
-                if len(resources) >0:
-                    for k,v in iter(resources.items()):
-                        self.store_resource(v, game_instance)
-                    game_instance.update_inv_window()
-                    return True 
-            if current_item == "Food-":
-                if self.retrieve_food(game_instance):
-                    return True 
-            if current_item == "Wood-":
-                if self.retrieve_wood(game_instance):
-                    return True 
+            match item:
+                case "..":
+                    menu_instance.set_list()
+                    return False
+                case "Resources+":
+                    if len(resources) > 0:
+                        menu_instance.set_list("Resources+", list(resources.keys()))
+                        return False # necessary ? 
+                case "Resources++":
+                    if len(resources) > 0:
+                        for k,v in iter(resources.items()):
+                            self.store_resource(v, game_instance.player)
+                        game_instance.update_inv_window()
+                        return True 
+                case "Food-":
+                    if self.retrieve_food(game_instance):
+                        return True 
+                case "Wood-":
+                    if self.retrieve_wood(game_instance):
+                        return True 
         if current_menu == "Resources+":
             res_obj = resources[current_item]
-            self.store_resource(res_obj, game_instance)
+            self.store_resource(res_obj, game_instance.player)
             game_instance.update_inv_window()
             return True 
         return False 
@@ -1159,7 +1154,7 @@ class Castle(TileBuilding):
                     return 
             if "New Hero" in current_item:
                 if self.food >= 2000:
-                    if self.new_npc(game_instance):
+                    if self.new_hero(game_instance):
                         self.num_heroes += 1
                         self.food -= 2000 
                 else:
@@ -1187,7 +1182,7 @@ class Castle(TileBuilding):
             "Guard Tower (2000 Wood, 2500 Food)",
             "Exit"
         ]
-    def new_npc(self, game_instance):
+    def new_hero(self, game_instance):
         dx, dy = game_instance.player.get_forward_direction()
         player = game_instance.player 
         spawn_tile = game_instance.map.get_tile(player.x+dx, player.y + dy)
@@ -1201,8 +1196,8 @@ class Castle(TileBuilding):
         if new_name:
             npc_name = new_name[0]
         if not npc_name:
-            npc_name = "NPC_"+str(random.randint(0,9))+str(random.randint(0,9))+str(random.randint(0,9))+str(random.randint(0,9))+str(random.randint(0,9))
-        game_instance.add_player(
+            npc_name = "Hero_"+rn(7)
+        game_instance.add_hero(
             key = npc_name, 
             name = npc_name, 
             x = game_instance.player.x+dx, 
@@ -1359,6 +1354,7 @@ class GuardTower(TileBuilding):
         )
         npc_obj.equip_item( Sword(name="Long_Sword", damage=7, durability_factor=0.9995), "primary_hand" )
         npc_obj.hunger = npc_obj.max_hunger
+        npc_obj.can_use_thrust_skill = True 
         game_instance.place_players()
         game_instance.dirty_tiles.add((game_instance.player.x+dx, game_instance.player.y+dy))
         game_instance.draw()
@@ -1386,6 +1382,8 @@ class GuardTower(TileBuilding):
         )
         npc_obj.equip_item( Sword(name="Long_Sword", damage=8.5, durability_factor=0.9995), "primary_hand" )
         npc_obj.hunger = npc_obj.max_hunger
+        npc_obj.can_use_thrust_skill = True 
+        npc_obj.can_use_knight_skill = True 
         game_instance.place_players()
         game_instance.dirty_tiles.add((game_instance.player.x+dx, game_instance.player.y+dy))
         game_instance.draw()

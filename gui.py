@@ -366,6 +366,8 @@ class SelectionBox(QWidget):
         self.current_key = "main"
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setWindowOpacity(0.7)  # 70% opaque, like MessagePopup
+        self.setWindowModality(Qt.ApplicationModal)  # This is the trick!
+        self.setFocusPolicy(Qt.StrongFocus)          # Accepts focus
         self.layout = QVBoxLayout()
         self.layout.setContentsMargins(10, 10, 10, 10)
         self.layout.setSpacing(5)
@@ -398,9 +400,10 @@ class SelectionBox(QWidget):
         self.list_widget.setFocus()
     def get_current_list(self):
         return self.current_key
-    def add_list(self, key,item_list):
+    def add_list(self, key, item_list):
         self.list_dictionary.update({key:item_list})
-    def set_list(self,key = "main"):
+    def set_list(self, key = "main", item_list = None):
+        if not item_list is None: self.add_list(key, item_list)
         self.list_widget.clear()
         for it in self.list_dictionary[key]:
             self.list_widget.addItem(it)
