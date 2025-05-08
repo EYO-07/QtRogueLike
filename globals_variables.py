@@ -33,7 +33,13 @@ PLAYER_MAX_HP = 100
 PLAYER_MAX_STAMINA = 200
 PLAYER_MAX_HUNGER = 1000
 
+# buildings 
 PROD_INV_FACTOR = 100.0 
+
+# Pop-up GUIs
+POPUP_GUI_ALPHA = 0.8 
+POPUP_WIDTH = 400
+POPUP_HEIGHT = 400 
 
 # cached diff moves 
 ADJACENT_DIFF_MOVES = [(1, 0), (-1, 0), (0, 1), (0, -1), (0, 0)]
@@ -112,16 +118,8 @@ SPRITE_NAMES = SPRITE_NAMES_WEAPONS + SPRITE_NAMES_CHARACTERS + SPRITE_NAMES_FOO
 ]
 
 # loot
-EQUIPMENT_SLOTS = [
-    'primary_hand', 
-    'secondary_hand', 
-    'head', 
-    'neck', 
-    'torso', 
-    'waist', 
-    'legs', 
-    'foot'
-]
+HAND_SLOTS = ['primary_hand', 'secondary_hand' ]
+EQUIPMENT_SLOTS = HAND_SLOTS + ['head', 'neck', 'torso', 'waist', 'legs', 'foot']
 
 LOOT_TABLE = [
     { "item_name": "Food", "chance": 0.3, "name":"apple", "nutrition":10 },

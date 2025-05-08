@@ -14,93 +14,128 @@ from PyQt5.QtWidgets import QWidget, QListWidget, QVBoxLayout, QPushButton, QHBo
 from PyQt5.QtCore import Qt, QEvent
 from PyQt5.QtGui import QTextCursor, QColor
 
-def quality(game_item):
-    if not hasattr(game_item, "durability_factor"): return ""
-    qlt = game_item.durability_factor
-    if qlt>=0.998: 
-        return "master-crafted"
-    elif qlt>=0.95:
-        return "durable"
-    elif qlt>=0.90:
-        return "bad-quality"
-    else:
-        return "junk"
+# -- helper classes
+class VLayout(QVBoxLayout):
+    def __truediv__(self, other):
+        if isinstance(other, QWidget):
+            self.addWidget(other)
+        elif isinstance(other, QLayout):
+            self.addLayout(other)
+        else:
+            raise TypeError(f"Cannot divide layout by object of type {type(other).__name__}")
+        return self
+class HLayout(QHBoxLayout):
+    def __truediv__(self, other):
+        if isinstance(other, QWidget):
+            self.addWidget(other)
+        elif isinstance(other, QLayout):
+            self.addLayout(other)
+        else:
+            raise TypeError(f"Cannot divide layout by object of type {type(other).__name__}")
+        return self
+class Dialog(QDialog):
+    def __truediv__(self, other):
+        if isinstance(other, QLayout):
+            self.setLayout(other)
+        else:
+            raise TypeError(f"Cannot divide layout by object of type {type(other).__name__}")
+        return self
 
+# -- helpers 
+def item_text_color(game_item):
+    if isinstance(game_item, Weapon):
+        return QColor("white")
+    if isinstance(game_item, Equippable): 
+        return QColor("cyan")
+    if isinstance(game_item, Food): 
+        return QColor("yellow")
+    if isinstance(game_item, Resource): 
+        return QColor("magenta") 
+    return QColor("white")
 def info(game_item):
-    if isinstance(game_item, Weapon): # < equippable < item
-        return f"{game_item.name} : {game_item.damage:.1f} [dmg] ({ quality(game_item) })", QColor("white")
-    if isinstance(game_item, Equippable): # < item 
-        return f"{game_item.name} : {game_item.slot}", QColor("cyan")    
-    if isinstance(game_item, WeaponRepairTool): # < item
-        return f"{game_item.name} : {game_item.uses} [uses]", QColor("white")
-    if isinstance(game_item, Food): # < item
-        return f"{game_item.name} : {game_item.nutrition:.1f} [ntr]", QColor("yellow")
-    if isinstance(game_item, Resource): # < item 
-        return f"{game_item.name} : {game_item.value:.1f} [val]", QColor(0,255,0,255) # green 
-    return game_item.name, QColor("white")
+    return game_item.info(), item_text_color(game_item)
+def color_to_css(foreground):
+    if isinstance(foreground, QColor):
+        return foreground.name(QColor.HexArgb) if foreground.alpha() < 255 else foreground.name()
+    elif isinstance(foreground, str):
+        return foreground  # assume it's a valid CSS color string
+    return "white"  # default fallback
+
+# -- constructors 
+def new_text(foreground = "white", layout = None):
+    color_css = color_to_css(foreground)
+    text_edit = QTextEdit()
+    text_edit.setStyleSheet(f"""
+        QTextEdit {{
+            background-color: rgba(0, 0, 0, 150);
+            color: {color_css};
+            border: 1px solid rgba(255, 255, 255, 50);
+            border-radius: 5px;
+            padding: 5px;
+            font-size: 11px;
+        }}
+    """)
+    text_edit.setFocusPolicy(Qt.StrongFocus)
+    if layout is None: return text_edit
+    layout.addWidget(text_edit)
+    return text_edit
+def new_button(label, callback, foreground = "white", layout = None):
+    color_css = color_to_css(foreground)
+    button = QPushButton(label)
+    button.setStyleSheet(f"""
+        QPushButton {{
+            background-color: rgba(0, 0, 0, 150);
+            color: {color_css};
+            border: 1px solid rgba(255, 255, 255, 50);
+            border-radius: 5px;
+            padding: 5px;
+        }}
+        QPushButton:hover {{
+            background-color: rgba(255, 255, 255, 20);
+        }}
+    """)
+    button.clicked.connect(callback)
+    if layout is None: return button 
+    layout.addWidget(button)
+    return button
+
+# -- set window properties
+
+# 1. don't steals focus 
+# 2. non modal 
+# 3. small square size 
+def set_properties_non_modal_popup(wdg, title):
+    if not isinstance(wdg, QDialog): return 
+    #self.setWindowFlags(Qt.FramelessWindowHint) # don't work 
+    wdg.setAttribute(Qt.WA_TranslucentBackground)
+    wdg.setWindowOpacity(POPUP_GUI_ALPHA) 
+    wdg.setFocusPolicy(Qt.NoFocus) # Prevent stealing focus
+    wdg.setModal(False) # Non-blocking
+    wdg.setWindowTitle(title)
+    wdg.setFixedSize(POPUP_WIDTH, POPUP_HEIGHT)  # Similar size to InventoryWindow 
+def set_properties_layout(layout):
+    layout.setContentsMargins(10, 10, 10, 10)
+    layout.setSpacing(5)
 
 # Classes 
-class JournalWindow(QDialog):
+class JournalWindow(Dialog):
     def __init__(self, parent=None):
         super().__init__(parent)
-        #self.setWindowFlags(Qt.FramelessWindowHint)
-        self.setAttribute(Qt.WA_TranslucentBackground)
-        self.setWindowOpacity(0.8)  # Match InventoryWindow
-        self.setFocusPolicy(Qt.NoFocus)  # Prevent stealing focus
-        self.setModal(False)  # Non-blocking
-        self.setWindowTitle("Journal")
-
-        # Layout
-        self.layout = QVBoxLayout()
-        self.layout.setContentsMargins(10, 10, 10, 10)
-        self.layout.setSpacing(5)
-
-        # Text editor
-        self.text_edit = QTextEdit()
-        self.text_edit.setStyleSheet("""
-            QTextEdit {
-                background-color: rgba(0, 0, 0, 150);
-                color: yellow;
-                border: 1px solid rgba(255, 255, 255, 50);
-                border-radius: 5px;
-                padding: 5px;
-                font-size: 11px;
-            }
-        """)
-        self.text_edit.setFocusPolicy(Qt.StrongFocus)  # Allow text input
-        self.layout.addWidget(self.text_edit)
-
-        # Buttons
-        button_layout = QHBoxLayout()
-        self.save_button = QPushButton("Save")
-        self.save_button.setStyleSheet("""
-            QPushButton {
-                background-color: rgba(0, 0, 0, 150);
-                color: white;
-                border: 1px solid rgba(255, 255, 255, 50);
-                border-radius: 5px;
-                padding: 5px;
-            }
-            QPushButton:hover {
-                background-color: rgba(255, 255, 255, 20);
-            }
-        """)
-        self.save_button.clicked.connect(self.save_journal)
-        button_layout.addWidget(self.save_button)
-        self.layout.addLayout(button_layout)
-
-        self.log_button = QPushButton("Log Entry")
-        self.log_button.setStyleSheet(self.save_button.styleSheet())
-        self.log_button.clicked.connect(self.log_diary_entry)
-        button_layout.addWidget(self.log_button)
-
-        self.setLayout(self.layout)
-        self.setFixedSize(400, 400)  # Similar size to InventoryWindow
+        set_properties_non_modal_popup(self, "Journal")
+        self.build_parts()
+        self.assemble_parts()
+        # -- 
         self.hide()  # Hidden by default
         self.update_position()
-        if self.parent():
-            self.parent().setFocus()
-
+        if self.parent(): self.parent().setFocus()
+    def build_parts(self):
+        self.layout = VLayout() # vertical 
+        self.text_edit = new_text(foreground = "yellow")
+        self.save_button = new_button("Save", self.save_journal)
+        self.log_button = new_button("Log Entry", self.log_diary_entry)
+    def assemble_parts(self):
+        set_properties_layout(self.layout)
+        self/( self.layout/self.text_edit/( HLayout()/self.save_button/self.log_button ) )
     def whereAmI(self):
         player = self.parent().player
         if not player: return ""
@@ -138,7 +173,6 @@ class JournalWindow(QDialog):
             else: # southest
                 return "I'm on southeast part of this region, where should I go ? ..."
         return ""
-
     def update_position(self):
         """Position the journal window to the right of the parent window, vertically centered."""
         if self.parent():
@@ -219,19 +253,6 @@ class JournalWindow(QDialog):
         self.append_text(entry)
         self.parent().add_message("Diary entry logged")
     
-    def keyPressEvent(self, event):
-        """Handle key presses, e.g., Escape to close."""
-        if event.key() == Qt.Key_Escape:
-            self.hide()
-            if self.parent():
-                self.parent().setFocus()
-        elif event.key() == Qt.Key_J:
-            self.hide()
-            if self.parent():
-                self.parent().setFocus()
-        else:
-            super().keyPressEvent(event)
-
     def showEvent(self, event):
         """Ensure the text is scrolled to the end when the journal is shown."""
         cursor = self.text_edit.textCursor()
@@ -277,9 +298,8 @@ class JournalWindow(QDialog):
         self.text_edit.ensureCursorVisible()
 
     def keyPressEvent(self, event):
-        """Handle key presses, e.g., Escape to close."""
-        if event.key() == Qt.Key_Escape:
-            self.hide()
+        key = event.key()
+        if key == Qt.Key_Escape or key == Qt.Key_J: # set focus to parent 
             if self.parent():
                 self.parent().setFocus()
         else:

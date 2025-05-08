@@ -68,7 +68,7 @@ class Resource: # Interface : store in buildings
     def __init__(self):
         self.value = 0
         self.type = None 
-    def get_value(self):
+    def get_value(self): # || { .update_value() }
         self.update_value()
         return self.value 
     def update_value(self):
@@ -77,6 +77,8 @@ class Resource: # Interface : store in buildings
         old_val = getattr(tile_building,self.type,0.0)
         setattr(tile_building, self.type, old_val + self.get_value())
         char.remove_item(self)
+    def get_utility_info(self):
+        return f"{self.get_value()} [value]"
 
 # SpecialSkillWeapon.consumption() || { SpecialSkillWeapon.get_equipped_slot() } || {}
 # SpecialSkillWeapon.special_attack() || { SpecialSkillWeapon.consumption() | SpecialSkillWeapon.damage() | Character.drop_on_death() } || { SpecialSkillWeapon.get_equipped_slot() }
@@ -228,20 +230,27 @@ class SpecialSkillWeapon: # Interface : use special skills
             return self.use_thrust_special(char, game)
         return False     
 
+# (name, utility, info) ~ (alfa, beta, gama)
 class Item(Serializable, Entity): # Primitive
     __serialize_only__ = Entity.__serialize_only__ + ["name","description","weight"]
     def __init__(self, name="", description="", weight=1, sprite="item"):
         super().__init__()
         self.name = name
         self.description = description
-        self.weight = weight
-        self.sprite = sprite
-    def __str__(self):
-        return f"{self.name} ({self.weight}kg): {self.description}"
+        self.weight = weight # not used yet 
+        self.sprite = sprite 
     def paint_to(self, painter, item_list=None):
         if not item_list: return super().paint_to()
         if len(item_list)<=1: return super().paint_to()
-        
+    def get_utility_info(self): # return a string with a formated value for the utility variable attributes 
+        return ""
+    def get_add_info(self): 
+        return f"{self.weight:.1f} [kg] : {self.description}"
+    def __str__(self):
+        return f"{self.name} ; "+self.get_utility_info()
+    def info(self):
+        return self.__str__()
+    
 # Usable.use() || { Character.remove_item() } || {}
 class Usable(Item): # Interface : use item
     __serialize_only__ = Item.__serialize_only__+["uses"]
@@ -252,6 +261,8 @@ class Usable(Item): # Interface : use item
         self.uses -= 1
         if self.uses <= 0: char.remove_item(self)
         # do something on derived classes 
+    def get_utility_info(self):
+        return f"({self.uses:.0f})"
 
 class Container(Serializable): # Primitive 
     __serialize_only__ = ["items"]
@@ -284,13 +295,42 @@ class Container(Serializable): # Primitive
             return item_instance
         return None
 
-# Equippable.get_equipped_slot() || { Character.getattr() } || {}
-class Equippable(Item): # Interface : equipment
-    __serialize_only__ = Item.__serialize_only__+["slot", "durability_factor"]
-    def __init__(self, name="", description="", weight=1, slot="primary_hand", durability_factor=0.995):
-        super().__init__(name = name, description = description, weight = weight, sprite=name.lower())
-        self.slot = slot
+class Durable(Item): # interface : has durability_factor, quality
+    __serialize_only__ = ["durability_factor"]
+    def __init__(self, name="", description="", weight=1, durability_factor=0.995):
+        super().__init__( name = name, description = description, weight = weight, sprite=name.lower() )
         self.durability_factor = durability_factor
+    def durability_consumption(self, char):
+        pass 
+    def get_quality(self):
+        qlt = self.durability_factor
+        if qlt>=0.998: 
+            return "master-crafted"
+        elif qlt>=0.95:
+            return "durable"
+        elif qlt>=0.90:
+            return "bad-quality"
+        else:
+            return "junk"
+    def set_quality(self, n_int = 2):
+        match n_int:
+            case 1: # master-crafted
+                self.durability_factor = d(0.998, 0.999)
+            case 2: # durable
+                self.durability_factor = d(0.95, 0.998)
+            case 3: # bad-quality
+                self.durability_factor = d(0.9, 0.95)
+            case 4: # junk 
+                self.durability_factor = d(0.9)
+    def get_utility_info(self):
+        return f"({self.get_quality():.0f})"
+        
+# Equippable.get_equipped_slot() || { Character.getattr() } || {}
+class Equippable(Durable): # Interface : equipment
+    __serialize_only__ = Durable.__serialize_only__+["slot"]
+    def __init__(self, name="", description="", weight=1, slot="primary_hand", durability_factor=0.995):
+        super().__init__(name = name, description = description, weight = weight, durability_factor = durability_factor)
+        self.slot = slot
     def get_equipped_slot(self, char):
         current_slot = None
         for atrib in EQUIPMENT_SLOTS:
@@ -298,8 +338,15 @@ class Equippable(Item): # Interface : equipment
                 current_slot = atrib
                 break
         return current_slot
-    def durability_consumption(self, char):
-        pass 
+    def is_equipped(self, char):
+        return not (self.get_equipped_slot(char) is None)
+    def is_properly_equipped(self, char):
+        current_equipped_slot = self.get_equipped_slot()
+        if self.slot == current_equipped_slot: return True 
+        if self.slot in HAND_SLOTS and current_equipped_slot in HAND_SLOTS: return True 
+        return False 
+    def get_utility_info(self):
+        return f"-{self.slot} "+super().get_utility_info()
     
 # Weapon.durability_consumption() || { Character.set_equipment_by_slot() } || {}
 # Weapon.stats_update() || { Weapon.stamina_consumption() | Weapon.durability_consumption() } || { Character.set_equipment_by_slot() }
@@ -311,6 +358,7 @@ class Weapon(Equippable):
         self.stamina_consumption = stamina_consumption 
         self.max_damage = damage 
     def durability_consumption(self, char):
+        if not self.is_properly_equipped(): return 
         self.damage = max(0,self.damage*self.durability_factor)
         if self.damage < 0.5: char.primary_hand = None
     def stamina_consumption(self, char):
@@ -320,6 +368,8 @@ class Weapon(Equippable):
         self.stamina_consumption(player)
         self.durability_consumption(player)
         return True
+    def get_utility_info(self):
+        return f"{self.damage:.1f} [dmg] "+Durable.get_utility_info(self)
 
 class Parriable(Weapon): 
     """ Weapons that has probability to exchange hp damage for stamina consumption. """
@@ -385,6 +435,8 @@ class Food(Usable, Resource):
         return False
     def update_value(self):
         self.value = self.nutrition*self.uses 
+    def get_utility_info(self):
+        return f"{self.nutrition:.1f} [ntr] "+Usable.get_utility_info(self)
 
 class Wood(Item, Resource):
     __serialize_only__ = Item.__serialize_only__+Resource.__serialize_only__
@@ -392,6 +444,8 @@ class Wood(Item, Resource):
         super().__init__(name="Wood", description="", weight=1, sprite="wood")
         self.value = value 
         self.type == "wood"
+    def get_utility_info(self):
+        return Resource.get_utility_info(self)
 
 class Stone(Item, Resource):
     __serialize_only__ = Item.__serialize_only__+Resource.__serialize_only__
@@ -399,14 +453,18 @@ class Stone(Item, Resource):
         super().__init__(name="Stone", description="", weight=1, sprite="stone")        
         self.value = value 
         self.type == "stone"
-
+    def get_utility_info(self):
+        return Resource.get_utility_info(self)
+        
 class Metal(Item, Resource):
     __serialize_only__ = Item.__serialize_only__+Resource.__serialize_only__
     def __init__(self, value = 100):
         super().__init__(name="Metal", description="", weight=1, sprite="metal")
         self.value = value 
         self.type == "metal"
-
+    def get_utility_info(self):
+        return Resource.get_utility_info(self)
+        
 # WeaponRepairTool.use() || { Usable.use() } || { Character.remove_item() }
 class WeaponRepairTool(Usable):
     __serialize_only__ = Usable.__serialize_only__+["repairing_factor"]
@@ -421,12 +479,20 @@ class WeaponRepairTool(Usable):
                 primary.damage = min( self.repairing_factor*primary.damage, primary.max_damage)
                 return True
         return False
-     
+    
 class Armor(Equippable): 
     __serialize_only__ = Equippable.__serialize_only__+["defense_factor"]
     def __init__(self, name="", defense_factor=0.02, description="", weight=1, slot="torso"):
         super().__init__(name = name, description = description, weight = weight, slot = slot)
         self.defense_factor = defense_factor
+    def durability_consumption(self, char):
+        if not self.is_properly_equipped(): return 
+        self.defense_factor = max(0,self.defense_factor*self.durability_factor)
+        if self.defense_factor < 0.5: 
+            if self.is_equipped():
+                char.set_equipment_by_slot( value = None, slot = self.get_equipped_slot() )
+    def get_utility_info(self):
+        return f"{self.defense_factor*100:.0f} [def] "+super().get_utility_info()
 
 # SANITY COMMENTS:
 # 1. b_generate_items must be False by default, otherwise the Serializable will generate initial items whenever they use Load_JSON 
