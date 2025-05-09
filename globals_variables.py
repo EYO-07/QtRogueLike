@@ -4,7 +4,7 @@ import random
 def Generate_Square_Diffs(radius=3):
     return [ (x,y) for y in range(-radius+1,radius) for x in range(-radius+1,radius) ]
     
-def d(a,b = None): # float dice 
+def d(a = None,b = None): # float dice 
     if (a is None) and (b is None):
         return random.random()
     if b is None:

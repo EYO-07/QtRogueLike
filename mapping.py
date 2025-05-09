@@ -132,7 +132,7 @@ class Map(Serializable):
             prev_y = MAP_HEIGHT//2, 
             going_up = False
         ):
-        super().__init__()
+        Serializable.__init__(self)
         self.width = width
         self.height = height
         self.filename = filename

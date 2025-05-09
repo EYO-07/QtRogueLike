@@ -126,7 +126,7 @@ def set_properties_layout(layout):
 # Classes 
 class JournalWindow(Dialog):
     def __init__(self, parent=None):
-        super().__init__(parent)
+        Dialog.__init__(self, parent)
         set_properties_non_modal_popup(self, "Journal")
         self.setFixedSize(POPUP_WIDTH, POPUP_HEIGHT)  # Similar size to InventoryWindow 
         self.build_parts()
@@ -267,9 +267,9 @@ class JournalWindow(Dialog):
             super().keyPressEvent(event)
 class MessagePopup(Dialog):
     def __init__(self, parent=None):
-        super().__init__(parent)
+        Dialog.__init__(self, parent)
         # window settings
-        set_properties_non_modal_popup("Messages")
+        set_properties_non_modal_popup(self, "Messages")
         self.setAttribute(Qt.WA_ShowWithoutActivating) # Show without taking focus
         # Layout
         self.layout = VLayout()
@@ -288,7 +288,7 @@ class MessagePopup(Dialog):
         text = " | ".join(reversed(messages)) # Newest at top
         self.label.setText(text)
         # adjust size
-        self.label.setFixedWidth(400)
+        self.label.setFixedWidth(500)
         # self.setFixedSize(fixed_width + 20, self.label.height() + 20)
         self.label.adjustSize()
         self.adjustSize()
@@ -298,7 +298,7 @@ class MessagePopup(Dialog):
         if self.parent(): self.parent().setFocus()
 class SelectionBox(Widget):
     def __init__(self, item_list = [f"Option {i}" for i in range(5)], action = lambda x, instance: instance.close(), parent=None, **kwargs):
-        super().__init__(parent)
+        Widget.__init__(self, parent)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setWindowOpacity(0.7)  # 70% opaque, like MessagePopup
         self.setWindowModality(Qt.ApplicationModal) 
@@ -367,7 +367,7 @@ class SelectionBox(Widget):
         self.action(self.current_key, item.text(),self, **self.kw)
 class InventoryWindow(Dialog):
     def __init__(self, parent=None):
-        super().__init__(parent)        
+        Dialog.__init__(self, parent)        
         set_properties_non_modal_popup(self, "Inventory")
         self.setFixedSize(POPUP_WIDTH, POPUP_HEIGHT)
         self.build_parts()
@@ -483,7 +483,8 @@ class InventoryWindow(Dialog):
             else: # equipped
                 if isinstance(game_item, Equippable):
                     self.parent().add_message(f"Unequipped")
-                    self.player.unequip_item(game_item.slot)
+                    c_slot = game_item.get_equipped_slot(self.player)
+                    self.player.unequip_item(c_slot)
             self.parent().game_iteration() 
         self.update_inventory(self.player) # Refresh list            
         self.parent().setFocus()  # Return focus to game
@@ -496,7 +497,7 @@ class InventoryWindow(Dialog):
                 self.parent().add_message(f"Can't drop equipped item")
                 return 
             game_item = self.player.items[index]
-            if game_item.is_equipped():
+            if game_item.is_equipped(self.player):
                 self.parent().add_message(f"Can't drop equipped item: {game_item.name}")
                 return 
             tile = self.parent().map.get_tile(self.player.x, self.player.y)
@@ -539,8 +540,8 @@ def main_menu(menu, item, instance, game_instance):
                     game_instance.start_new_game(new_name[0])
                     instance.close()
                     return 
-            case "Load Game >": instance.set_list("Load Game >", ["[ Main Menu > Load Game ]","Slot 1", "Slot 2", ".."])
-            case "Save Game >": instance.set_list("Save Game >", ["[ Main Menu > Save Game ]","Slot 1", "Slot 2", ".."])
+            case "Load Game >": instance.set_list("Load Game >", ["[ Main Menu > Load Game ]","Slot 1", ".."])
+            case "Save Game >": instance.set_list("Save Game >", ["[ Main Menu > Save Game ]","Slot 1", ".."])
             case "Quit to Desktop": 
                 game_instance.close()
                 return 
@@ -626,13 +627,13 @@ def build_menu(menu, item, instance, game_instance):
             game_instance.draw()    
             instance.close()     
             return 
-def primary_menu(menu, item, instance, game_instance, list_of_weapons):
+def primary_menu(menu, item, instance, game_instance, list_of_weapons, slot):
     if common_menu_parts(menu, item, instance, game_instance): 
         instance.close()
         return 
     for wp in list_of_weapons:
         if item == wp[1]:
-            game_instance.player.equip_item(wp[0], wp[0].slot)
+            game_instance.player.equip_item(wp[0], slot)
             game_instance.update_inv_window()
             instance.close()
 def skill_menu(menu, item, instance, game_instance, stamina_bound):
@@ -642,37 +643,8 @@ def skill_menu(menu, item, instance, game_instance, stamina_bound):
     player = game_instance.player 
     if "Release Party" in item:
         if isinstance(player, Hero):
-            player.release_party()
-            instance.close()
-            return 
-    if "Dodge" in item:
-        if player.dodge_skill():
-            pass 
-            instance.close()
-            return 
-    if "Thrust" in item: 
-        if player.thrust_skill():
-            pass 
-            instance.close()
-            return 
-    if "Power" in item: 
-        if player.power_skill():
-            pass 
-            instance.close()
-            return 
-    if "Knight" in item:         
-        if player.knight_skill():
-            pass 
-            instance.close()
-            return 
-    if "Tower" in item: 
-        if player.tower_skill():
-            pass 
-            instance.close()
-            return 
-    if "Bishop" in item: 
-        if player.bishop_skill():
-            pass 
+            player.release_party(game_instance)
+            game_instance.update_prior_next_selection()
             instance.close()
             return 
 def player_menu(menu,item, instance, game_instance, npc):
@@ -686,7 +658,7 @@ def player_menu(menu,item, instance, game_instance, npc):
         instance.close()
         return 
     if item == "Add to Party":
-        if isinstance(npc, Player):
+        if isinstance(npc, Player) and isinstance(player, Hero):
             player.add_to_party(npc.name, game_instance)
             instance.close()
             return 

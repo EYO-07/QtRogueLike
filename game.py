@@ -103,8 +103,6 @@ class Game_VIEWPORT:
         self.dirty_tiles = set()  # Track tiles that need redrawing
         self.tile_items = {}  # For optimized rendering
         # -- 
-        self.scene = QGraphicsScene()
-        self.setScene(self.scene)
         Tile._load_sprites()
     def draw(self):
         self.draw_grid()
@@ -285,6 +283,10 @@ class Game_PLAYERS:
         if len(self.players) <= 1: 
             self.add_message("Must have at least one adventurer ...")
             return 
+        candidates = [ k for k,v in self.players.items() if not v.party ] 
+        if len(candidates)==0: 
+            self.add_message("Must have at least one adventurer ...")
+            return 
         if not key: key = self.current_player
         char_to_remove = self.players[key]
         self.map.remove_character(char_to_remove)
@@ -292,7 +294,7 @@ class Game_PLAYERS:
         if not char_to_remove is self.player: 
             self.update_prior_next_selection()
             return 
-        new_key_name = random.choice( [ k for k,v in self.players.items() if not v.party ] )
+        new_key_name = random.choice(candidates)
         if not new_key_name: 
             self.update_prior_next_selection()
             return 
@@ -305,13 +307,14 @@ class Game_PLAYERS:
             if value.party: return False
             if value.current_map != self.current_map: return False
             if value is self.player: return False 
-            if not value.is_placed_on_map(): return False 
+            if not value.is_placed_on_map(self.map): return False 
             if value.distance(self.player) > 20: return False 
             return True
         self.prior_next_index = 0
         try:
             self.prior_next_players = [self.player.name]+[ key for key,value in self.players.items() if ply_filter(value) ]
-        except:
+        except Exception as e:
+            print(e)
             self.prior_next_players = []
     def move_party(self):
         for k,v in self.players.items():
@@ -535,7 +538,7 @@ class Game_DATA:
             b_is_new = True
         xy = self.map.get_random_walkable_tile()
         if not xy: xy = (50,50)
-        self.add_player(new_character_name, name = new_character_name, hp = 100, x=xy[0], y=xy[1], b_generate_items=True)
+        self.add_hero(new_character_name, name = new_character_name, hp = 100, x=xy[0], y=xy[1], b_generate_items=True)
         self.set_player(new_character_name)
         if b_is_new: Castle.new(self)
         self.player.hunger = 200
@@ -795,7 +798,7 @@ class Game_ITERATION:
         
         print("you died!")
         if isinstance(self.player, Hero): # only heroes can have a party 
-            self.player.release_party(game_instance)
+            self.player.release_party(self)
         # self.release_party(SQUARE_DIFF_MOVES_5x5)
         self.player.drop_on_death()
         if self.player.name in self.players.keys():
@@ -818,7 +821,7 @@ class Game_ITERATION:
             self.save_current_game(slot = self.current_slot)
         self.update_prior_next_selection()
     def Event_DoAttack(self, event):
-        self.target.receive_damage(event.attacker, event.damage)
+        event.target.receive_damage(event.attacker, event.damage)
         if hasattr(event.target, "description"): self.last_encounter_description = getattr(event.target,"description")
         if event.target is self.player: # player being attacked
             self.last_encounter_description = getattr(event.attacker,"description")
@@ -836,6 +839,7 @@ class Game_ITERATION:
             if event.target.name in self.players:
                 print("Removing :",event.target.name)
                 self.remove_player(event.target.name)
+                return 
             self.map.remove_character(event.target)
             
 # Main Window Class 
@@ -853,16 +857,18 @@ class Game(QGraphicsView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_P
         "certificates"
     ]
     def __init__(self):
-        super().__init__()
-        # QGraphicsView.__init__(self)
-        # Serializable.__init__(self)
-        # Game_VIEWPORT.__init__(self)
-        # Game_SOUNDMANAGER.__init__(self)
-        # Game_PLAYERS.__init__(self)
-        # Game_MAPTRANSITION.__init__(self)
-        # Game_DATA.__init__(self)
-        # Game_GUI.__init__(self)
-        # Game_ITERATION.__init__(self)
+        QGraphicsView.__init__(self)
+        self.scene = QGraphicsScene()
+        self.setScene(self.scene)
+        #print(Game.__mro__)
+        Serializable.__init__(self)
+        Game_VIEWPORT.__init__(self)
+        Game_SOUNDMANAGER.__init__(self)
+        Game_PLAYERS.__init__(self)
+        Game_MAPTRANSITION.__init__(self)
+        Game_DATA.__init__(self)
+        Game_GUI.__init__(self)
+        Game_ITERATION.__init__(self)
         self.alt_pressed = False
         self.version = "1.0.0"
         self.load_current_game()
@@ -914,6 +920,7 @@ class Game(QGraphicsView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_P
                 else:
                     self.prior_next_index = len(self.prior_next_players)-1
                 self.set_player( self.prior_next_players[self.prior_next_index] )
+                self.update_inv_window()
                 self.draw()
             return True 
         elif key == Qt.Key_PageDown: # cycle between playables
@@ -928,6 +935,7 @@ class Game(QGraphicsView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_P
                 else:
                     self.prior_next_index = 0
                 self.set_player( self.prior_next_players[self.prior_next_index] )
+                self.update_inv_window()
                 self.draw() 
             return True             
         return False 
@@ -941,10 +949,11 @@ class Game(QGraphicsView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_P
                     item_list = ["[ Weapon Selection ]", f"-> primary: {self.player.primary_hand.name} {self.player.primary_hand.damage:.1f} [dmg]"]+[ i[1] for i in list_of_weapons ]+["Exit"], 
                     action = primary_menu, 
                     game_instance = self, 
-                    list_of_weapons = list_of_weapons 
+                    list_of_weapons = list_of_weapons,
+                    slot = "primary_hand"
                 )
             else:
-                SB = SelectionBox( parent=self, item_list = ["[ Weapon Selection ]"]+[ i[1] for i in list_of_weapons ]+["Exit"], action = primary_menu, game_instance = self, list_of_weapons = list_of_weapons )
+                SB = SelectionBox( parent=self, item_list = ["[ Weapon Selection ]"]+[ i[1] for i in list_of_weapons ]+["Exit"], action = primary_menu, game_instance = self, list_of_weapons = list_of_weapons, slot = "primary_hand" )
             SB.show()
             return True 
         elif key == Qt.Key_2: # TODO : should include shields too 
@@ -955,177 +964,142 @@ class Game(QGraphicsView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_P
                     item_list = ["[ Weapon Selection ]", f"-> secondary: {self.player.secondary_hand.name} {self.player.secondary_hand.damage:.1f} [dmg]"]+[ i[1] for i in list_of_weapons ]+["Exit"], 
                     action = primary_menu, 
                     game_instance = self, 
-                    list_of_weapons = list_of_weapons 
+                    list_of_weapons = list_of_weapons,
+                    slot = "secondary_hand"
                 )
             else:
-                SB = SelectionBox( parent=self, item_list = ["[ Weapon Selection ]"]+[ i[1] for i in list_of_weapons ]+["Exit"], action = primary_menu, game_instance = self, list_of_weapons = list_of_weapons )
+                SB = SelectionBox( parent=self, item_list = ["[ Weapon Selection ]"]+[ i[1] for i in list_of_weapons ]+["Exit"], action = primary_menu, game_instance = self, list_of_weapons = list_of_weapons, slot = "secondary_hand" )
             SB.show()   
             return True 
         return False 
-        
-        
-    def keyPressEvent(self, event):
-        key = event.key()
+    def key_press_gui(self, key):
+        stamina_bound = 20 
+        match key: # selection box menus 
+            case Qt.Key_B: # build menu 
+                SelectionBox(parent = self, item_list = [ "[ Certificates ]" ]+self.certificates+["Exit"], action = build_menu, game_instance = self ).show()
+                return True 
+            case Qt.Key_X: # skill menu            
+                SelectionBox(parent = self, item_list = [
+                    f"[ Available Skills ](days survived: {self.player.days_survived})",
+                    f"-> Current Map: { self.player.current_map[0]}, {-self.player.current_map[1] }, {self.player.current_map[2] }",
+                    f"-> Map Position: { self.player.x}, { self.map.height -self.player.y }",
+                    f"Release Party: { self.player.count_party() if isinstance(self.player, Hero) else "..." }",
+                    f"Dodge Skill: { self.player.can_use_dodge_skill }",
+                    f"Thrust Skill: { self.player.can_use_thrust_skill }",
+                    f"Knight Slash Skill: { self.player.can_use_knight_skill }",
+                    f"Tower Smash Skill: { self.player.can_use_tower_skill }",
+                    "Exit"
+                ], action = skill_menu, game_instance = self, stamina_bound = stamina_bound).show()
+                return True 
+        match key: # journal and inventory
+            case Qt.Key_N: # take a quick note in journal
+                self.take_note_on_diary()
+                return True 
+            case Qt.Key_J:  # Toggle journal window
+                if not self.journal_window:
+                    self.journal_window = JournalWindow(self)
+                if self.journal_window.isVisible():
+                    self.journal_window.save_journal()  # Save on close
+                    self.journal_window.hide()
+                else:
+                    self.journal_window.load_journal(self.current_slot)  # Refresh contents
+                    self.journal_window.show()
+                    self.journal_window.update_position()
+                self.setFocus()
+                return True 
+            case Qt.Key_I:  # Toggle inventory window
+                if not self.inventory_window:
+                    self.inventory_window = InventoryWindow(self)
+                if self.inventory_window.isVisible():
+                    self.inventory_window.update_inventory(self.player)
+                    self.inventory_window.hide()
+                else:
+                    self.inventory_window.update_inventory(self.player)
+                return True     
+        match key: # music 
+            case Qt.Key_M:  # Toggle music
+                self.toggle_music()
+                return True
+            case Qt.Key_Plus:
+                volume = min(self.music_player.volume() + 10, 100)
+                self.music_player.setVolume(volume)
+                self.add_message(f"Music volume: {volume}%")
+                return True 
+            case Qt.Key_Minus:
+                volume = max(self.music_player.volume() - 10, 0)
+                self.music_player.setVolume(volume)
+                self.add_message(f"Music volume: {volume}%")
+                return True
+        match key: # main menu options 
+            case Qt.Key_F5:
+                self.save_current_game(slot=1)
+                return
+            case Qt.Key_F7:
+                self.load_current_game(slot=1)
+                return True 
+            case Qt.Key_F9:    
+                self.start_new_game()
+                return True 
+        return False 
+    def key_press_movement(self, key):
+        """ return True if the key press should trigger game_iteration """
         dx, dy = 0, 0
         b_isForwarding = False
-        stamina_bound = 20
-        
-        # -- 
-        if self.key_press_move_app_window(key): return 
-        if self.key_press_cycle_between_playables(key): return 
-        if self.key_press_choose_weapon_menu(key): return 
-        
-        elif key == Qt.Key_R:
-            self.player.use_first_item_of(WeaponRepairTool, self)
-            return
-        
-        elif key == Qt.Key_B: # build menu 
-            SB = SelectionBox(parent = self, item_list = [ "[ Certificates ]" ]+self.certificates+["Exit"], action = build_menu, game_instance = self )
-            SB.show()
-        elif key == Qt.Key_X: # skill menu            
-            SB = SelectionBox(parent = self, item_list = [
-                f"[ Available Skills ](days survived: {self.player.days_survived})",
-                f"-> Current Map: { self.player.current_map[0]}, {-self.player.current_map[1] }, {self.player.current_map[2] }",
-                f"-> Map Position: { self.player.x}, { self.map.height -self.player.y }",
-                f"Release Party: { self.count_party() }",
-                f"Dodge: { self.player.days_survived>=5 }",
-                f"Power Attack: { self.player.days_survived>=15 }",
-                f"Weapon Special Attack: { self.player.days_survived>=20 }",
-                "Exit"
-            ], action = skill_menu, game_instance = self, stamina_bound = stamina_bound)
-            SB.show()
-        
-        elif key == Qt.Key_End:
-            if self.player.days_survived >= 15:
-                tx, ty = self.player.get_forward_direction()
-                tile0 = self.map.get_tile(self.player.x+tx, self.player.y+ty)
-                if tile0:
-                    if not tile0.walkable:
-                        self.add_message("Can't find a target ...")
-                        return 
-                    if tile0.current_char:
-                        self.add_message("The enemy is too close to perform this attack ...")
-                        return 
-                tile1 = self.map.get_tile(self.player.x+2*tx, self.player.y+2*ty)
-                if tile1:
-                    if tile1.current_char:
-                        if self.player.primary_hand:
-                            if self.player.stamina<stamina_bound:
-                                self.add_message("I'm exhausted ... I need to take a breathe")
-                            else:
-                                self.add_message("Powerful Strike ...")
-                                self.events.append(
-                                    AttackEvent(
-                                        self.player, tile1.current_char, d(self.player.primary_hand.damage,3*self.player.primary_hand.damage) 
-                                    ) 
-                                )
-                                self.player.stamina -= stamina_bound
-                                self.game_iteration()
-                                return 
-                    else:
-                        self.add_message("Can't find a target ...")
-            else:
-                self.journal_window.append_text("With 'end' key you activate de power strike skill, you must be one tile of distance to the target, if the target is too close there is no much space to perform that skill, in order to use it you must survive at least 15 days ...")
-                self.add_message("I don't feel well enough to exercise ... maybe tomorrow I'll feel better.")
-        elif key == Qt.Key_Control: # dodge backward
-            if self.player.days_survived >= 5:
-                if self.player.stamina<stamina_bound:
-                    self.add_message("I'm exhausted ... I need to take a breathe")
-                x = self.player.x 
-                y = self.player.y
-                fx, fy = self.player.get_forward_direction()
-                bx = -fx 
-                by = -fy
-                #print(bx,by)
-                b_is_walkable = True 
-                tile = self.map.get_tile(x+bx,y+by)
-                if tile and self.player.stamina>stamina_bound:
-                    if tile.walkable:
-                        tile2 = self.map.get_tile(x+2*bx,y+2*by)
-                        if tile2:
-                            if tile2.walkable:
-                                dx = 2*bx 
-                                dy = 2*by
-                                self.player.stamina -= stamina_bound
-                            else:
-                                b_is_walkable = False
+        match key: # use, interaction 
+            case Qt.Key_R: # use item 
+                self.player.use_first_item_of(WeaponRepairTool, self)
+                return False 
+            case Qt.Key_C: # Interact with stair or special tile 
+                tile = self.map.get_tile(self.player.x, self.player.y)
+                if tile:
+                    if tile.stair:
+                        if tile.default_sprite_key == "dungeon_entrance":
+                            self.vertical_map_transition(tile.stair, False)
                         else:
-                            b_is_walkable = False
-                    else:
-                        b_is_walkable = False
-                else:
-                    b_is_walkable = False
-                if not b_is_walkable:
+                            self.vertical_map_transition(tile.stair, tile.default_sprite_key == "stair_up")
+                        return False 
+                    elif isinstance(tile, TileBuilding):
+                        SB = SelectionBox( tile.menu_list, action = tile.action(), parent = self, game_instance = self )
+                        tile.update_menu_list(SB)
+                        SB.show()
+                        return False 
+                px, py = self.player.get_forward_direction()
+                tile2 = self.map.get_tile(self.player.x+px, self.player.y+py)
+                if tile:
+                    char = tile2.current_char
+                    if char and isinstance(char, Player):
+                        SB = SelectionBox( [
+                            f"[ {char.name} ]",
+                            "Add to Party",
+                            "items+",
+                            "items-",
+                            "Exit"
+                        ], action = player_menu, parent = self, game_instance = self, npc = char )
+                        SB.show()
+                        return False 
+                return False 
+            case Qt.Key_E: # Use first food item
+                self.player.use_first_item_of(Food, self)
+                return False 
+            case Qt.Key_G: # Pickup items
+                tile = self.map.get_tile(self.player.x, self.player.y)
+                if tile and tile.items:
+                    self.events.append(PickupEvent(self.player, tile))
+                    self.dirty_tiles.add((self.player.x, self.player.y))  # Redraw tile
                     self.game_iteration()
-            else:
-                self.journal_window.append_text("With ctrl you activate de dodge skill and move 2 tiles backward, in order to use the dodge skill you must survive at least 5 days ...")
-                self.add_message("I don't feel well enough to exercise ... maybe tomorrow I'll feel better.")
-        elif key == Qt.Key_F: # weapon special skill 
-            primary = self.player.primary_hand
-            if primary:
-                if hasattr(primary,"use_special"):
-                    if primary.use_special(self.player, self.map, self):
-                        self.game_iteration()
-                        return 
-                    else:
-                        self.add_message("Can't Use Special Skill Right Now ...")
-        elif key == Qt.Key_N:
-            self.take_note_on_diary()
-            return 
-        elif key == Qt.Key_J:  # Toggle journal window
-            if not self.journal_window:
-                self.journal_window = JournalWindow(self)
-            if self.journal_window.isVisible():
-                self.journal_window.save_journal()  # Save on close
-                self.journal_window.hide()
-            else:
-                self.journal_window.load_journal(self.current_slot)  # Refresh contents
-                self.journal_window.show()
-                self.journal_window.update_position()
-            self.setFocus()
-            return
-        elif key == Qt.Key_M:  # Toggle music
-            self.toggle_music()
-            return
-        elif key == Qt.Key_Plus:
-            volume = min(self.music_player.volume() + 10, 100)
-            self.music_player.setVolume(volume)
-            self.add_message(f"Music volume: {volume}%")
-            return
-        elif key == Qt.Key_Minus:
-            volume = max(self.music_player.volume() - 10, 0)
-            self.music_player.setVolume(volume)
-            self.add_message(f"Music volume: {volume}%")
-            return    
-        elif key == Qt.Key_C:  # Interact with stair or special tile 
-            tile = self.map.get_tile(self.player.x, self.player.y)
-            if tile:
-                if tile.stair:
-                    if tile.default_sprite_key == "dungeon_entrance":
-                        self.vertical_map_transition(tile.stair, False)
-                    else:
-                        self.vertical_map_transition(tile.stair, tile.default_sprite_key == "stair_up")
-                    return
-                elif isinstance(tile, TileBuilding):
-                    SB = SelectionBox( tile.menu_list, action = tile.action(), parent = self, game_instance = self )
-                    tile.update_menu_list(SB)
-                    SB.show()
-                    return 
-            px, py = self.player.get_forward_direction()
-            tile2 = self.map.get_tile(self.player.x+px, self.player.y+py)
-            if tile:
-                char = tile2.current_char
-                if char and isinstance(char, Player):
-                    SB = SelectionBox( [
-                        f"[ {char.name} ]",
-                        "Add to Party",
-                        "items+",
-                        "items-",
-                        "Exit"
-                    ], action = player_menu, parent = self, game_instance = self, npc = char )
-                    SB.show()
-                    return 
-        elif key in (Qt.Key_Up, Qt.Key_W):
+                self.update_inv_window()
+                return False 
+        match key: # rotation
+            case Qt.Key_Left:
+                self.rotation = (self.rotation - 90) % 360
+                self.player.rotation = self.rotation 
+                return True
+            case Qt.Key_Right:
+                self.rotation = (self.rotation + 90) % 360
+                self.player.rotation = self.rotation             
+                return True   
+        # -- $ dx, dy
+        if key in (Qt.Key_Up, Qt.Key_W):
             dx, dy = self.rotated_direction(0, -1)
             b_isForwarding = True
         elif key in (Qt.Key_Down, Qt.Key_S):
@@ -1134,122 +1108,82 @@ class Game(QGraphicsView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_P
             dx, dy = self.rotated_direction(-1, 0)
         elif key == Qt.Key_D:
             dx, dy = self.rotated_direction(1, 0)
-        elif key == Qt.Key_Left:
-            self.rotation = (self.rotation - 90) % 360
-            self.player.rotation = self.rotation 
-            self.game_iteration()
-            return        
-        elif key == Qt.Key_Right:
-            self.rotation = (self.rotation + 90) % 360
-            self.player.rotation = self.rotation 
-            self.game_iteration()
-            return
-        elif key == Qt.Key_E:  # Use first food item
-            self.player.use_first_item_of(Food, self)
-            return    
-        elif key == Qt.Key_G:  # Pickup items
-            tile = self.map.get_tile(self.player.x, self.player.y)
-            if tile and tile.items:
-                self.events.append(PickupEvent(self.player, tile))
-                self.dirty_tiles.add((self.player.x, self.player.y))  # Redraw tile
-                self.game_iteration()
-            self.update_inv_window()
-            return
-        elif key == Qt.Key_F5:
-            self.save_current_game(slot=1)
-            return
-        elif key == Qt.Key_F6:
-            self.save_current_game(slot=2)
-            return
-        elif key == Qt.Key_F7:
-            self.load_current_game(slot=1)
-            return
-        elif key == Qt.Key_F8:
-            self.load_current_game(slot=2)
-            return
-        elif key == Qt.Key_F9:    
-            self.start_new_game()
-            return 
-        elif key == Qt.Key_I:  # Toggle inventory window
-            #print("Pressing I: ",self.player.primary_hand, self.player.items)
-            if not self.inventory_window:
-                self.inventory_window = InventoryWindow(self)
-            if self.inventory_window.isVisible():
-                self.inventory_window.update_inventory(self.player)
-                self.inventory_window.hide()
-            else:
-                self.inventory_window.update_inventory(self.player)
-            return
-        elif key == Qt.Key_Escape:  # Main Menu 
-            SB = SelectionBox( parent=self, item_list = [
-                f"[ Main Menu ]", 
-                f"-> Current Save Slot: {self.current_slot}",
-                f"-> Character: {self.current_player}",
-                "Resume",
-                "Start New Game",
-                "Character Settings >",
-                "Load Game >", 
-                "Save Game >", 
-                "Quit to Desktop"
-            ], action = main_menu, game_instance = self)
-            SB.show()
-        elif key == Qt.Key_F12:  # F12 Debugging: 
-            SB = SelectionBox(parent=self, item_list = [
-                "[ DEBUG MENU ]",
-                "Set Day 100", 
-                "Add Item >", 
-                "Generate Enemies >", 
-                "Restore Status",
-                "Generate Dungeon Entrance", 
-                "Add a Cosmetic Layer >",
-                "Exit"
-            ], action = debugging_menu, game_instance = self)
-            SB.add_list("Add Item >",[
-                "Whetstone",
-                "Mace",
-                "Long Sword",
-                "Food",
-                ".."
-            ])
-            SB.add_list("Generate Enemies >",[
-                "Zombie",
-                "Bear",
-                "Rogue",
-                "Mercenary",
-                "Player",
-                ".."
-            ])
-            SB.add_list("Add a Cosmetic Layer >", [
-                "House",
-                "Castle",
-                "Lumber Mill",
-                "Clear", 
-                "Mill",
-                "Tower",
-                ".."
-            ])
-            SB.show()        
-        else:
-            self.game_iteration()
-            return 
-
+        elif key == Qt.Key_Space:
+            return True 
+        # -- $ dx, dy | process movement 
         if dx or dy:
             target_x, target_y = self.player.x + dx, self.player.y + dy
             tile = self.map.get_tile(target_x, target_y)
             if target_x <0 or target_x > self.grid_width-1 or target_y<0 or target_y> self.grid_height-1:
-                self.horizontal_map_transition(target_x, target_y)  # Add this
-                return
+                self.horizontal_map_transition(target_x, target_y)
+                return False
             if tile and tile.walkable:
                 if tile.current_char:
                     if b_isForwarding and not isinstance(tile.current_char, Player):
-                        damage = self.player.calculate_damage_done()
-                        self.events.append(AttackEvent(self.player, tile.current_char, damage))
+                        self.events.append(AttackEvent(self.player, tile.current_char, self.player.do_damage()))
                 else:
                     old_x, old_y = self.player.x, self.player.y
                     if self.player.move(dx, dy, self.map):
                         self.events.append(MoveEvent(self.player, old_x, old_y))
                         self.dirty_tiles.add((old_x, old_y))
-                        self.dirty_tiles.add((self.player.x, self.player.y))    
+                        self.dirty_tiles.add((self.player.x, self.player.y))
+                return True        
+        return False 
+    def key_press_skills(self, key):
+        primary = self.player.primary_hand
+        match key:
+            case Qt.Key_Control: # dodge
+                if self.player.can_use_dodge_skill:
+                    self.player.dodge_skill(self)
+                else:
+                    self.journal_window.append_text("With ctrl you activate de dodge skill and move 2 tiles backward, in order to use the dodge skill you must survive at least 5 days ...")
+                    self.add_message("I don't feel well enough to exercise ... maybe tomorrow I'll feel better.")
+                return True     
+            case Qt.Key_End: # weapon special skill 
+                if isinstance(primary, SpecialSkillWeapon):
+                    primary.use_special_End(self.player, self)
+                return True
+            case Qt.Key_F: # weapon special skill 
+                if isinstance(primary, SpecialSkillWeapon):
+                    self.add_message("Using Special Weapon Skill ...")
+                    primary.use_special_F(self.player, self)
+                return True 
+        return False 
+    def keyPressEvent(self, event):
+        key = event.key()        
+        match key:
+            case Qt.Key_Escape: # main menu
+                SelectionBox( parent=self, item_list = [
+                    f"[ Main Menu ]", 
+                    f"-> Current Save Slot: {self.current_slot}",
+                    f"-> Character: {self.current_player}",
+                    "Resume",
+                    "Start New Game",
+                    "Character Settings >",
+                    "Load Game >", 
+                    "Save Game >", 
+                    "Quit to Desktop"
+                ], action = main_menu, game_instance = self).show()
+                return 
+            case Qt.Key_F12: # debug menu
+                SelectionBox(parent=self, item_list = [
+                    "[ DEBUG MENU ]",
+                    "Set Day 100", 
+                    "Add Item >", 
+                    "Generate Enemies >", 
+                    "Restore Status",
+                    "Generate Dungeon Entrance", 
+                    "Add a Cosmetic Layer >",
+                    "Exit"
+                ], action = debugging_menu, game_instance = self).show()
+                return 
+        if self.key_press_move_app_window(key): return 
+        if self.key_press_cycle_between_playables(key): return 
+        if self.key_press_choose_weapon_menu(key): return 
+        if self.key_press_skills(key): return 
+        if self.key_press_gui(key): return 
+        if self.key_press_movement(key): # put that function always on the end 
             self.game_iteration()
-    
+            return 
+
 # --- END 

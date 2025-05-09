@@ -18,8 +18,7 @@ from PyQt5.QtGui import QPixmap, QPainter
 from PyQt5.QtWidgets import QGraphicsPixmapItem, QInputDialog
 import noise  # Use python-perlin-noise instead of pynoise
 
-TRANSPARENT_IMAGE = QPixmap(TILE_SIZE,TILE_SIZE)
-TRANSPARENT_IMAGE.fill(Qt.transparent)
+# TRANSPARENT_IMAGE = 0 # QPixmap(TILE_SIZE,TILE_SIZE)
 
 def is_enemy_of(char1, char2):
     if isinstance(char1, Player) and isinstance(char2, Player): return False 
@@ -41,6 +40,8 @@ class Entity: # Interface : distance and painting on tile
         self.y = 0
         self.current_tile = None # don't serialize this, avoid infinite saving 
     def get_sprite(self):
+        TRANSPARENT_IMAGE = QPixmap(TILE_SIZE,TILE_SIZE)
+        TRANSPARENT_IMAGE.fill(Qt.transparent)
         if not self.sprite: 
             print(f"Warning: {self} sprite not found")
             return TRANSPARENT_IMAGE 
@@ -109,7 +110,7 @@ class SpecialSkillWeapon: # Interface : use special skills
                 if self.damage < 0.5: char.set_equipment_by_slot(None, slot) # garbaging 
                 return True 
         return True
-    def damage(self, type):
+    def calc_damage(self, type):
         if type == "knight": return d(self.max_damage,3*self.max_damage)
         if type == "tower": return d(self.max_damage,3*self.max_damage)
         return self.damage 
@@ -117,10 +118,12 @@ class SpecialSkillWeapon: # Interface : use special skills
         if not game: return False
         target = target_tile.current_char
         if not target: return False
-        if not is_enemy_of(char, target): return False
+        if not is_enemy_of(char, target): 
+            game.add_message("watch out, he is not my enemy ...")
+            return False
         if not char.can_see_character(target, game.map): return False
         if not self.consumption(char, type): return False
-        dmg = self.damage(type)
+        dmg = self.calc_damage(type)
         if dmg > target.hp: # manual kill and move process 
             dx = target.x - char.x 
             dy = target.y - char.y 
@@ -137,8 +140,10 @@ class SpecialSkillWeapon: # Interface : use special skills
             match type:
                 case "knight":
                     game.events.append( AttackEvent(char, target, dmg) )
+                    game.add_message(f"Attack performed : {dmg:.1f}")
                 case "tower":                    
                     game.events.append( AttackEvent(char, target, dmg) )
+                    game.add_message(f"Attack performed : {dmg:.1f}")
                     # move the character 
                     dx, dy = char.get_forward_direction()
                     dx = -dx + target.x - char.x
@@ -150,6 +155,7 @@ class SpecialSkillWeapon: # Interface : use special skills
                         game.draw()
                 case _: 
                     game.events.append( AttackEvent(char, target, dmg) )
+                    game.add_message(f"Attack performed : {dmg:.1f}")
         return True     
     def use_power_special(self, char, game): 
         pass     
@@ -169,7 +175,7 @@ class SpecialSkillWeapon: # Interface : use special skills
                     if char.stamina<stamina_bound:
                         return False 
                     else:
-                        self.events.append(
+                        game.events.append(
                             AttackEvent(
                                 char, tile1.current_char, d(char.primary_hand.damage,3*char.primary_hand.damage) 
                             ) 
@@ -191,7 +197,10 @@ class SpecialSkillWeapon: # Interface : use special skills
             if tile:
                 if self.special_attack(char, tile, game, "knight"):
                     b_attack_performed = True 
+                    game.game_iteration()
                     break
+        if not b_attack_performed:
+            game.add_message("nevermind ...")
         return b_attack_performed
     def use_tower_special(self, char, game): # mace
         map = game.map 
@@ -202,20 +211,21 @@ class SpecialSkillWeapon: # Interface : use special skills
         target = None 
         dx, dy = char.get_forward_direction()
         for i in range(1,7):
-            dx = dx*i 
-            dy = dy*i
-            tile = map.get_tile(x+dx, y+dy)
-            if not tile: return False
-            if not tile.walkable: return False 
+            tile = map.get_tile(x+i*dx, y+i*dy)
+            if not tile: continue
+            if not tile.walkable: continue 
             target = tile.current_char
-            if target: break 
+            if target: 
+                dx = dx*i 
+                dy = dy*i
+                break 
         if not target: return False 
         b_attack_performed = False
         tile = map.get_tile(x+dx,y+dy)
         if tile:
             if self.special_attack(char, tile, game, "tower"):
                 b_attack_performed = True 
-                break
+                # break
         return b_attack_performed
     def use_bishop_special(self, char, game):
         pass 
@@ -223,7 +233,9 @@ class SpecialSkillWeapon: # Interface : use special skills
         if isinstance(self, Sword) and char.can_use_knight_skill:
             return self.use_knight_special(char, game)
         if isinstance(self, Mace) and char.can_use_tower_skill:
+            print(self)
             return self.use_tower_special(char, game)
+        game.add_message("this weapon don't have any special skill ...")
         return False 
     def use_special_End(self, char, game): # End Key
         if isinstance(self, Sword) and char.can_use_thrust_skill:
@@ -234,14 +246,15 @@ class SpecialSkillWeapon: # Interface : use special skills
 class Item(Serializable, Entity): # Primitive
     __serialize_only__ = Entity.__serialize_only__ + ["name","description","weight"]
     def __init__(self, name="", description="", weight=1, sprite="item"):
-        super().__init__()
+        Serializable.__init__(self)
+        Entity.__init__(self)
         self.name = name
         self.description = description
         self.weight = weight # not used yet 
         self.sprite = sprite 
     def paint_to(self, painter, item_list=None):
-        if not item_list: return super().paint_to()
-        if len(item_list)<=1: return super().paint_to()
+        if not item_list: return super().paint_to(painter)
+        if len(item_list)<=1: return super().paint_to(painter)
     def get_utility_info(self): # return a string with a formated value for the utility variable attributes 
         return ""
     def get_add_info(self): 
@@ -257,7 +270,7 @@ class Item(Serializable, Entity): # Primitive
 class Usable(Item): # Interface : use item
     __serialize_only__ = Item.__serialize_only__+["uses"]
     def __init__(self, name="", description="", weight=1, sprite="item", uses = 1):
-        super().__init__(name = name, description = description, weight = weight, sprite = sprite)
+        Item.__init__(self, name = name, description = description, weight = weight, sprite = sprite)
         self.uses = uses 
     def use(self, char):
         self.uses -= 1
@@ -269,7 +282,7 @@ class Usable(Item): # Interface : use item
 class Container(Serializable): # Primitive 
     __serialize_only__ = ["items"]
     def __init__(self, current_char = None):
-        super().__init__()
+        Serializable.__init__(self)
         self.items = []
         self.current_char = current_char # necessary ? 
     def get_item_index(self, item):
@@ -299,14 +312,14 @@ class Container(Serializable): # Primitive
     def give(self, item, another):
         if not isinstance(another, Container): return False
         if self.get_item_index(item) == -1: return False
-        self.remove_item( obj )
-        another.add_item( obj ) 
+        self.remove_item( item )
+        another.add_item( item ) 
         return True 
         
 class Durable(Item): # interface : has durability_factor, quality
     __serialize_only__ = ["durability_factor"]
     def __init__(self, name="", description="", weight=1, durability_factor=0.995):
-        super().__init__( name = name, description = description, weight = weight, sprite=name.lower() )
+        Item.__init__(self, name = name, description = description, weight = weight, sprite=name.lower() )
         self.durability_factor = durability_factor
     def durability_consumption(self, char):
         pass 
@@ -331,13 +344,13 @@ class Durable(Item): # interface : has durability_factor, quality
             case 4: # junk 
                 self.durability_factor = d(0.9)
     def get_utility_info(self):
-        return f"({self.get_quality():.0f})"
+        return f"({self.get_quality()})"
         
 # Equippable.get_equipped_slot() || { Character.getattr() } || {}
 class Equippable(Durable): # Interface : equipment
     __serialize_only__ = Durable.__serialize_only__+["slot"]
     def __init__(self, name="", description="", weight=1, slot="primary_hand", durability_factor=0.995):
-        super().__init__(name = name, description = description, weight = weight, durability_factor = durability_factor)
+        Durable.__init__(self, name = name, description = description, weight = weight, durability_factor = durability_factor)
         self.slot = slot
     def get_equipped_slot(self, char):
         current_slot = None
@@ -349,7 +362,7 @@ class Equippable(Durable): # Interface : equipment
     def is_equipped(self, char):
         return not (self.get_equipped_slot(char) is None)
     def is_properly_equipped(self, char):
-        current_equipped_slot = self.get_equipped_slot()
+        current_equipped_slot = self.get_equipped_slot(char)
         if self.slot == current_equipped_slot: return True 
         if self.slot in HAND_SLOTS and current_equipped_slot in HAND_SLOTS: return True 
         return False 
@@ -361,19 +374,19 @@ class Equippable(Durable): # Interface : equipment
 class Weapon(Equippable): 
     __serialize_only__ = Equippable.__serialize_only__+["damage","stamina_consumption","max_damage"]
     def __init__(self, name="", damage=0 ,description="", weight=1, stamina_consumption=1, durability_factor=0.995):
-        super().__init__(name = name, description=description, weight=weight, slot="primary_hand", durability_factor=durability_factor)
+        Equippable.__init__(self, name = name, description=description, weight=weight, slot="primary_hand", durability_factor=durability_factor)
         self.damage = damage # damages decrease when successfully hit and restored to max_damage using special item 
         self.stamina_consumption = stamina_consumption 
         self.max_damage = damage 
     def durability_consumption(self, char):
-        if not self.is_properly_equipped(): return 
+        if not self.is_properly_equipped(char): return 
         self.damage = max(0,self.damage*self.durability_factor)
         if self.damage < 0.5: char.primary_hand = None
-    def stamina_consumption(self, char):
+    def do_stamina_consumption(self, char):
         char.stamina = max(0, char.stamina - self.stamina_consumption)
     def stats_update(self, player): # must differentiate between players and npcs 
         if not (self in {player.primary_hand, player.secondary_hand}): return False
-        self.stamina_consumption(player)
+        self.do_stamina_consumption(player)
         self.durability_consumption(player)
         return True
     def get_utility_info(self):
@@ -383,7 +396,7 @@ class Parriable(Weapon):
     """ Weapons that has probability to exchange hp damage for stamina consumption. """
     __serialize_only__ = Weapon.__serialize_only__
     def __init__(self, name="", damage=0 ,description="", weight=1, stamina_consumption=1, durability_factor=0.995):
-        super().__init__(name = name, damage = damage, description = description, weight= weight, stamina_consumption = stamina_consumption, durability_factor = durability_factor)
+        Weapon.__init__(self, name = name, damage = damage, description = description, weight= weight, stamina_consumption = stamina_consumption, durability_factor = durability_factor)
     def get_parry_chance(self, char, enemy, damage):
         """ To be used on derived classes, return False whenever the derived class should return 0.0 """
         if not (self in {char.primary_hand, char.secondary_hand}): return False # the derived class should return 0.0 chance 
@@ -396,7 +409,8 @@ class Parriable(Weapon):
 class Sword(Parriable, SpecialSkillWeapon):
     __serialize_only__ = Parriable.__serialize_only__ 
     def __init__(self, name="long_sword", damage=8 ,description="", weight=1, stamina_consumption=1, durability_factor=0.995):
-        super().__init__(name = name, damage = damage, description = description, weight = weight, stamina_consumption = stamina_consumption, durability_factor = durability_factor)
+        Parriable.__init__(self, name = name, damage = damage, description = description, weight = weight, stamina_consumption = stamina_consumption, durability_factor = durability_factor)
+        SpecialSkillWeapon.__init__(self)
         self.days_to_unlock_special = 20
     def get_parry_chance(self,player, enemy, damage):
         if not super().get_parry_chance(player, enemy, damage): return 0.0
@@ -411,7 +425,8 @@ class Sword(Parriable, SpecialSkillWeapon):
 class Mace(Parriable, SpecialSkillWeapon):
     __serialize_only__ = Parriable.__serialize_only__ 
     def __init__(self, name="mace", damage=10 ,description="", weight=1, stamina_consumption=2, durability_factor=0.995):
-        super().__init__(name = name, damage = damage, description = description, weight = weight, stamina_consumption = stamina_consumption, durability_factor = durability_factor)
+        Parriable.__init__(self, name = name, damage = damage, description = description, weight = weight, stamina_consumption = stamina_consumption, durability_factor = durability_factor)
+        SpecialSkillWeapon.__init__(self)
         self.days_to_unlock_special = 10
     def get_parry_chance(self, player, enemy, damage):
         if not super().get_parry_chance(player, enemy, damage): return 0.0
@@ -428,7 +443,8 @@ class Food(Usable, Resource):
     def __init__(self, name="", nutrition=0, description="", weight=1):
         food_uses = 1
         if nutrition > 100: food_uses = nutrition//50
-        super().__init__(name = name, description = description, weight = weight, sprite=name.lower(), uses = food_uses)
+        Usable.__init__(self, name = name, description = description, weight = weight, sprite=name.lower(), uses = food_uses)
+        Resource.__init__(self)
         self.nutrition = float(nutrition)/food_uses
         self.type = "food"
         self.update_value()
@@ -449,16 +465,18 @@ class Food(Usable, Resource):
 class Wood(Item, Resource):
     __serialize_only__ = Item.__serialize_only__+Resource.__serialize_only__
     def __init__(self, value = 100):
-        super().__init__(name="Wood", description="", weight=1, sprite="wood")
+        Item.__init__(self, name="Wood", description="", weight=1, sprite="wood")
+        Resource.__init__(self)
         self.value = value 
-        self.type == "wood"
+        self.type = "wood"
     def get_utility_info(self):
         return Resource.get_utility_info(self)
 
 class Stone(Item, Resource):
     __serialize_only__ = Item.__serialize_only__+Resource.__serialize_only__
     def __init__(self, value = 100):
-        super().__init__(name="Stone", description="", weight=1, sprite="stone")        
+        Item.__init__(self, name="Stone", description="", weight=1, sprite="stone")        
+        Resource.__init__(self)
         self.value = value 
         self.type == "stone"
     def get_utility_info(self):
@@ -467,7 +485,8 @@ class Stone(Item, Resource):
 class Metal(Item, Resource):
     __serialize_only__ = Item.__serialize_only__+Resource.__serialize_only__
     def __init__(self, value = 100):
-        super().__init__(name="Metal", description="", weight=1, sprite="metal")
+        Item.__init__(self, name="Metal", description="", weight=1, sprite="metal")
+        Resource.__init__(self)
         self.value = value 
         self.type == "metal"
     def get_utility_info(self):
@@ -477,7 +496,7 @@ class Metal(Item, Resource):
 class WeaponRepairTool(Usable):
     __serialize_only__ = Usable.__serialize_only__+["repairing_factor"]
     def __init__(self, name="", repairing_factor=1.05, description="", weight=1, uses = 10):
-        super().__init__(name = name, description = description, weight = weight, sprite=name.lower(), uses = uses)
+        Usable.__init__(self, name = name, description = description, weight = weight, sprite=name.lower(), uses = uses)
         self.repairing_factor = repairing_factor
     def use(self, char):
         if char.primary_hand:
@@ -491,7 +510,7 @@ class WeaponRepairTool(Usable):
 class Armor(Equippable): 
     __serialize_only__ = Equippable.__serialize_only__+["defense_factor"]
     def __init__(self, name="", defense_factor=0.02, description="", weight=1, slot="torso"):
-        super().__init__(name = name, description = description, weight = weight, slot = slot)
+        Equippable.__init__(self, name = name, description = description, weight = weight, slot = slot)
         self.defense_factor = defense_factor
     def durability_consumption(self, char):
         if not self.is_properly_equipped(): return 
@@ -511,13 +530,13 @@ class Damageable:
     def __init__(self):
         self.max_hp = 100
         self.hp = self.max_hp
-    def receive_damage(self, damage): 
+    def receive_damage(self, attacker, damage): 
         self.hp -= damage
         
 class OfensiveCharacter(Damageable):
-    __serialize_only__ = DamageableCharacter.__serialize_only__ + ["base_damage"]
+    __serialize_only__ = Damageable.__serialize_only__ + ["base_damage"]
     def __init__(self):
-        super().__init__()
+        Damageable.__init__(self)
         self.base_damage = 0
     def do_damage(self):
         damage = self.base_damage
@@ -533,20 +552,19 @@ class OfensiveCharacter(Damageable):
         secondary = self.secondary_hand
         if secondary and isinstance(secondary, Weapon) and secondary.is_properly_equipped(self):
             secondary.stats_update(self)
-        
 
 # DefensiveCharacter.receive_damage() || { DefensiveCharacter.calculate_parry_factor() | DefensiveCharacter.calculate_defense_factor() } || {}
 class DefensiveCharacter(OfensiveCharacter): # interface : characters that can parry and absorb damage 
     __serialize_only__ = OfensiveCharacter.__serialize_only__ + ["stamina", "max_stamina"]
     def __init__(self):
-        super().__init__()
+        OfensiveCharacter.__init__(self)
         self.max_stamina = 100
         self.stamina = self.max_stamina 
     def receive_damage(self, attacker, damage):
         if d() < self.calculate_parry_factor(attacker, damage) + self.calculate_defense_factor():
             self.stamina -= damage
         else:
-            super().receive_damage(damage)
+            super().receive_damage(attacker, damage)
     def calculate_defense_factor(self):
         S = 0
         for df in EQUIPMENT_SLOTS:
@@ -571,7 +589,7 @@ class DefensiveCharacter(OfensiveCharacter): # interface : characters that can p
 class RegenerativeCharacter(DefensiveCharacter): # interface : characters that can regenerate stats
     __serialize_only__ = DefensiveCharacter.__serialize_only__ 
     def __init__(self):
-        super().__init__()
+        DefensiveCharacter.__init__(self)
     def regenerate(self):
         self.regenerate_health()
         self.regenerate_stamina()
@@ -592,7 +610,7 @@ class RegenerativeCharacter(DefensiveCharacter): # interface : characters that c
 class BehaviourCharacter(Entity): # interface : artificially controlled characters 
     __serialize_only__ = Entity.__serialize_only__ + ["activity", "tolerance"] # not serializable yet 
     def __init__(self):
-        super().__init__()
+        Entity.__init__(self)
         self.activity = 0.05
         self.tolerance = 4
     def get_closest_visible(self, entities, game_instance, default_target = None):
@@ -601,15 +619,17 @@ class BehaviourCharacter(Entity): # interface : artificially controlled characte
         if default_target:
             entity = default_target
             distance = self.distance(entity)
-        if len(entities) == 0: return entity, distance 
+        if len(entities) == 0: 
+            return entity, distance 
         if type(entities) == list: 
             if not default_target:
                 entity = entities[0]
                 distance = self.distance(entity)
-            if len(entities) == 1: return entity, distance 
+            if len(entities) == 1: 
+                return entity, distance 
             for v in entities:
                 if not v: continue # possibly unnecessary 
-                if not self.can_see_character(v, game_instance.map): continue 
+                # if not self.can_see_character(v, game_instance.map): continue 
                 if not v.current_tile: continue 
                 tile = game_instance.map.get_tile(v.x,v.y)
                 if not tile: continue
@@ -633,8 +653,14 @@ class BehaviourCharacter(Entity): # interface : artificially controlled characte
                 elif new_distance < distance:
                     entity = v
                     distance = new_distance 
-        if entity and self.can_see_character(entity, game_instance.map):
-            return entity, distance
+        if entity and distance:
+            if isinstance(self, Player):
+                return entity, distance
+            else:
+                if self.can_see_character(entity, game_instance.map):
+                    return entity, distance
+                else:
+                    return None, None 
         else:
             return None, None 
     def pursue_target(self, entities, game_instance, default_target = None):
@@ -651,7 +677,9 @@ class BehaviourCharacter(Entity): # interface : artificially controlled characte
                         self.move(dx, dy, map)
                         return True 
                     elif tile.current_char is enemy:
-                        game_instance.events.append(AttackEvent(self, enemy, self.do_damage()))
+                        damage = self.do_damage()
+                        game_instance.events.append(AttackEvent(self, enemy, damage))
+                        if isinstance(self, Player):print(self, damage)
                         return True 
         return False
     def random_walk(self, game_instance):
@@ -663,16 +691,17 @@ class BehaviourCharacter(Entity): # interface : artificially controlled characte
                 if tile.walkable and not tile.current_char:
                     self.move(dx, dy, game_instance.map)
     def behaviour_update(self, entities, game_instance, default_target = None):
-        if self.current_map != game_instance.map.coords: return False
-        if self.current_map != game_instance.current_map: return False
+        if hasattr(self,"current_map"):
+            if self.current_map != game_instance.map.coords: return False
+            if self.current_map != game_instance.current_map: return False
         if self.pursue_target(entities, game_instance, default_target): return True 
         self.random_walk(game_instance) 
         return True 
 
 class EquippedCharacter(Container): # interface : equip items
-    __serialize_only__ = [ "primary_hand", "secondary_hand", "head", "neck", "torso", "waist", "legs", "foot" ]
+    __serialize_only__ = Container.__serialize_only__ + [ "primary_hand", "secondary_hand", "head", "neck", "torso", "waist", "legs", "foot" ]
     def __init__(self):
-        super().__init__() 
+        Container.__init__(self) 
         self.primary_hand = None
         self.secondary_hand = None
         self.head = None
@@ -682,23 +711,25 @@ class EquippedCharacter(Container): # interface : equip items
         self.legs = None
         self.foot = None
     def equip_item(self, item, slot): 
-        if isinstance(item, Equippable) and item.slot == slot:
-            if self.add_item(item): # add item to inventory or verify if its already there 
-                if slot == "primary_hand":
-                    if self.primary_hand: # removes any form primary hand 
-                        self.items.append(self.primary_hand)
-                        self.primary_hand = None
-                    index = self.get_item_index(item)
-                    if index != -1: self.items.pop(index) # remove from inventory
-                    self.primary_hand = item # put in the hand 
-                    return True
-        return False # not equipped
+        if isinstance(item, Equippable):
+            # removes any equipped 
+            prev_equip = self.get_equipment_by_slot(slot)
+            if prev_equip: 
+                self.items.append(prev_equip) # put back the previous equipped to inventory
+                self.set_equipment_by_slot(None, slot) # set slot free
+            # remove the new item from inventory if its there 
+            index = self.get_item_index(item)
+            if index != -1: self.items.pop(index) 
+            # equip item in the slot 
+            self.set_equipment_by_slot(item, slot)
+            return True 
+        return False # not equipped, fail 
     def unequip_item(self, slot):
-        if slot == "primary_hand" and self.primary_hand:
-            index = self.get_item_index(self.primary_hand)
-            if index == -1: self.items.append(self.primary_hand)
-            self.primary_hand = None
-            return True
+        prev_equip = self.get_equipment_by_slot(slot)
+        if prev_equip:
+            self.add_item(prev_equip)
+            self.set_equipment_by_slot(None, slot)
+            return True 
         return False
     def pickup_item(self, item):
         return self.add_item(item)
@@ -706,11 +737,14 @@ class EquippedCharacter(Container): # interface : equip items
         pass     
     def set_equipment_by_slot(self, value, slot = "primary_hand"):
         setattr(self, slot, value)
-        
+    def get_equipment_by_slot(self, slot = "primary_hand"):
+        return getattr(self, slot, None)
+    
 class Character(EquippedCharacter, BehaviourCharacter):
     __serialize_only__ = EquippedCharacter.__serialize_only__ + BehaviourCharacter.__serialize_only__ +  ["name"]
     def __init__(self, name="", hp=100, x=50, y=50):
-        super().__init__()
+        EquippedCharacter.__init__(self)
+        BehaviourCharacter.__init__(self)
         self.name = name
         self.hp = hp
         self.max_hp = hp
@@ -762,20 +796,47 @@ class SkilledCharacter(Character):
         "can_use_dodge_skill" 
     ]
     def __init__(self, name="", hp=100, x=50, y=50):
-        super().__init__(name = name, hp = hp, x = x, y = y)
+        Character.__init__(self, name = name, hp = hp, x = x, y = y)
         self.deactivate_all_skills()
-    def power_skill(self): 
-        if not self.can_use_power_skill: return False
-    def thrust_skill(self): 
-        if not self.can_use_thrust_skill: return False 
-    def knight_skill(self): 
-        if not self.can_use_knight_skill: return False 
-    def tower_skill(self): 
-        if not self.can_use_power_skill: return False 
-    def bishop_skill(self): 
-        if not self.can_use_bishop_skill: return False 
-    def dodge_skill(self): 
+        self.stamina_bound = 20
+    def dodge_skill(self, game_instance): 
         if not self.can_use_dodge_skill: return False 
+        if self.stamina<self.stamina_bound:
+            game_instance.add_message("I'm exhausted ... I need to take a breathe")
+        x = self.x 
+        y = self.y
+        fx, fy = self.get_forward_direction()
+        bx = -fx 
+        by = -fy
+        b_is_walkable = True 
+        map = game_instance.map 
+        tile = map.get_tile(x+bx,y+by)
+        if tile and self.stamina>self.stamina_bound:
+            if tile.walkable:
+                tile2 = map.get_tile(x+2*bx,y+2*by)
+                if tile2:
+                    if tile2.walkable:
+                        dx = 2*bx 
+                        dy = 2*by
+                        self.stamina -= self.stamina_bound
+                    else:
+                        b_is_walkable = False
+                else:
+                    b_is_walkable = False
+            else:
+                b_is_walkable = False
+        else:
+            b_is_walkable = False
+        if not b_is_walkable:
+            return False 
+        old_x, old_y = self.x, self.y
+        if self.move(dx, dy, game_instance.map):
+            game_instance.events.append(MoveEvent(self, old_x, old_y))
+            game_instance.dirty_tiles.add((old_x, old_y))
+            game_instance.dirty_tiles.add((self.x, self.y))    
+            game_instance.game_iteration()
+            return True 
+        return False 
     def activate_all_skills(self):
         self.can_use_power_skill = True
         self.can_use_thrust_skill = True
@@ -802,7 +863,8 @@ class Player(SkilledCharacter, RegenerativeCharacter): # player or playable npc
         "party"
     ]
     def __init__(self, name="", hp=PLAYER_MAX_HP, x=MAP_WIDTH//2, y=MAP_HEIGHT//2, b_generate_items = False, sprite = "player", current_map = (0,0,0)):
-        super().__init__(name = name, hp = hp, x = x, y = y)
+        SkilledCharacter.__init__(self, name = name, hp = hp, x = x, y = y)
+        RegenerativeCharacter.__init__(self)
         self.rotation = 0
         self.field_of_view = 70
         self.name = name
@@ -887,7 +949,7 @@ class Player(SkilledCharacter, RegenerativeCharacter): # player or playable npc
                 game_instance.Event_PlayerDeath()
                 return    
     def behaviour_update(self, game_instance): # on turn for npcs 
-        if super().behaviour_update_update(game_instance.map.enemies, game_instance):
+        if super().behaviour_update(game_instance.map.enemies, game_instance):
             self.regenerate_stamina()
             self.regenerate_health()
     def update_available_skills(self):
@@ -906,7 +968,7 @@ class Player(SkilledCharacter, RegenerativeCharacter): # player or playable npc
 class Hero(Player): # playable character that can "carry" a party 
     __serialize_only__ = Player.__serialize_only__ + ["party_members"]
     def __init__(self, name="", hp=PLAYER_MAX_HP, x=MAP_WIDTH//2, y=MAP_HEIGHT//2, b_generate_items = False, sprite = "player", current_map = (0,0,0)):
-        super().__init__(name = name, hp = hp, x = x, y = y, b_generate_items = b_generate_items, sprite = sprite, current_map = current_map)
+        Player.__init__(self, name = name, hp = hp, x = x, y = y, b_generate_items = b_generate_items, sprite = sprite, current_map = current_map)
         self.party_members = set() # names of players that belongs to Hero party 
     def add_to_party(self, key, game_instance):
         if not key in game_instance.players: return 
@@ -944,7 +1006,8 @@ class Hero(Player): # playable character that can "carry" a party
 class Enemy(Character, OfensiveCharacter):
     __serialize_only__ = Character.__serialize_only__ + OfensiveCharacter.__serialize_only__ +["type","stance","canSeeCharacter","patrol_direction"]
     def __init__(self, name="", hp=30, x=50, y=50, b_generate_items = False):
-        super().__init__(name = name, hp = hp, x = x, y = y)
+        Character.__init__(self, name = name, hp = hp, x = x, y = y)
+        OfensiveCharacter.__init__(self)
         self.description = ""
         self.type = "Generic"
         self.stance = "Aggressive"
@@ -960,12 +1023,12 @@ class Enemy(Character, OfensiveCharacter):
 class Zombie(Enemy):
     __serialize_only__ = Enemy.__serialize_only__
     def __init__(self, name="", hp=40, x=50, y=50, b_generate_items = False):
-        super().__init__(name = name, hp = hp, x = x, y = y, b_generate_items = b_generate_items)
+        Enemy.__init__(self, name = name, hp = hp, x = x, y = y, b_generate_items = b_generate_items)
         self.type = "Zombie"
         self.description = "Zombies, people affected by the plague, they are still alive but because of this strange disease their bodies smells like rotten flesh. Before they lose their minds, they try to acummulate food to satiate hunger, it's almost certain to find food with them ..."
         self.sprite = "zombie"
     def do_damage(self):
-        return d(0, 15)
+        return d(0, 10)
     def generate_initial_items(self):
         if random.random() < 0.7:
             self.add_item(Food("bread", nutrition=random.randint(50, 100)))
@@ -975,7 +1038,7 @@ class Zombie(Enemy):
 class Rogue(Enemy):
     __serialize_only__ = Enemy.__serialize_only__
     def __init__(self, name="", hp=100 , x=50, y=50, b_generate_items = False):
-        super().__init__(name = name, hp = hp, x = x, y = y, b_generate_items = b_generate_items)
+        Enemy.__init__(self, name = name, hp = hp, x = x, y = y, b_generate_items = b_generate_items)
         self.type = "Rogue"
         self.description = "Rogues and Bandits, they are just robbers, ambushing travellers on the road. Always carry a sword with you ..."
         self.sprite = "rogue"
@@ -989,7 +1052,7 @@ class Rogue(Enemy):
 class Mercenary(Rogue):
     __serialize_only__ = Enemy.__serialize_only__
     def __init__(self, name="", hp=130 , x=50, y=50, b_generate_items = False):
-        super().__init__(name = name, hp = hp, x = x, y = y, b_generate_items = b_generate_items)
+        Rogue.__init__(self, name = name, hp = hp, x = x, y = y, b_generate_items = b_generate_items)
         self.type = "Mercenary"
         self.description = "More experienced in combat than rogues, but often doing the same kind of 'job', money before honor ..."
         self.sprite = "mercenary"
@@ -1005,7 +1068,7 @@ class Mercenary(Rogue):
 class Bear(Enemy):
     __serialize_only__ = Enemy.__serialize_only__
     def __init__(self, name="", hp=60 , x=50, y=50, b_generate_items = False):
-        super().__init__(name = name, hp = hp, x = x, y = y, b_generate_items = b_generate_items)
+        Enemy.__init__(self, name = name, hp = hp, x = x, y = y, b_generate_items = b_generate_items)
         self.description = "Bears, these woods are their home, stronger than any man, don't try to mess with them ..."
         self.sprite = "bear"
         self.activity = 0.1
@@ -1019,7 +1082,7 @@ class Tile(Container):
     list_sprites_names = list(SPRITE_NAMES)
     __serialize_only__ = Container.__serialize_only__ + ["walkable", "blocks_sight", "default_sprite_key", "stair", "stair_x", "stair_y", "cosmetic_layer_sprite_keys", "stamina_consumption"]
     def __init__(self, walkable=True, sprite_key="grass"):
-        super().__init__()
+        Container.__init__(self)
         self._load_sprites()
         self.walkable = walkable
         self.blocks_sight = not walkable
@@ -1041,11 +1104,14 @@ class Tile(Container):
             self.cosmetic_layer_sprite_keys.clear()
             return 
         self.cosmetic_layer_sprite_keys.remove( sprite_key )
+    def get_transparent_image(self):
+        # todo 
+        return 
     def paint_items(self, painter):
         if len(self.items) == 0: return 
         if len(self.items) == 1: self.items[0].paint_to(painter)
         if len(self.items) > 1:
-            painter.drawPixmap(0, 0, Tile.SPRITES.get("sack", base))
+            painter.drawPixmap(0, 0, Tile.SPRITES.get("sack", self.get_default_pixmap() ))
     def draw(self, scene, x, y, tile_size = TILE_SIZE):
         # BEGIN Painter
         combined = QPixmap(tile_size, tile_size) # will be changed with QPainter 
@@ -1094,12 +1160,12 @@ class Tile(Container):
         
 class ActionTile(Tile): # tile which the player can interact - interface class
     def __init__(self, front_sprite = "stair_up", walkable=True, sprite_key="grass"):
-        super().__init__(walkable=walkable, sprite_key=sprite_key)
+        Tile.__init__(self, walkable=walkable, sprite_key=sprite_key)
         self.add_layer( front_sprite )
 
 class Stair(ActionTile): # not used yet 
     def __init__(self, front_sprite = "stair_up", walkable=True, sprite_key="grass"):
-        super().__init__(front_sprite = front_sprite, walkable = walkable, sprite_key = sprite_key)
+        ActionTile.__init__(self, front_sprite = front_sprite, walkable = walkable, sprite_key = sprite_key)
         self.stair = None # used to store a tuple map coord to connect between maps 
         self.stair_x = None # points to the stair tile from the map with coord self.stair
         self.stair_y = None # points to the stair tile from the map with coord self.stair 
@@ -1112,7 +1178,7 @@ class Stair(ActionTile): # not used yet
 class TileBuilding(ActionTile): # interface class
     __serialize_only__ = Tile.__serialize_only__ + ["villagers", "villagers_max", "food", "stone", "metal", "wood"]
     def __init__(self, front_sprite, walkable=True, sprite_key="grass"):
-        super().__init__( front_sprite = front_sprite, walkable=walkable, sprite_key=sprite_key )
+        ActionTile.__init__(self, front_sprite = front_sprite, walkable=walkable, sprite_key=sprite_key )
         self.villagers = 5
         self.villagers_max = 20
         self.food = 0
@@ -1137,7 +1203,7 @@ class TileBuilding(ActionTile): # interface class
     def retrieve_wood(self, game_instance, quantity = 500):
         if self.wood >= quantity:
             self.wood -= quantity
-            game_instance.player.add_item(Resource(name = "wood", value = quantity))
+            game_instance.player.add_item(Wood(value = quantity))
             game_instance.update_inv_window()
             return True 
         return False
@@ -1211,7 +1277,7 @@ class TileBuilding(ActionTile): # interface class
             return False 
         # -- 
         if current_menu == "Resources >":
-            match item:
+            match current_item:
                 case "..":
                     menu_instance.set_list()
                     return False
@@ -1242,7 +1308,7 @@ class TileBuilding(ActionTile): # interface class
 class Castle(TileBuilding):
     __serialize_only__ = TileBuilding.__serialize_only__ + ["name","heroes","num_heroes"]
     def __init__(self, name = "Home"):
-        super().__init__(front_sprite = "castle", walkable=True, sprite_key="grass")
+        TileBuilding.__init__(self, front_sprite = "castle", walkable=True, sprite_key="grass")
         self.name = name 
         self.heroes = {}
         self.num_heroes = 0
@@ -1350,7 +1416,7 @@ class Castle(TileBuilding):
 class Mill(TileBuilding):
     __serialize_only__ = TileBuilding.__serialize_only__ + ["name"]
     def __init__(self, name = "Farm", food = d(500,2000)):
-        super().__init__(front_sprite = "mill", walkable=True, sprite_key="grass")
+        TileBuilding.__init__(self, front_sprite = "mill", walkable=True, sprite_key="grass")
         self.name = name 
         self.menu_list = []
         self.food = food 
@@ -1379,7 +1445,7 @@ class Mill(TileBuilding):
 class LumberMill(TileBuilding):
     __serialize_only__ = TileBuilding.__serialize_only__ + ["name"]
     def __init__(self, name = "Lumber Mill", wood = d(500,2000)):
-        super().__init__(front_sprite = "lumber_mill", walkable=True, sprite_key="grass")
+        TileBuilding.__init__(self, front_sprite = "lumber_mill", walkable=True, sprite_key="grass")
         self.name = name 
         self.menu_list = []
         self.wood = wood
@@ -1408,7 +1474,7 @@ class LumberMill(TileBuilding):
 class GuardTower(TileBuilding):
     __serialize_only__ = TileBuilding.__serialize_only__ + ["name","heroes","num_heroes"]
     def __init__(self, name = "Guard Tower"):
-        super().__init__(front_sprite = "tower", walkable=True, sprite_key="grass")
+        TileBuilding.__init__(self, front_sprite = "tower", walkable=True, sprite_key="grass")
         self.name = name 
         self.heroes = {}
         self.num_heroes = 0
