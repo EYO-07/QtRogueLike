@@ -250,6 +250,8 @@ class Item(Serializable, Entity): # Primitive
         return f"{self.name} ; "+self.get_utility_info()
     def info(self):
         return self.__str__()
+    def is_equipped(self, char):
+        return False
     
 # Usable.use() || { Character.remove_item() } || {}
 class Usable(Item): # Interface : use item
@@ -294,7 +296,13 @@ class Container(Serializable): # Primitive
             self.add_item(item_instance) 
             return item_instance
         return None
-
+    def give(self, item, another):
+        if not isinstance(another, Container): return False
+        if self.get_item_index(item) == -1: return False
+        self.remove_item( obj )
+        another.add_item( obj ) 
+        return True 
+        
 class Durable(Item): # interface : has durability_factor, quality
     __serialize_only__ = ["durability_factor"]
     def __init__(self, name="", description="", weight=1, durability_factor=0.995):
@@ -736,20 +744,54 @@ class Character(EquippedCharacter, BehaviourCharacter):
         if not tile: return False 
         return (tile.current_char is self) and (self.current_tile is tile) 
 
-class Player(Character, RegenerativeCharacter): # player or playable npc 
-    __serialize_only__ = Character.__serialize_only__+ RegenerativeCharacter.__serialize_only__ + [ 
+class SkilledCharacter(Character):
+    __serialize_only__ = Character.__serialize_only__ + [ 
+        "can_use_bishop_skill",
+        "can_use_knight_skill", 
+        "can_use_power_skill", 
+        "can_use_thrust_skill", 
+        "can_use_tower_skill",
+        "can_use_dodge_skill" 
+    ]
+    def __init__(self, name="", hp=100, x=50, y=50):
+        super().__init__(name = name, hp = hp, x = x, y = y)
+        self.deactivate_all_skills()
+    def power_skill(self): 
+        if not self.can_use_power_skill: return False
+    def thrust_skill(self): 
+        if not self.can_use_thrust_skill: return False 
+    def knight_skill(self): 
+        if not self.can_use_knight_skill: return False 
+    def tower_skill(self): 
+        if not self.can_use_power_skill: return False 
+    def bishop_skill(self): 
+        if not self.can_use_bishop_skill: return False 
+    def dodge_skill(self): 
+        if not self.can_use_dodge_skill: return False 
+    def activate_all_skills(self):
+        self.can_use_power_skill = True
+        self.can_use_thrust_skill = True
+        self.can_use_knight_skill = True
+        self.can_use_tower_skill = True
+        self.can_use_bishop_skill = True
+        self.can_use_dodge_skill = True
+    def deactivate_all_skills(self):
+        self.can_use_power_skill = False 
+        self.can_use_thrust_skill = False 
+        self.can_use_knight_skill = False 
+        self.can_use_tower_skill = False 
+        self.can_use_bishop_skill = False 
+        self.can_use_dodge_skill = False 
+
+class Player(SkilledCharacter, RegenerativeCharacter): # player or playable npc 
+    __serialize_only__ = SkilledCharacter.__serialize_only__+ RegenerativeCharacter.__serialize_only__ + [ 
         "hunger",
         "max_hunger",
         "rotation", 
         "field_of_view", 
         "current_map",
         "days_survived",
-        "party",
-        "can_use_bishop_skill",
-        "can_use_knight_skill", 
-        "can_use_power_skill", 
-        "can_use_thrust_skill", 
-        "can_use_tower_skill" 
+        "party"
     ]
     def __init__(self, name="", hp=PLAYER_MAX_HP, x=MAP_WIDTH//2, y=MAP_HEIGHT//2, b_generate_items = False, sprite = "player", current_map = (0,0,0)):
         super().__init__(name = name, hp = hp, x = x, y = y)
@@ -764,11 +806,6 @@ class Player(Character, RegenerativeCharacter): # player or playable npc
         self.current_map = current_map
         self.days_survived = 0
         self.party = False # marker if the player belongs to a character 
-        self.can_use_power_skill = False 
-        self.can_use_thrust_skill = False 
-        self.can_use_knight_skill = False 
-        self.can_use_tower_skill = False 
-        self.can_use_bishop_skill = False 
         self.activity = 0.05
         self.tolerance = 4
         if b_generate_items: self.generate_initial_items()
@@ -865,6 +902,8 @@ class Hero(Player): # playable character that can "carry" a party
         self.party_members.add(key)
         npc.party = True
         game_instance.map.remove_character(npc)
+        game_instance.update_prior_next_selection()
+        game_instance.draw()
     def release_party(self, game_instance):
         x = self.x 
         y = self.y 

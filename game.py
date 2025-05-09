@@ -91,7 +91,6 @@ class Game_SOUNDMANAGER:
             else:
                 self.add_message("Music not ready, will play when loaded")
                 print("Music not ready, waiting for LoadedMedia state")
-            
 class Game_VIEWPORT:
     def __init__(self):
         self.rotation = 0  # degrees: 0, 90, 180, 270
@@ -1172,17 +1171,6 @@ class Game(QGraphicsView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_P
                 "Save Game >", 
                 "Quit to Desktop"
             ], action = main_menu, game_instance = self)
-            SB.add_list("Load Game >", ["[ Main Menu > Load Game ]","Slot 1", "Slot 2", ".."])
-            SB.add_list("Save Game >", ["[ Main Menu > Save Game ]","Slot 1", "Slot 2", ".."])
-            SB.add_list("Select Player Sprite >", ["[ Character Settings > Select Sprite ]"] + SPRITE_NAMES_PLAYABLES + [".."])
-            SB.add_list("Select Player Character >", ["[ Character Settings > Character Selection ]"] + [ k for k,v in self.players.items() if v.current_map == self.player.current_map and not v.party ] + [".."])
-            SB.add_list("Character Settings >", [
-                "[ Main Menu > Character Settings ]",
-                "Select Player Sprite >",
-                "Select Player Character >",
-                "Change Current Character Name",
-                ".."
-            ] )
             SB.show()
         elif key == Qt.Key_F12:  # F12 Debugging: 
             SB = SelectionBox(parent=self, item_list = [
