@@ -526,7 +526,15 @@ class OfensiveCharacter(Damageable):
         if self.secondary_hand and hasattr(self.secondary_hand, 'damage'):
             damage += d(self.secondary_hand.damage/3.0, self.secondary_hand.damage)/2.0
         return damage
+    def weapons_stats_update(self):
+        primary = self.primary_hand
+        if primary and isinstance(primary, Weapon) and primary.is_properly_equipped(self):
+            primary.stats_update(self)
+        secondary = self.secondary_hand
+        if secondary and isinstance(secondary, Weapon) and secondary.is_properly_equipped(self):
+            secondary.stats_update(self)
         
+
 # DefensiveCharacter.receive_damage() || { DefensiveCharacter.calculate_parry_factor() | DefensiveCharacter.calculate_defense_factor() } || {}
 class DefensiveCharacter(OfensiveCharacter): # interface : characters that can parry and absorb damage 
     __serialize_only__ = OfensiveCharacter.__serialize_only__ + ["stamina", "max_stamina"]
@@ -643,7 +651,7 @@ class BehaviourCharacter(Entity): # interface : artificially controlled characte
                         self.move(dx, dy, map)
                         return True 
                     elif tile.current_char is enemy:
-                        game_instance.events.append(AttackEvent(self, enemy, self.calculate_damage_done()))
+                        game_instance.events.append(AttackEvent(self, enemy, self.do_damage()))
                         return True 
         return False
     def random_walk(self, game_instance):
@@ -882,6 +890,16 @@ class Player(SkilledCharacter, RegenerativeCharacter): # player or playable npc
         if super().behaviour_update_update(game_instance.map.enemies, game_instance):
             self.regenerate_stamina()
             self.regenerate_health()
+    def update_available_skills(self):
+        if self.days_survived >= 5: 
+            self.can_use_dodge_skill = True 
+        if self.days_survived >= 20: 
+            self.can_use_thrust_skill = True
+        if self.days_survived >= 30:
+            self.can_use_knight_skill = True 
+            self.can_use_tower_skill = True 
+            self.can_use_bishop_skill = True 
+            self.can_use_power_skill = True
 
 # Hero.add_to_party() || { Hero.remove_character() | Hero.place_character() } || {}
 # Hero.release_party() || { Hero.place_character() | Hero.draw() } || {}
@@ -920,6 +938,8 @@ class Hero(Player): # playable character that can "carry" a party
                     game_instance.map.place_character(value)
                     game_instance.draw()
                     break 
+    def count_party(self):
+        return len(self.party_members)
                     
 class Enemy(Character, OfensiveCharacter):
     __serialize_only__ = Character.__serialize_only__ + OfensiveCharacter.__serialize_only__ +["type","stance","canSeeCharacter","patrol_direction"]

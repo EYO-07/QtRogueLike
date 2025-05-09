@@ -235,7 +235,6 @@ class Game_VIEWPORT:
             return dy, -dx            
     def rotated_direction(self, dx, dy):
         return self.rotate_vector_for_movement(dx, dy)
-
 class Game_PLAYERS:
     def __init__(self):
         self.turn = 0
@@ -261,9 +260,13 @@ class Game_PLAYERS:
         self.update_prior_next_selection()
         return obj 
     def set_player(self, name): # set the Game.player by dictionary name  
-        self.player = self.players[name]
+        """ return True if successfully set the current player, False otherwise """
+        if not name in self.players: return False 
+        new_player = self.players[name]
+        self.player = new_player
         self.current_player = name 
         self.player.party = False
+        return True 
     def set_player_name(self,key,new_name):
         player = self.players.get(key,None)
         if not player: return False
@@ -279,30 +282,44 @@ class Game_PLAYERS:
             self.map.place_character(v)
         return self.map.place_character(self.player)
     def remove_player(self, key = None):
-        if len(list(self.players.keys())) <= 1: 
+        if len(self.players) <= 1: 
             self.add_message("Must have at least one adventurer ...")
             return 
         if not key: key = self.current_player
-        self.map.remove_character(self.players[key])
+        char_to_remove = self.players[key]
+        self.map.remove_character(char_to_remove)
         self.players.pop(key)
-        new_key_name = random.choice( list(self.players.keys()) )
-        if not new_key_name: return 
+        if not char_to_remove is self.player: 
+            self.update_prior_next_selection()
+            return 
+        new_key_name = random.choice( [ k for k,v in self.players.items() if not v.party ] )
+        if not new_key_name: 
+            self.update_prior_next_selection()
+            return 
         self.set_player(new_key_name)
         self.update_prior_next_selection()
     def update_prior_next_selection(self):
+        def ply_filter(value):
+            if value is None: return False 
+            if not isinstance(value, Player): return False 
+            if value.party: return False
+            if value.current_map != self.current_map: return False
+            if value is self.player: return False 
+            if not value.is_placed_on_map(): return False 
+            if value.distance(self.player) > 20: return False 
+            return True
         self.prior_next_index = 0
         try:
-            self.prior_next_players = [self.player.name]+[ key for key,value in iter(self.players.items()) if (value.party == False and value.current_map == self.current_map and (not value is self.player)) ]
+            self.prior_next_players = [self.player.name]+[ key for key,value in self.players.items() if ply_filter(value) ]
         except:
             self.prior_next_players = []
-    # --
     def move_party(self):
-        for k,v in iter(self.players.items()):
+        for k,v in self.players.items():
             if v is self.player: continue 
             if not v.party: continue 
             v.current_map = self.current_map
     def release_party(self, diff_moves = CROSS_DIFF_MOVES_1x1):
-        print("releasing from party")
+        print("releasing everyone from party")
         x = self.player.x 
         y = self.player.y 
         for dx,dy in diff_moves:
@@ -319,13 +336,16 @@ class Game_PLAYERS:
                     self.draw()
                     break 
         self.update_prior_next_selection()
+    def release_hero_party(self):
+        if not isinstance(self.player, Hero): return 
+        self.player.release_party(self)
+        self.update_prior_next_selection()
     def count_party(self):
         S = 0
         for i in self.players:
             if self.players[i].party == True:
                 S += 1
         return S
-            
 class Game_MAPTRANSITION:
     def __init__(self):
         self.current_map = (0,0,0) # Current map coordinates
@@ -348,14 +368,6 @@ class Game_MAPTRANSITION:
             new_map_coord = (self.current_map[0], self.current_map[1] + 1, self.current_map[2])
             new_y = 0
         return new_x, new_y, new_map_coord
-    def find_stair_tile(self, map_obj, target_stair_coords):
-        """Find a tile in map_obj with a stair attribute matching target_stair_coords."""
-        for y in range(map_obj.height):
-            for x in range(map_obj.width):
-                tile = map_obj.get_tile(x, y)
-                if tile and tile.stair == target_stair_coords:
-                    return (tile.stair_x or x, tile.stair_y or y)
-        return None
     def new_map_from_current_coords(
             self, 
             filename = "default", 
@@ -503,7 +515,6 @@ class Game_MAPTRANSITION:
         self.draw_grid()
         self.draw_hud()
         toc(T1,"Game.vertical_map_transition() ||")
-        
 class Game_DATA:
     def __init__(self):
         self.current_slot = 1  # Track current save slot
@@ -649,7 +660,6 @@ class Game_DATA:
             self.journal_window = JournalWindow(self)
         self.journal_window.load_journal(slot)
         self.player.rotation = self.rotation 
-
 class Game_GUI:
     def __init__(self):
         self.setWindowFlags(Qt.FramelessWindowHint)
@@ -700,7 +710,6 @@ class Game_GUI:
             self.journal_window.update_position()
         self.journal_window.save_journal()
         self.setFocus()
-            
 class Game_ITERATION:
     def __init__(self):
         self.events = []  # Initialize events list
@@ -726,12 +735,11 @@ class Game_ITERATION:
                         event.tile.remove_item(item)
                         self.add_message(f"{event.character.name} picked up {item.name}")
                         self.dirty_tiles.add((event.character.x, event.character.y))
-                        #self.save_current_game(slot=1)  # Autosave on pickup
             elif isinstance(event, UseItemEvent):
                 if event.item.use(event.character):
                     if hasattr(event.item,"uses"):
                         self.add_message(f"{event.item.name} used")
-                        if event.item.uses <0:
+                        if event.item.uses <= 0:
                             event.character.remove_item(event.item)
                     else:
                         event.character.remove_item(event.item)
@@ -742,28 +750,29 @@ class Game_ITERATION:
         self.events.clear()
     def update_players(self):
         self.player.update(self)
-        for k,v in iter(self.players.items()):
+        for k,v in self.players.items():
             if v is self.player: continue 
             if v.party:
                 if v.is_placed_on_map(self.map):
                     self.map.remove_character(v)
                 continue 
-            v.npc_update(self)
+            v.behaviour_update(self)
     def update_enemies(self): # maybe more maps could be updated, like maps with alive players 
         self.map.update_enemies(self)
     def update_buildings(self):
         for b in self.map.buildings:
             b.update()
     def Event_NewTurn(self):
-        # triggers the new day
-        # print(f"Turn {self.turn}")
         if self.turn // self.turns_per_day + 1 > self.current_day:
             self.current_day += 1
             self.Event_NewDay()
         if self.turn % 5 == 0: # refresh some variables 
             self.last_encounter_description = ""
         if self.turn % 100 == 0:
-            self.add_message(f"Day : {self.current_day} Turn : {self.turn}")
+            self.Event_Every_100_Turns()
+    def Event_Every_100_Turns(self):
+        self.add_message(f"Day : {self.current_day} Turn : {self.turn}")
+        self.player.update_available_skills()
     def Event_NewDay(self):
         print(f"Day {self.current_day}")
         self.player.days_survived += 1
@@ -771,6 +780,8 @@ class Game_ITERATION:
             self.journal_window.append_text("(Skill - 5 days) I'm in full shape now, I'm feeling agile, use Ctrl to dodge and move two tiles backward ...") 
         if self.current_day == 20:
             self.journal_window.append_text("(Skill - 20 days) My body remembered how to use a sword properly, now I can perform deadly blows with F key. Whenever the enemy stay in L position like a knight chess I can swing my sword hit taking him off-guard ...") 
+        if self.current_day == 30:
+            self.journal_window.append_text("(Skill - 30 days) Now I'm proficient with many weapons, I can use special moves ...") 
     def Event_PlayerDeath(self):
         # SANITY COMMENTS
         # 1. If there is other characters on the map or on the party you still can load the save if you don't change the map. 
@@ -782,70 +793,50 @@ class Game_ITERATION:
         # -> Player Death () || ... | % Has Other Characters on the Map || Take Control of Next Character on the Map 
         # -> Player Death () || ... | % Has Other Characters on the Map | % else || Start New Game and Saves  
         
-        print("Game Over!")
-        self.release_party(SQUARE_DIFF_MOVES_5x5)
+        print("you died!")
+        if isinstance(self.player, Hero): # only heroes can have a party 
+            self.player.release_party(game_instance)
+        # self.release_party(SQUARE_DIFF_MOVES_5x5)
         self.player.drop_on_death()
         if self.player.name in self.players.keys():
             print("Removing :",self.player.name)
             self.players.pop(self.player.name)
         self.map.remove_character(self.player)
-        
         # -- 
+        b_new_char_set = False
         if len(self.players) > 0: # Has Other Characters on the Map
-            for k,v in iter(self.players.items()):
+            for k,v in self.players.items():
                 # take control of the first valid character 
                 if k and v and isinstance(v, Player):
-                    self.set_player(v.name)
-                    self.draw()
-                    break 
-        else:
+                    if self.set_player(v.name):
+                        self.draw()
+                        b_new_char_set = True
+                        break 
+        if not b_new_char_set:
             self.add_message("You died, starting new game")
             self.start_new_game(new_character_name = self.current_player, b_clear_players = False)
             self.save_current_game(slot = self.current_slot)
+        self.update_prior_next_selection()
     def Event_DoAttack(self, event):
-        primary = self.player.primary_hand
-        # swords have the parry property in the player perspective, they will try to consume the stamina first 
+        self.target.receive_damage(event.attacker, event.damage)
+        if hasattr(event.target, "description"): self.last_encounter_description = getattr(event.target,"description")
         if event.target is self.player: # player being attacked
             self.last_encounter_description = getattr(event.attacker,"description")
-            primary_attacker = event.attacker.primary_hand 
-            if primary and primary_attacker:
-                if isinstance(primary, Sword):
-                    print(f"Defense Factor : {self.player.calculate_defense_factor():.5f}")
-                    if random.random() < primary.get_player_parry_chance(self.player, event.attacker, event.damage) + self.player.calculate_defense_factor():
-                        self.add_message(f"You parry the incoming attack ...")
-                        self.player.stamina -= event.damage
-                    else:
-                        self.add_message(f"You've being hit, your foe is skilled in sword combat ...")
-                        self.player.hp -= event.damage
-                else: 
-                    self.player.hp -= event.damage
-            else:
-                self.player.hp -= event.damage            
-        else: # player attack
-            if hasattr(event.target, "description"): self.last_encounter_description = getattr(event.target,"description")
-            event.target.hp -= event.damage
-            if self.player is event.attacker:
-                self.add_message(f"{event.attacker.name} deals {event.damage:.1f} damage to {event.target.name}")
-            if primary:
-                if isinstance(primary, Weapon):
-                    primary.stats_update(self.player)
-                    self.update_inv_window()
-        # in case of death 
-        if event.target.hp <= 0:
+        elif self.player is event.attacker: # player attack            
+            self.add_message(f"{event.attacker.name} deals {event.damage:.1f} damage to {event.target.name}")
+            self.player.weapons_stats_update()
+            self.update_inv_window()
+        if event.target.hp <= 0: # in case of death 
             self.Event_CharacterDeath(event)
     def Event_CharacterDeath(self, event):
         if event.target is self.player:
             self.Event_PlayerDeath()
-            self.update_prior_next_selection()
         else:
             event.target.drop_on_death()
-            if event.target in self.map.enemies:
-                self.map.enemies.remove(event.target)
-            if event.target.name in self.players.keys():
+            if event.target.name in self.players:
                 print("Removing :",event.target.name)
-                self.players.pop(event.target.name)
-                self.update_prior_next_selection()
-            event.target.current_tile.current_char = None
+                self.remove_player(event.target.name)
+            self.map.remove_character(event.target)
             
 # Main Window Class 
 class Game(QGraphicsView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_PLAYERS, Game_MAPTRANSITION, Game_DATA, Game_GUI, Game_ITERATION):
@@ -856,23 +847,22 @@ class Game(QGraphicsView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_P
         "current_map", # map coords
         "turn",
         "current_slot",
-        "low_hp_triggered",
-        "low_hunger_triggered",
         "current_day",
         "is_music_muted",
         "current_player",
         "certificates"
     ]
     def __init__(self):
-        QGraphicsView.__init__(self)
-        Serializable.__init__(self)
-        Game_VIEWPORT.__init__(self)
-        Game_SOUNDMANAGER.__init__(self)
-        Game_PLAYERS.__init__(self)
-        Game_MAPTRANSITION.__init__(self)
-        Game_DATA.__init__(self)
-        Game_GUI.__init__(self)
-        Game_ITERATION.__init__(self)
+        super().__init__()
+        # QGraphicsView.__init__(self)
+        # Serializable.__init__(self)
+        # Game_VIEWPORT.__init__(self)
+        # Game_SOUNDMANAGER.__init__(self)
+        # Game_PLAYERS.__init__(self)
+        # Game_MAPTRANSITION.__init__(self)
+        # Game_DATA.__init__(self)
+        # Game_GUI.__init__(self)
+        # Game_ITERATION.__init__(self)
         self.alt_pressed = False
         self.version = "1.0.0"
         self.load_current_game()
@@ -893,32 +883,29 @@ class Game(QGraphicsView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_P
     def keyReleaseEvent(self, event):
         if event.key() == Qt.Key_Alt:
             self.alt_pressed = False
-    def keyPressEvent(self, event):
-        # window movement 
-        if event.key() == Qt.Key_Alt:
-            self.alt_pressed = True
+    def key_press_move_app_window(self, key):
+        """ return True means that the keyPressEvent should return imediatly """
+        if key == Qt.Key_Alt and not self.alt_pressed: self.alt_pressed = True
         if self.alt_pressed:
-            if event.key() == Qt.Key_Left:
+            if key == Qt.Key_Left:
                 self.move(self.x() - 10, self.y())
-                return 
-            elif event.key() == Qt.Key_Right:
+                return True
+            elif key == Qt.Key_Right:
                 self.move(self.x() + 10, self.y())
-                return 
-            elif event.key() == Qt.Key_Up:
+                return True
+            elif key == Qt.Key_Up:
                 self.move(self.x(), self.y() - 10)
-                return 
-            elif event.key() == Qt.Key_Down:
+                return True 
+            elif key == Qt.Key_Down:
                 self.move(self.x(), self.y() + 10)
-                return 
-        # game key input 
-        key = event.key()
-        dx, dy = 0, 0
-        b_isForwarding = False
-        stamina_bound = 20
-        if key == Qt.Key_PageUp:
+                return True 
+        return False 
+    def key_press_cycle_between_playables(self, key):
+        """ return True means that the keyPressEvent should return imediatly """
+        if key == Qt.Key_PageUp: # cycle between playables
             if self.count_party() > 0: 
                 self.add_message("Release Party to Change Character")
-                return 
+                return True 
             if len(self.prior_next_players) <= 1:
                 self.update_prior_next_selection()
             if len(self.prior_next_players) > 0:
@@ -928,11 +915,11 @@ class Game(QGraphicsView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_P
                     self.prior_next_index = len(self.prior_next_players)-1
                 self.set_player( self.prior_next_players[self.prior_next_index] )
                 self.draw()
-                return 
-        elif key == Qt.Key_PageDown:
+            return True 
+        elif key == Qt.Key_PageDown: # cycle between playables
             if self.count_party() > 0: 
                 self.add_message("Release Party to Change Character")
-                return 
+                return True 
             if len(self.prior_next_players) <= 1:
                 self.update_prior_next_selection()
             if len(self.prior_next_players) > 0:
@@ -941,9 +928,12 @@ class Game(QGraphicsView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_P
                 else:
                     self.prior_next_index = 0
                 self.set_player( self.prior_next_players[self.prior_next_index] )
-                self.draw()
-                return 
-        elif key == Qt.Key_1:
+                self.draw() 
+            return True             
+        return False 
+    def key_press_choose_weapon_menu(self, key):
+        """ return True means that the keyPressEvent should return imediatly """
+        if key == Qt.Key_1:
             list_of_weapons = [ [wp, f"{wp.name} {wp.damage:.1f} [dmg]"] for wp in self.player.items if isinstance(wp, Weapon) ]
             if self.player.primary_hand and hasattr(self.player.primary_hand, "damage"):
                 SB = SelectionBox( 
@@ -956,6 +946,39 @@ class Game(QGraphicsView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_P
             else:
                 SB = SelectionBox( parent=self, item_list = ["[ Weapon Selection ]"]+[ i[1] for i in list_of_weapons ]+["Exit"], action = primary_menu, game_instance = self, list_of_weapons = list_of_weapons )
             SB.show()
+            return True 
+        elif key == Qt.Key_2: # TODO : should include shields too 
+            list_of_weapons = [ [wp, f"{wp.name} {wp.damage:.1f} [dmg]"] for wp in self.player.items if isinstance(wp, Weapon) ]
+            if self.player.secondary_hand and hasattr(self.player.secondary_hand, "damage"):
+                SB = SelectionBox( 
+                    parent=self, 
+                    item_list = ["[ Weapon Selection ]", f"-> secondary: {self.player.secondary_hand.name} {self.player.secondary_hand.damage:.1f} [dmg]"]+[ i[1] for i in list_of_weapons ]+["Exit"], 
+                    action = primary_menu, 
+                    game_instance = self, 
+                    list_of_weapons = list_of_weapons 
+                )
+            else:
+                SB = SelectionBox( parent=self, item_list = ["[ Weapon Selection ]"]+[ i[1] for i in list_of_weapons ]+["Exit"], action = primary_menu, game_instance = self, list_of_weapons = list_of_weapons )
+            SB.show()   
+            return True 
+        return False 
+        
+        
+    def keyPressEvent(self, event):
+        key = event.key()
+        dx, dy = 0, 0
+        b_isForwarding = False
+        stamina_bound = 20
+        
+        # -- 
+        if self.key_press_move_app_window(key): return 
+        if self.key_press_cycle_between_playables(key): return 
+        if self.key_press_choose_weapon_menu(key): return 
+        
+        elif key == Qt.Key_R:
+            self.player.use_first_item_of(WeaponRepairTool, self)
+            return
+        
         elif key == Qt.Key_B: # build menu 
             SB = SelectionBox(parent = self, item_list = [ "[ Certificates ]" ]+self.certificates+["Exit"], action = build_menu, game_instance = self )
             SB.show()
@@ -971,9 +994,7 @@ class Game(QGraphicsView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_P
                 "Exit"
             ], action = skill_menu, game_instance = self, stamina_bound = stamina_bound)
             SB.show()
-        elif key == Qt.Key_R:
-            self.player.use_first_item_of(WeaponRepairTool, self)
-            return
+        
         elif key == Qt.Key_End:
             if self.player.days_survived >= 15:
                 tx, ty = self.player.get_forward_direction()
