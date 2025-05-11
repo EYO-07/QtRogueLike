@@ -11,7 +11,7 @@ import os
 from datetime import datetime
 
 # third-party
-from PyQt5.QtWidgets import QWidget, QListWidget, QVBoxLayout, QPushButton, QHBoxLayout, QMenu, QDialog, QLabel, QTextEdit, QSizePolicy, QInputDialog
+from PyQt5.QtWidgets import QWidget, QListWidget, QVBoxLayout, QPushButton, QHBoxLayout, QMenu, QDialog, QLabel, QTextEdit, QSizePolicy, QInputDialog, QTabWidget
 from PyQt5.QtCore import Qt, QEvent
 from PyQt5.QtGui import QTextCursor, QColor
 
@@ -105,6 +105,39 @@ def new_list_widget(callback = None, get_filtered_event_from = None):
     if callback: list_widget.itemDoubleClicked.connect(callback)
     if get_filtered_event_from: list_widget.installEventFilter(get_filtered_event_from) # now the list_widget will use the keyPressEvent function 
     return list_widget
+def new_tab_bar(label="tab 1", wdg=None):
+    if wdg is None:
+        wdg = QWidget()
+
+    tab_widget = QTabWidget()
+    tab_widget.addTab(wdg, label)
+    
+    # Styling (matches your dark semi-transparent style)
+    tab_widget.setStyleSheet("""
+        QTabWidget::pane {
+            border: 1px solid rgba(255, 255, 255, 50);
+            background-color: rgba(0, 0, 0, 100);
+            border-radius: 5px;
+        }
+        QTabBar::tab {
+            background-color: rgba(0, 0, 0, 150);
+            color: white;
+            padding: 5px 10px;
+            border: 1px solid rgba(255, 255, 255, 30);
+            border-radius: 3px;
+            margin: 2px;
+            font-size: 10px;
+        }
+        QTabBar::tab:selected {
+            background-color: rgba(255, 255, 255, 30);
+            color: cyan;
+        }
+        QTabBar::tab:hover {
+            background-color: rgba(255, 255, 255, 20);
+        }
+    """)
+    # tab_widget.setFocusPolicy(Qt.StrongFocus)
+    return tab_widget
 
 # -- set window properties
 

@@ -717,6 +717,9 @@ class Game_ITERATION:
     def __init__(self):
         self.events = []  # Initialize events list
     def game_iteration(self):
+        """ return True if losing hp """
+        prev_hp = self.player.hp 
+        # -- 
         self.turn += 1
         self.Event_NewTurn()
         self.process_events() 
@@ -725,6 +728,7 @@ class Game_ITERATION:
         self.update_buildings()
         self.update_messages() # Critical: Update message window 
         self.draw()
+        return ( self.player.hp < prev_hp )
     def process_events(self): # delayed events 
         """Process events and trigger autosave for significant changes."""
         for event in sorted(self.events, key=lambda e: getattr(e, 'priority', 0)):
@@ -1108,8 +1112,15 @@ class Game(QGraphicsView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_P
             dx, dy = self.rotated_direction(-1, 0)
         elif key == Qt.Key_D:
             dx, dy = self.rotated_direction(1, 0)
+        elif key == Qt.Key_H:
+            for i in range(10): 
+                if self.game_iteration(): 
+                    self.add_message(f"Rested {i} turns")
+                    break 
+            self.add_message(f"Rested 10 turns")
+            return False
         elif key == Qt.Key_Space:
-            return True 
+            return True
         # -- $ dx, dy | process movement 
         if dx or dy:
             target_x, target_y = self.player.x + dx, self.player.y + dy
