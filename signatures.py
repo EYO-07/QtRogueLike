@@ -209,7 +209,7 @@ def extract_function_signatures_from_list(filename_list, output_filename):
             
 # Set working directory to the script's directory
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
-folder = "./QtRogueLike/"
+folder = "./"
 # extraction 
 extract_function_signatures_from_list([
     folder+"globals_variables.py",

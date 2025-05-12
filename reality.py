@@ -75,7 +75,7 @@ class Resource: # Interface : store in buildings
     def update_value(self):
         pass 
     def store(self, char, tile_building):
-        old_val = getattr(tile_building,self.type,0.0)
+        old_val = getattr(tile_building,self.type, 0.0)
         setattr(tile_building, self.type, old_val + self.get_value())
         char.remove_item(self)
     def get_utility_info(self):
@@ -440,7 +440,7 @@ class Mace(Parriable, SpecialSkillWeapon):
 # Food.use() || { Food.update_value() | Usable.use() } || { Character.remove_item() }    
 class Food(Usable, Resource):
     __serialize_only__ = Usable.__serialize_only__+Resource.__serialize_only__+["nutrition"]
-    def __init__(self, name="", nutrition=0, description="", weight=1):
+    def __init__(self, nutrition=0, name="Meat", description="", weight=1):
         food_uses = 1
         if nutrition > 100: food_uses = nutrition//50
         Usable.__init__(self, name = name, description = description, weight = weight, sprite=name.lower(), uses = food_uses)
@@ -478,7 +478,7 @@ class Stone(Item, Resource):
         Item.__init__(self, name="Stone", description="", weight=1, sprite="stone")        
         Resource.__init__(self)
         self.value = value 
-        self.type == "stone"
+        self.type = "stone"
     def get_utility_info(self):
         return Resource.get_utility_info(self)
         
@@ -488,7 +488,7 @@ class Metal(Item, Resource):
         Item.__init__(self, name="Metal", description="", weight=1, sprite="metal")
         Resource.__init__(self)
         self.value = value 
-        self.type == "metal"
+        self.type = "metal"
     def get_utility_info(self):
         return Resource.get_utility_info(self)
         
@@ -541,9 +541,9 @@ class OfensiveCharacter(Damageable):
     def do_damage(self):
         damage = self.base_damage
         if self.primary_hand and hasattr(self.primary_hand, 'damage'):
-            damage += d(self.primary_hand.damage/3.0, self.primary_hand.damage)
+            damage += d(self.primary_hand.damage/2.0, 1.5*self.primary_hand.damage)
         if self.secondary_hand and hasattr(self.secondary_hand, 'damage'):
-            damage += d(self.secondary_hand.damage/3.0, self.secondary_hand.damage)/2.0
+            damage += d(self.secondary_hand.damage/2.0, 1.5*self.secondary_hand.damage)/2.0
         return damage
     def weapons_stats_update(self):
         primary = self.primary_hand
@@ -887,10 +887,10 @@ class Player(SkilledCharacter, RegenerativeCharacter): # player or playable npc
         return False
     def generate_initial_items(self):
         self.equip_item(Sword(name="Bastard_Sword", damage=8.5, durability_factor=0.9995, description="although with no name, this Bastard Sword was master-crafted and passed as heirloom in generations of my family, that swords reminds me of the values my father teach me ..."), "primary_hand")
-        self.add_item(Food("Apple", nutrition=50))
-        self.add_item(Food("Apple", nutrition=50))
-        self.add_item(Food("Apple", nutrition=50))
-        self.add_item(Food("Bread", nutrition=100))
+        self.add_item(Food(name="Apple", nutrition=50))
+        self.add_item(Food(name="Apple", nutrition=50))
+        self.add_item(Food(name="Apple", nutrition=50))
+        self.add_item(Food(name="Bread", nutrition=100))
     def get_forward_direction(self):
         dx = 0
         dy = -1
@@ -1031,9 +1031,9 @@ class Zombie(Enemy):
         return d(0, 10)
     def generate_initial_items(self):
         if random.random() < 0.7:
-            self.add_item(Food("bread", nutrition=random.randint(50, 100)))
+            self.add_item(Food(name="bread", nutrition=random.randint(50, 100)))
         if random.random() < 0.7:
-            self.add_item(Food("apple", nutrition=random.randint(5, 15)))
+            self.add_item(Food(name="apple", nutrition=random.randint(5, 15)))
 
 class Rogue(Enemy):
     __serialize_only__ = Enemy.__serialize_only__
@@ -1047,7 +1047,7 @@ class Rogue(Enemy):
     def generate_initial_items(self):
         self.equip_item(Sword("Long_Sword", damage=10), "primary_hand")
         if random.random() < 0.3:
-            self.add_item(Food("bread", nutrition=random.randint(50, 100)))
+            self.add_item(Food(name="bread", nutrition=random.randint(50, 100)))
 
 class Mercenary(Rogue):
     __serialize_only__ = Enemy.__serialize_only__
@@ -1061,9 +1061,9 @@ class Mercenary(Rogue):
     def generate_initial_items(self):
         self.equip_item(Mace("mace", damage=10), "primary_hand")
         if random.random() < 0.3:
-            self.add_item(Food("bread", nutrition=random.randint(50, 100)))
+            self.add_item(Food(name="bread", nutrition=random.randint(50, 100)))
         else:
-            self.add_item(Food("meat", nutrition=random.randint(150, 200)))
+            self.add_item(Food(name="meat", nutrition=random.randint(150, 200)))
     
 class Bear(Enemy):
     __serialize_only__ = Enemy.__serialize_only__
@@ -1074,7 +1074,7 @@ class Bear(Enemy):
         self.activity = 0.1
         self.tolerance = 10 
     def generate_initial_items(self):
-        self.add_item(Food("meat", nutrition=250))
+        self.add_item(Food(name="meat", nutrition=250))
     
 # Tile.draw() || { Tile.get_default_pixmap() | Entity.paint_to() } || { Entity.get_sprite() }
 class Tile(Container):
@@ -1255,7 +1255,9 @@ class TileBuilding(ActionTile): # interface class
                     return True 
                 hero.x = player.x+dx
                 hero.y = player.y + dy
-                game_instance.players.update({current_item: self.heroes.pop(current_item)})
+                self.heroes.pop(current_item)
+                game_instance.players.update({current_item: hero})
+                print( hero.name, hero.party, hero.current_map )
                 game_instance.place_players()
                 game_instance.draw()
                 return True

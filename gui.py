@@ -736,8 +736,10 @@ def debugging_menu(menu, item, instance, game_instance):
     player = game_instance.player 
     if menu == "main":
         match item:
+            case "Display Players Info >":
+                instance.set_list("Display Players Info >", [".."]+[ f"{k} {v.current_map} {v.party}" for k,v in game_instance.players.items() ])
             case "Add Item >": 
-                instance.set_list("Add Item >", ["Whetstone","Mace","Long Sword","Food",".."])
+                instance.set_list("Add Item >", ["Resources","Whetstone","Mace","Long Sword","Food",".."])
             case "Restore Status":
                 player.reset_stats()
                 instance.close()
@@ -763,6 +765,13 @@ def debugging_menu(menu, item, instance, game_instance):
     # --
     if menu == "Add Item >":
         match item:
+            case "Resources":
+                player.add_item(Wood(3000))
+                player.add_item(Stone(3000))
+                player.add_item(Metal(3000))
+                player.add_item(Food(3000))
+                instance.close()
+                return 
             case "Whetstone":
                 player.add_item(WeaponRepairTool("whetstone"))
                 instance.close()

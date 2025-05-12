@@ -273,21 +273,30 @@ class Game_PLAYERS:
         self.players.update({new_name:player})
         return True
     def place_players(self):
-        for k,v in iter(self.players.items()):
+        for k,v in self.players.items():
             if v is self.player: continue
             if v.party: continue 
             if v.current_map != self.current_map: continue 
             self.map.place_character(v)
         return self.map.place_character(self.player)
+        
     def remove_player(self, key = None):
+        if not key: key = self.current_player
         if len(self.players) <= 1: 
             self.add_message("Must have at least one adventurer ...")
             return 
-        candidates = [ k for k,v in self.players.items() if not v.party ] 
+        def filter_candidates(k, v): # -- bug fix -- Fail to Garrison Player
+            if k == key: return False 
+            if v.party == True: return False 
+            if v.current_map != self.current_map: return False 
+            return True
+        candidates = [ k for k,v in self.players.items() if filter_candidates(k,v) ]
         if len(candidates)==0: 
             self.add_message("Must have at least one adventurer ...")
             return 
-        if not key: key = self.current_player
+        if not key in self.players:
+            print(f"Warning : {key} not in game.players")
+            return 
         char_to_remove = self.players[key]
         self.map.remove_character(char_to_remove)
         self.players.pop(key)
@@ -295,6 +304,7 @@ class Game_PLAYERS:
             self.update_prior_next_selection()
             return 
         new_key_name = random.choice(candidates)
+        print("New Character Selection :", new_key_name)
         if not new_key_name: 
             self.update_prior_next_selection()
             return 
@@ -318,9 +328,15 @@ class Game_PLAYERS:
             self.prior_next_players = []
     def move_party(self):
         for k,v in self.players.items():
-            if v is self.player: continue 
-            if not v.party: continue 
+            if v is self.player: 
+                print(" - ",v.name, v.current_map)
+                continue 
+            if not v.party: 
+                print(" - ",v.name, v.current_map)
+                continue 
             v.current_map = self.current_map
+            print(v.name, v.current_map) # debug 
+        self.update_prior_next_selection() # -- bug fix -- Carring Players that isn't on current map using pageup and down
     def release_party(self, diff_moves = CROSS_DIFF_MOVES_1x1):
         print("releasing everyone from party")
         x = self.player.x 
@@ -1179,6 +1195,7 @@ class Game(QGraphicsView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_P
             case Qt.Key_F12: # debug menu
                 SelectionBox(parent=self, item_list = [
                     "[ DEBUG MENU ]",
+                    "Display Players Info >",
                     "Set Day 100", 
                     "Add Item >", 
                     "Generate Enemies >", 
