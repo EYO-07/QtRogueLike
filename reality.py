@@ -1303,6 +1303,10 @@ class TileBuilding(ActionTile): # interface class
             game_instance.update_inv_window()
             return True 
         return False 
+    def set_population_menu(self, menu_instance):
+         menu_instance.set_list( "Overview >" ,
+            [f"Population : {self.villagers:.1f}/{self.villagers_max}",f"Mean Production : {self.villagers/PROD_INV_FACTOR/2.0:.1f}/turn"]+[f"Food : {self.food:.1f}" if self.food else None ]+[f"Wood : {self.wood:.1f}" if self.wood else None ]+[f"Stone : {self.stone:.1f}" if self.stone else None ]+[f"Metal : {self.metal:.1f}" if self.metal else None ]+[".."]
+         )
 
 # Castle.action() || { Castle.update_menu_list() | Castle.new_npc() | TileBuilding.menu_garrison() | TileBuilding.menu_resources() } || { Character.add_item(), TileBuilding.update_inv_window(), Character.remove_item() }
 class Castle(TileBuilding):
@@ -1321,6 +1325,8 @@ class Castle(TileBuilding):
         self.update_menu_list()
         def f(current_menu, current_item, menu_instance, game_instance):
             self.update_menu_list(menu_instance)
+            if current_item == "..": menu_instance.set_list()
+            if current_item == "Overview >": self.set_population_menu(menu_instance)
             if current_item == "Exit": menu_instance.close()
             if "Guard Tower" in current_item:
                 if self.wood >= 2000 and self.food >= 2500:
@@ -1365,6 +1371,7 @@ class Castle(TileBuilding):
             f"-> heroes: {len(self.heroes)}",
             f"-> food: {self.food:.0f}",
             f"-> wood: {self.wood:.0f}",
+            "Overview >",
             "New Hero (2000 Food)",
             "Garrison >",
             "Resources >",
@@ -1424,6 +1431,8 @@ class Mill(TileBuilding):
         self.update_menu_list()
         def f(current_menu, current_item, menu_instance, game_instance):
             self.update_menu_list(menu_instance)
+            if current_item == "..": menu_instance.set_list()
+            if current_item == "Overview >": self.set_population_menu(menu_instance)
             if current_item == "Exit": menu_instance.close()
             if self.menu_resources(current_menu, current_item, menu_instance, game_instance):
                 menu_instance.close()
@@ -1434,6 +1443,7 @@ class Mill(TileBuilding):
         self.menu_list += [
             f"Resource [{self.name}]",
             f"-> food: {self.food:.0f}",
+            "Overview >",
             "Resources >",
             "Exit"
         ]
@@ -1453,6 +1463,8 @@ class LumberMill(TileBuilding):
         self.update_menu_list()
         def f(current_menu, current_item, menu_instance, game_instance):
             self.update_menu_list(menu_instance)
+            if current_item == "..": menu_instance.set_list()
+            if current_item == "Overview >": self.set_population_menu(menu_instance)
             if current_item == "Exit": menu_instance.close()
             if self.menu_resources(current_menu, current_item, menu_instance, game_instance):
                 menu_instance.close()
@@ -1463,6 +1475,7 @@ class LumberMill(TileBuilding):
         self.menu_list += [
             f"Resource [{self.name}]",
             f"-> wood: {self.wood:.0f}",
+            "Overview >",
             "Resources >",
             "Exit"
         ]
@@ -1484,6 +1497,8 @@ class GuardTower(TileBuilding):
         self.update_menu_list()
         def f(current_menu, current_item, menu_instance, game_instance):
             self.update_menu_list(menu_instance)
+            if current_item == "..": menu_instance.set_list()
+            if current_item == "Overview >": self.set_population_menu(menu_instance)
             if current_item == "Exit": menu_instance.close()
             if "Recruit Swordman" in current_item:
                 if self.food >= 500:
@@ -1516,6 +1531,7 @@ class GuardTower(TileBuilding):
             f"-> garrison: {len(self.heroes)}",
             f"-> food: {self.food:.0f}",
             f"-> wood: {self.wood:.0f}",
+            "Overview >",
             "Recruit Swordman (500 Food)",
             "Recruit Mounted Knight (700 Food 1200 Wood)",
             "Garrison >",
