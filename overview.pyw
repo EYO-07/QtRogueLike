@@ -184,8 +184,9 @@ class Overview(Widget, Serializable):
             return text.replace("def "," ").replace(": ...",""), False
         if "class" in text:
             return text.replace("class ","").replace(":",""), True
-        else:
-            return text, True
+        if text[:4]=="    ":
+            return text, False # false means that isn't a pivot 
+        return text, True # true means that is a pivot 
     def update(self, index = None):
         text = None
         if not index: 

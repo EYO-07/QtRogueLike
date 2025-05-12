@@ -114,7 +114,8 @@ SPRITE_NAMES = SPRITE_NAMES_WEAPONS + SPRITE_NAMES_CHARACTERS + SPRITE_NAMES_FOO
     "quarry",
     "mill",
     "wood",
-    "tower"
+    "tower",
+    "red_flag"
 ]
 
 # loot
@@ -174,6 +175,15 @@ LAKE_ENEMY_TABLE = [
     {"enemy": "Zombie", "chance": 0.75, "b_generate_items": True}
 ] 
 
+TILE_BUILDING_ENEMY_TABLE = [
+    {"enemy": "Mercenary", "chance": 0.4, "b_generate_items": True, "extra_items": [
+        {"item_name": "WeaponRepairTool", "name":"Whetstone", "uses": 5},
+        {"item_name": "Food", "name":"meat", "nutrition":250}
+    ]},
+    {"enemy": "Rogue", "chance": 0.7, "b_generate_items": True, "extra_items": [
+        {"item_name": "WeaponRepairTool", "name":"Whetstone", "uses": 2}
+    ]}
+]
 
 
 

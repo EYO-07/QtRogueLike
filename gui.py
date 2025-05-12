@@ -753,7 +753,7 @@ def debugging_menu(menu, item, instance, game_instance):
                 instance.close()
                 return 
             case "Generate Enemies >":
-                instance.set_list("Generate Enemies >", ["Zombie","Bear","Rogue","Mercenary","Player",".."])
+                instance.set_list("Generate Enemies >", ["Zombie","Bear","Rogue","Mercenary","Player","clear",".."])
             case "Generate Dungeon Entrance":
                 if game_instance.map.add_dungeon_entrance_at(player.x, player.y):
                     game_instance.dirty_tiles.add((player.x, player.y)) 
@@ -761,7 +761,7 @@ def debugging_menu(menu, item, instance, game_instance):
                 instance.close()
                 return 
             case "Add a Cosmetic Layer >":
-                instance.set_list("Add a Cosmetic Layer >", ["House","Castle","Lumber Mill","Clear","Mill","Tower",".."])
+                instance.set_list("Add a Cosmetic Layer >", ["House", "Enemy Tower","Castle","Lumber Mill","Clear","Mill","Tower",".."])
     # --
     if menu == "Add Item >":
         match item:
@@ -794,6 +794,12 @@ def debugging_menu(menu, item, instance, game_instance):
         dx = 2*dx 
         dy = 2*dy
         match item:                        
+            case "clear":
+                for char in game_instance.map.enemies: game_instance.map.remove_character(char)
+                game_instance.map.enemies.clear()
+                game_instance.draw()
+                instance.close()
+                return 
             case "Zombie":
                 game_instance.map.generate_enemy_at(player.x+dx, player.y+dy, Zombie)
                 game_instance.dirty_tiles.add((player.x+dx, player.y+dy)) 
@@ -828,6 +834,11 @@ def debugging_menu(menu, item, instance, game_instance):
     if menu == "Add a Cosmetic Layer >":
         tile = player.current_tile
         match item:
+            case "Enemy Tower":
+                game_instance.map.set_tile(player.x, player.y, GuardTower(x=player.x, y = player.y, b_enemy = True))
+                game_instance.map.update_buildings_list()
+                game_instance.draw()    
+                instance.close()     
             case "House":
                 tile.add_layer("house")
                 game_instance.draw()    

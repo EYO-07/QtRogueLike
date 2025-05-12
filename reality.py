@@ -1080,12 +1080,14 @@ class Bear(Enemy):
 class Tile(Container):
     SPRITES = {}  # Class-level sprite cache
     list_sprites_names = list(SPRITE_NAMES)
-    __serialize_only__ = Container.__serialize_only__ + ["walkable", "blocks_sight", "default_sprite_key", "stair", "stair_x", "stair_y", "cosmetic_layer_sprite_keys", "stamina_consumption"]
-    def __init__(self, walkable=True, sprite_key="grass"):
+    __serialize_only__ = Container.__serialize_only__ + ["x", "y", "walkable", "blocks_sight", "default_sprite_key", "stair", "stair_x", "stair_y", "cosmetic_layer_sprite_keys", "stamina_consumption"]
+    def __init__(self, x = 0, y = 0, walkable=True, sprite_key="grass"):
         Container.__init__(self)
         self._load_sprites()
         self.walkable = walkable
         self.blocks_sight = not walkable
+        self.x = x 
+        self.y = y 
         # --
         self.default_sprite_key = sprite_key # is the first and last layer sprite 
         self.cosmetic_layer_sprite_keys = [] # to be used as a modifier for default_sprite
@@ -1099,11 +1101,11 @@ class Tile(Container):
         self.stair_y = None # points to the stair tile from the map with coord self.stair 
     def add_layer(self, sprite_key):
         self.cosmetic_layer_sprite_keys.append( sprite_key )
-    def remove_layer(self, sprite_key = None):
-        if not sprite_key: 
-            self.cosmetic_layer_sprite_keys.clear()
-            return 
-        self.cosmetic_layer_sprite_keys.remove( sprite_key )
+    # def remove_layer(self, sprite_key = None):
+        # if not sprite_key: 
+            # self.cosmetic_layer_sprite_keys.clear()
+            # return 
+        # self.cosmetic_layer_sprite_keys.remove( sprite_key )
     def get_transparent_image(self):
         # todo 
         return 
@@ -1142,6 +1144,25 @@ class Tile(Container):
         self.cosmetic_layer_sprite_keys.append(sprite_key)
     def get_stamina_consumption(self):
         return self.stamina_consumption
+    def get_layer_index(self, sprite_name):
+        """ return index or None """
+        result = None 
+        if len(self.cosmetic_layer_sprite_keys)>0:
+            idx = 0 
+            for it in self.cosmetic_layer_sprite_keys:
+                if sprite_name == it: 
+                    result = idx 
+                    break 
+                idx += 1
+        return result 
+    def add_layer_if_not_already(self, sprite_name):
+        idx = self.get_layer_index(sprite_name)
+        if idx is None:
+            self.add_layer( sprite_name )
+    def remove_layer(self, sprite_name):
+        idx = self.get_layer_index(sprite_name)
+        if idx is None: return 
+        self.cosmetic_layer_sprite_keys.pop(idx)
 
     @classmethod
     def _try_load(cls, key):
@@ -1159,13 +1180,13 @@ class Tile(Container):
             for key in cls.list_sprites_names: cls._try_load(key)
         
 class ActionTile(Tile): # tile which the player can interact - interface class
-    def __init__(self, front_sprite = "stair_up", walkable=True, sprite_key="grass"):
-        Tile.__init__(self, walkable=walkable, sprite_key=sprite_key)
+    def __init__(self, x =0,y=0,front_sprite = "stair_up", walkable=True, sprite_key="grass"):
+        Tile.__init__(self, x=x, y=y, walkable=walkable, sprite_key=sprite_key)
         self.add_layer( front_sprite )
-
+    
 class Stair(ActionTile): # not used yet 
-    def __init__(self, front_sprite = "stair_up", walkable=True, sprite_key="grass"):
-        ActionTile.__init__(self, front_sprite = front_sprite, walkable = walkable, sprite_key = sprite_key)
+    def __init__(self, x=0, y = 0,front_sprite = "stair_up", walkable=True, sprite_key="grass"):
+        ActionTile.__init__(self, x=x, y = y, front_sprite = front_sprite, walkable = walkable, sprite_key = sprite_key)
         self.stair = None # used to store a tuple map coord to connect between maps 
         self.stair_x = None # points to the stair tile from the map with coord self.stair
         self.stair_y = None # points to the stair tile from the map with coord self.stair 
@@ -1176,23 +1197,54 @@ class Stair(ActionTile): # not used yet
 # TileBuilding.retrieve_wood() || { Character.add_item() | TileBuilding.update_inv_window() } || {}
 # TileBuilding.store_resource() || { Character.remove_item() } || {}
 class TileBuilding(ActionTile): # interface class
-    __serialize_only__ = Tile.__serialize_only__ + ["villagers", "villagers_max", "food", "stone", "metal", "wood"]
-    def __init__(self, front_sprite, walkable=True, sprite_key="grass"):
-        ActionTile.__init__(self, front_sprite = front_sprite, walkable=walkable, sprite_key=sprite_key )
+    __serialize_only__ = Tile.__serialize_only__ + ["villagers", "villagers_max", "food", "stone", "metal", "wood", "b_enemy"]
+    def __init__(self, x=0,y=0,front_sprite = "Castle", walkable=True, sprite_key="grass", b_enemy = False):
+        ActionTile.__init__(self, x = x, y = y, front_sprite = front_sprite, walkable=walkable, sprite_key=sprite_key )
         self.villagers = 5
         self.villagers_max = 20
         self.food = 0
         self.wood = 0
         self.stone = 0
         self.metal = 0
+        self.b_enemy = b_enemy
+    def bonus_resources(self):
+        self.food = d(0,2000)
+        self.wood = d(0,2000)
+        self.stone = d(0,2000)
+        self.metal = d(0,2000)
     def production(self):
         self.villagers = min( 1.005*self.villagers, self.villagers_max )
         self.food += d(0,self.villagers/PROD_INV_FACTOR)
         self.wood += d(0,self.villagers/PROD_INV_FACTOR)
         self.stone += d(0,self.villagers/PROD_INV_FACTOR)
         self.metal += d(0,self.villagers/PROD_INV_FACTOR)
-    def update(self):
+    def update(self, game_instance = None):
         self.production()
+        # % .b_enemy || add red flag cosmetic layer 
+        # % .b_enemy | % else || remove red flag cosmetic layer 
+        if self.b_enemy:
+            self.add_layer_if_not_already("red_flag")
+            # % Player Distance to Building is Less than 5 || % has villagers || spawn rogue and mercenaries | reduze .villagers count 
+            # % Player Distance to Building is Less than 5 || % has villagers || spawn rogue and mercenaries || spawn on free walkable and adjacent walkable adjacent tiles 
+            # % Player Distance to Building is Less than 5 || % has villagers | % else || .b_enemy = False | add one villager 
+            if not game_instance: return 
+            map = game_instance.map
+            if self.b_enemy: print( "TileBuilding.update() || ", self.villagers )
+            if game_instance.player.distance(self) < 4: 
+                if self.villagers > 0:
+                    enemy = map.generate_enemy_by_chance_by_list_at(self.x, self.y, TILE_BUILDING_ENEMY_TABLE)
+                    if enemy:
+                        self.villagers -= 5
+                        map.enemies.append(enemy)
+                        map.place_character(enemy)
+                        game_instance.draw()
+                else:
+                    self.b_enemy = False 
+                    self.villagers = 1
+                    self.bonus_resources()
+        else:
+            self.remove_layer("red_flag")
+            
     def retrieve_food(self, game_instance, quantity = 500):
         if self.food >= quantity:
             self.food -= quantity
@@ -1313,8 +1365,8 @@ class TileBuilding(ActionTile): # interface class
 # Castle.action() || { Castle.update_menu_list() | Castle.new_npc() | TileBuilding.menu_garrison() | TileBuilding.menu_resources() } || { Character.add_item(), TileBuilding.update_inv_window(), Character.remove_item() }
 class Castle(TileBuilding):
     __serialize_only__ = TileBuilding.__serialize_only__ + ["name","heroes","num_heroes"]
-    def __init__(self, name = "Home"):
-        TileBuilding.__init__(self, front_sprite = "castle", walkable=True, sprite_key="grass")
+    def __init__(self, x=0, y =0, name = "Home", b_enemy=False):
+        TileBuilding.__init__(self, x=x,y=y, front_sprite = "castle", walkable=True, sprite_key="grass", b_enemy=b_enemy)
         self.name = name 
         self.heroes = {}
         self.num_heroes = 0
@@ -1424,8 +1476,8 @@ class Castle(TileBuilding):
 # Mill.action() || { Mill.update_menu_list() | TileBuilding.menu_resources() } || { Character.add_item(), TileBuilding.update_inv_window(), Character.remove_item() }
 class Mill(TileBuilding):
     __serialize_only__ = TileBuilding.__serialize_only__ + ["name"]
-    def __init__(self, name = "Farm", food = d(500,2000)):
-        TileBuilding.__init__(self, front_sprite = "mill", walkable=True, sprite_key="grass")
+    def __init__(self, x=0, y =0, name = "Farm", food = d(500,2000), b_enemy=False):
+        TileBuilding.__init__(self, x=x, y=y, front_sprite = "mill", walkable=True, sprite_key="grass", b_enemy=b_enemy)
         self.name = name 
         self.menu_list = []
         self.food = food 
@@ -1456,8 +1508,8 @@ class Mill(TileBuilding):
 # LumberMill.action() || { LumberMill.update_menu_list() | TileBuilding.menu_resources() } || { Character.add_item(), TileBuilding.update_inv_window(), Character.remove_item() }
 class LumberMill(TileBuilding):
     __serialize_only__ = TileBuilding.__serialize_only__ + ["name"]
-    def __init__(self, name = "Lumber Mill", wood = d(500,2000)):
-        TileBuilding.__init__(self, front_sprite = "lumber_mill", walkable=True, sprite_key="grass")
+    def __init__(self, x=0, y =0, name = "Lumber Mill", wood = d(500,2000), b_enemy=False):
+        TileBuilding.__init__(self, x=x,y=y,front_sprite = "lumber_mill", walkable=True, sprite_key="grass", b_enemy=b_enemy)
         self.name = name 
         self.menu_list = []
         self.wood = wood
@@ -1488,8 +1540,8 @@ class LumberMill(TileBuilding):
 # GuardTower.action() || { GuardTower.update_menu_list() | GuardTower.new_swordman() | GuardTower.new_mounted_knight() | TileBuilding.menu_garrison() | TileBuilding.menu_resources() } || { Character.add_item(), TileBuilding.update_inv_window(), Character.remove_item() }
 class GuardTower(TileBuilding):
     __serialize_only__ = TileBuilding.__serialize_only__ + ["name","heroes","num_heroes"]
-    def __init__(self, name = "Guard Tower"):
-        TileBuilding.__init__(self, front_sprite = "tower", walkable=True, sprite_key="grass")
+    def __init__(self, x=0, y =0,name = "Guard Tower", b_enemy=False):
+        TileBuilding.__init__(self, x=x, y=y, front_sprite = "tower", walkable=True, sprite_key="grass", b_enemy=b_enemy)
         self.name = name 
         self.heroes = {}
         self.num_heroes = 0

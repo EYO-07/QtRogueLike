@@ -433,6 +433,7 @@ class Game_MAPTRANSITION:
             if self.current_map:
                 self.add_message(f"Loading Map from Cache ({self.current_map[0]}, {-self.current_map[1]}, {self.current_map[2]})")
             self.map = self.maps[self.current_map]
+        if len(self.map.enemies) < 10: self.map.fill_enemies(num_enemies=50)
         return None, None
     def safely_place_character_to_new_map(self,char=None):
         if not char: char = self.player 
@@ -784,7 +785,7 @@ class Game_ITERATION:
         self.map.update_enemies(self)
     def update_buildings(self):
         for b in self.map.buildings:
-            b.update()
+            b.update(self)
     def Event_NewTurn(self):
         if self.turn // self.turns_per_day + 1 > self.current_day:
             self.current_day += 1
@@ -1079,6 +1080,7 @@ class Game(QGraphicsView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_P
                             self.vertical_map_transition(tile.stair, tile.default_sprite_key == "stair_up")
                         return False 
                     elif isinstance(tile, TileBuilding):
+                        if tile.b_enemy: return False 
                         SB = SelectionBox( tile.menu_list, action = tile.action(), parent = self, game_instance = self )
                         tile.update_menu_list(SB)
                         SB.show()

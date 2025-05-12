@@ -136,7 +136,18 @@ class Map(Serializable):
         self.width = width
         self.height = height
         self.filename = filename
-        self.grid = []
+        
+        self.grid = [] 
+        # 1. self.grid[y][x] ~ (x,y) means that the matrix is a row vector matrix 
+        # 2. grid_1 equals to grid_2
+        # grid_1 = [ [ (i,j) for i in range(size) ] for j in range(size) ]
+        # grid_2 = [ [ None for i in range(size) ] for j in range(size) ]
+        # for i in range(size):
+        #    for j in range(size):
+        #       grid_2[j][i] = (i,j)
+        # 3. grid[y] is a row vector
+        # 4. [ grid[j][x] for j ] is a column vector 
+        
         self.enemy_type = "default" # used for fill_enemies to know which type of enemies should spawn. 
         self.path_cache = {}
         self.coords = coords # maybe would be necessary 
@@ -184,10 +195,15 @@ class Map(Serializable):
                 try:
                     with open(f"maps/{self.filename}.txt", 'r') as f:
                         lines = f.readlines()
-                        self.grid = [
-                            [Tile(walkable=c != '#', sprite_key="wall" if c == '#' else "grass") for c in line.strip()]
-                            for line in lines
-                        ]
+                        for y in range(lines):
+                            line = lines[y]
+                            LS = line.strip()
+                            for x in range(LS):
+                                self.grid[y][x] = Tile(x,y,walkable=LS[x] != '#', sprite_key="wall" if LS[x] == '#' else "grass")
+                        # self.grid = [
+                            # [Tile(walkable=c != '#', sprite_key="wall" if c == '#' else "grass") for c in line.strip()]
+                            # for line in lines
+                        # ]
                 except FileNotFoundError:
                     print(f"Map file {self.filename}.txt not found, using default map")
                     self._generate_default()
@@ -328,22 +344,18 @@ class Map(Serializable):
     def update_enemies(self, game_instance):        
         for enemy in self.enemies:
             enemy.behaviour_update(game_instance)
-        if len(self.enemies) < 5:
-            self.fill_enemies()
+        # if len(self.enemies) < 5:
+            # self.fill_enemies()
     
     # -- procedural generators || generator helpers
     def grid_init_uniform(self, spriteKey = "grass", is_walkable = True, x1 = 0, x2 = None, y1 = 0, y2 = None):
         if not x2: x2 = self.width
         if not y2: y2 = self.height 
         if not self.grid:
-            self.grid = [ 
-            [ Tile(walkable=is_walkable, sprite_key=spriteKey) 
-                for j in range(0,self.height)] 
-            for i in range(0,self.width)]
-        
+            self.grid = [ [ Tile(i,j,walkable=is_walkable, sprite_key=spriteKey) for i in range(0,self.width) ] for j in range(0,self.height) ]
         for i in range(x1,x2):
             for j in range(y1,y2):
-                self.grid[i][j] = Tile(walkable=is_walkable, sprite_key=spriteKey)
+                self.grid[j][i] = Tile(i,j, walkable=is_walkable, sprite_key=spriteKey)
     
     def add_rectangle(self, center_x, center_y, width, height, has_entry = True, sprite_border="wall", sprite_floor="floor"):
         """ Generate a room with one floor-tile entry only changing his limits """
@@ -356,14 +368,14 @@ class Map(Serializable):
             x2, y2 = self.rooms[i + 1][0] + self.rooms[i + 1][2] // 2, self.rooms[i + 1][1] + self.rooms[i + 1][3] // 2
             if random.choice([True, False]):
                 for x in range(min(x1, x2), max(x1, x2) + 1):
-                    self.grid[y1][x] = Tile(walkable=True, sprite_key=sprite_corridor_floor)
+                    self.grid[y1][x] = Tile(x, y1, walkable=True, sprite_key=sprite_corridor_floor)
                 for y in range(min(y1, y2), max(y1, y2) + 1):
-                    self.grid[y][x2] = Tile(walkable=True, sprite_key=sprite_corridor_floor)
+                    self.grid[y][x2] = Tile(x2, y, walkable=True, sprite_key=sprite_corridor_floor)
             else:
                 for y in range(min(y1, y2), max(y1, y2) + 1):
-                    self.grid[y][x1] = Tile(walkable=True, sprite_key=sprite_corridor_floor)
+                    self.grid[y][x1] = Tile(x1, y, walkable=True, sprite_key=sprite_corridor_floor)
                 for x in range(min(x1, x2), max(x1, x2) + 1):
-                    self.grid[y2][x] = Tile(walkable=True, sprite_key=sprite_corridor_floor)
+                    self.grid[y2][x] = Tile(x, y2, walkable=True, sprite_key=sprite_corridor_floor)
     
     def add_rooms(self, num_rooms = random.randint(8, 15)):
         # Generate rooms () || & Generate Enough Rooms || $ (bool) Check if Overlaps | % not overlap || Add Room 
@@ -461,7 +473,7 @@ class Map(Serializable):
             for j in range(self.height):
                 noise_value = noise.snoise2(i * scale, j * scale, octaves=1)  # Adjust scale (0.1) for patch size
                 if noise_value > 0.2:  # Threshold for dirt
-                    self.grid[i][j] = Tile(walkable=is_walkable, sprite_key=spriteKey)
+                    self.grid[j][i] = Tile(i,j,walkable=is_walkable, sprite_key=spriteKey)
                     
     def add_dungeon_loot(self, k=20):
         # -> add_dungeon_loot () || $ Sample | & (Tile) X : Sample || Random Choice in Loot Table || Add to X the Loot 
@@ -479,18 +491,18 @@ class Map(Serializable):
                 # Increase chance if neighboring tiles have trees (clustering)
                 for di, dj in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
                     if 0 <= i + di < 100 and 0 <= j + dj < 100:
-                        if self.grid[i + di][j + dj].default_sprite_key == "tree":
+                        if self.grid[j + dj][i + di].default_sprite_key == "tree":
                             tree_chance += 0.1
                 if random.random() < tree_chance:
-                    self.grid[i][j] = Tile(walkable=False, sprite_key="tree")
+                    self.grid[j][i] = Tile(i,j,walkable=False, sprite_key="tree")
     
     def add_rocks(self, spriteKey = "rock", is_walkable=False):
         for i in range(1, self.width-1):
             for j in range(1, self.height-1):
                 if random.random() < 0.001:  # 2% chance for water
-                    self.grid[i][j] = Tile(walkable=False, sprite_key="water")
+                    self.grid[j][i] = Tile(i,j, walkable=False, sprite_key="water")
                 elif random.random() < 0.05:  # 5% chance for rocks
-                    self.grid[i][j] = Tile(walkable=is_walkable, sprite_key=spriteKey)
+                    self.grid[j][i] = Tile(i,j, walkable=is_walkable, sprite_key=spriteKey)
                     
     def is_adjacent_walkable(self,tile, x,y):
         for dx,dy in CROSS_DIFF_MOVES:
@@ -509,9 +521,19 @@ class Map(Serializable):
     def get_random_walkable_tile(self, border_factor = 0.0):
         dx = int(border_factor*self.width)
         dy = int(border_factor*self.height)
-        walkable_tiles = [(i, j) for j in range(dy,self.height-dy) for i in range(dx,self.width-dx) if self.is_adjacent_walkable(self.grid[i][j],i,j) ]
+        walkable_tiles = [(i, j) for j in range(dy,self.height-dy) for i in range(dx,self.width-dx) if self.is_adjacent_walkable(self.grid[j][i],i,j) ]
         if not walkable_tiles: return None
         return random.choice(walkable_tiles)
+    
+    def add_enemy_tower(self, probability = 0.3, border_factor = 0.0):
+        coin = random.random()
+        if coin > probability: return False
+        xy = self.get_random_walkable_tile(border_factor = border_factor)
+        if not xy: return False
+        x = xy[0]
+        y = xy[1]
+        self.set_tile( x, y, GuardTower(x=x, y =y, b_enemy = True))
+        print(f"Generated Enemy Tower at {x}, {y}")
     
     def add_dungeon_entrance(self, probability = 1.0, border_factor = 0.0):
         coin = random.random()
@@ -521,7 +543,7 @@ class Map(Serializable):
         entrance_x = xy[0]
         entrance_y = xy[1]
         target_map = (self.coords[0], self.coords[1], -1)
-        self.grid[entrance_y][entrance_x] = Tile(walkable=True, sprite_key="dungeon_entrance")
+        self.grid[entrance_y][entrance_x] = Tile(entrance_x, entrance_y, walkable=True, sprite_key="dungeon_entrance")
         self.grid[entrance_y][entrance_x].stair = target_map
         self.grid[entrance_y][entrance_x].stair_x = entrance_x
         self.grid[entrance_y][entrance_x].stair_y = entrance_y
@@ -556,14 +578,14 @@ class Map(Serializable):
     def carve_corridor(self, x1, y1, x2, y2, sprite_key="dirt"):
         if random.choice([True, False]):
             for x in range(min(x1, x2), max(x1, x2) + 1):
-                self.grid[y1][x] = Tile(walkable=True, sprite_key=sprite_key)
+                self.grid[y1][x] = Tile(x, y1, walkable=True, sprite_key=sprite_key)
             for y in range(min(y1, y2), max(y1, y2) + 1):
-                self.grid[y][x2] = Tile(walkable=True, sprite_key=sprite_key)
+                self.grid[y][x2] = Tile(x2, y, walkable=True, sprite_key=sprite_key)
         else:
             for y in range(min(y1, y2), max(y1, y2) + 1):
-                self.grid[y][x1] = Tile(walkable=True, sprite_key=sprite_key)
+                self.grid[y][x1] = Tile(x1, y, walkable=True, sprite_key=sprite_key)
             for x in range(min(x1, x2), max(x1, x2) + 1):
-                self.grid[y2][x] = Tile(walkable=True, sprite_key=sprite_key)
+                self.grid[y2][x] = Tile(x, y2, walkable=True, sprite_key=sprite_key)
                 
     def ensure_connection(self, target_points = None):
         if not self.rooms:
@@ -616,6 +638,7 @@ class Map(Serializable):
         self.add_patches(scale = 0.4)
         self.ensure_connection()  # <--- Here!
         self.add_dungeon_loot(k=10)
+        self.add_enemy_tower()
 
     def generate_procedural_dungeon(self, previous_map_coords, prev_x, prev_y, up=False):
         """
@@ -645,7 +668,7 @@ class Map(Serializable):
         new_x = room_x + room_w // 2
         new_y = room_y + room_h // 2
         stair_sprite = "stair_down" if up else "stair_up"
-        self.grid[new_y][new_x] = Tile(walkable=True, sprite_key=stair_sprite)
+        self.grid[new_y][new_x] = Tile(new_x, new_y, walkable=True, sprite_key=stair_sprite)
         self.grid[new_y][new_x].stair = previous_map_coords
         self.grid[new_y][new_x].stair_x = prev_x  # Point to the stair/entrance on previous map
         self.grid[new_y][new_x].stair_y = prev_y
@@ -660,7 +683,7 @@ class Map(Serializable):
                 down_x = down_room[0] + down_room[2] // 2
                 down_y = down_room[1] + down_room[3] // 2
                 target_map = (prev_x_map, prev_y_map, new_z - 1)
-                self.grid[down_y][down_x] = Tile(walkable=True, sprite_key="stair_down")
+                self.grid[down_y][down_x] = Tile(down_x, down_y, walkable=True, sprite_key="stair_down")
                 self.grid[down_y][down_x].stair = target_map
                 self.grid[down_y][down_x].stair_x = down_x  # Point to stair_up on next level
                 self.grid[down_y][down_x].stair_y = down_y
@@ -682,12 +705,13 @@ class Map(Serializable):
             for j in range(self.height-1):
                 n = noise.pnoise2(i * 0.1, j * 0.1, octaves=1, persistence=0.5, lacunarity=2.0)
                 if n > 0.2:
-                    self.grid[i][j] = Tile(walkable=False, sprite_key="tree")
+                    self.grid[j][i] = Tile(i,j,walkable=False, sprite_key="tree")
                 elif random.random() < 0.01:
-                    self.grid[i][j].add_item(Food("Apple", nutrition=10))
+                    self.grid[j][i].add_item(Food(name ="Apple", nutrition=10))
         xy = self.get_random_walkable_tile()
         if xy:
-            self.set_tile( xy[0], xy[1], Mill() )
+            self.set_tile( xy[0], xy[1], Mill(x=xy[0], y =xy[1], b_enemy = True) )
+        self.add_enemy_tower()    
         
     def generate_procedural_road(self):
         self.enemy_type = "road"
@@ -699,16 +723,16 @@ class Map(Serializable):
             offset = int(noise.pnoise1(y * 0.1, octaves=1, persistence=0.5, lacunarity=2.0) * 10)
             road_x += offset
             road_x = max(1, min(self.width-2, road_x))
-            self.grid[y][road_x] = Tile(walkable=True, sprite_key="grass")
+            self.grid[y][road_x] = Tile(road_x, y, walkable=True, sprite_key="grass")
             if random.random() < 0.05:
-                self.grid[y][road_x].add_item(Food("Bread", nutrition=15))
+                self.grid[y][road_x].add_item(Food(name ="Bread", nutrition=15))
         for i in range(self.height):
             for j in range(self.height):
                 if random.random() < 0.1 and abs(j - road_x) > 2:
-                    self.grid[i][j] = Tile(walkable=False, sprite_key="tree")
+                    self.grid[j][i] = Tile(i,j,walkable=False, sprite_key="tree")
         xy = self.get_random_walkable_tile()
         if xy:
-            self.set_tile( xy[0], xy[1], Mill() )
+            self.set_tile( xy[0], xy[1], Mill(x=xy[0], y =xy[1], b_enemy = True) )
     def generate_procedural_lake(self):
         self.enemy_type = "lake"
         self.grid_init_uniform("grass", True)
@@ -719,14 +743,15 @@ class Map(Serializable):
                 n = noise.pnoise2(i * 0.05, j * 0.05, octaves=1, persistence=0.5, lacunarity=2.0)
                 dist = ((i - center_x) ** 2 + (j - center_y) ** 2) ** 0.5
                 if n > -0.1 and dist < 30:
-                    self.grid[i][j] = Tile(walkable=False, sprite_key="water")
+                    self.grid[j][i] = Tile(i,j,walkable=False, sprite_key="water")
                 elif random.random() < 0.1:
-                    self.grid[i][j] = Tile(walkable=False, sprite_key="tree")
+                    self.grid[j][i] = Tile(i,j,walkable=False, sprite_key="tree")
                 elif random.random() < 0.001:
-                    self.grid[i][j].add_item(Food("Fish", nutrition=80))
+                    self.grid[j][i].add_item(Food(name = "Fish", nutrition=80))
                 elif random.random() < 0.0005:
-                    self.grid[i][j].add_item(WeaponRepairTool("Whetstone", uses=10))
+                    self.grid[j][i].add_item(WeaponRepairTool("Whetstone", uses=10))
         self.add_dungeon_entrance()
+        self.add_enemy_tower()
                     
     # -- methods 
     def get_tile(self, x, y):
