@@ -54,6 +54,10 @@ def set_text_cursor_to(text_widget, position = QTextCursor.End):
     cursor.movePosition(position)
     text_widget.setTextCursor(cursor)
     text_widget.ensureCursorVisible()
+def apply_filter_to_list_widget(list_widget, text):
+    for index in range(list_widget.count()):
+        item = list_widget.item(index)
+        item.setHidden(text.lower() not in item.text().lower())
 
 # -- helper classes
 class VLayout(QVBoxLayout):

@@ -11,7 +11,7 @@ import os
 from datetime import datetime
 
 # third-party
-from PyQt5.QtWidgets import QWidget, QListWidget, QVBoxLayout, QPushButton, QHBoxLayout, QMenu, QDialog, QLabel, QTextEdit, QSizePolicy, QInputDialog, QTabWidget
+from PyQt5.QtWidgets import QWidget, QListWidget, QVBoxLayout, QPushButton, QHBoxLayout, QMenu, QDialog, QLabel, QTextEdit, QSizePolicy, QInputDialog, QTabBar
 from PyQt5.QtCore import Qt, QEvent
 from PyQt5.QtGui import QTextCursor, QColor
 
@@ -105,20 +105,11 @@ def new_list_widget(callback = None, get_filtered_event_from = None):
     if callback: list_widget.itemDoubleClicked.connect(callback)
     if get_filtered_event_from: list_widget.installEventFilter(get_filtered_event_from) # now the list_widget will use the keyPressEvent function 
     return list_widget
-def new_tab_bar(label="tab 1", wdg=None):
-    if wdg is None:
-        wdg = QWidget()
-
-    tab_widget = QTabWidget()
-    tab_widget.addTab(wdg, label)
-    
+def new_tab_bar(label="tab 1", callback = None):
+    tab_ = QTabBar()
+    tab_.addTab(label)
     # Styling (matches your dark semi-transparent style)
-    tab_widget.setStyleSheet("""
-        QTabWidget::pane {
-            border: 1px solid rgba(255, 255, 255, 50);
-            background-color: rgba(0, 0, 0, 100);
-            border-radius: 5px;
-        }
+    tab_.setStyleSheet("""
         QTabBar::tab {
             background-color: rgba(0, 0, 0, 150);
             color: white;
@@ -137,7 +128,8 @@ def new_tab_bar(label="tab 1", wdg=None):
         }
     """)
     # tab_widget.setFocusPolicy(Qt.StrongFocus)
-    return tab_widget
+    if callback: tab_.currentChanged.connect(callback)
+    return tab_
 
 # -- set window properties
 
@@ -408,18 +400,37 @@ class InventoryWindow(Dialog):
         # --
         self.list_widget_objects = []
         self.list_widget_last_size = 0
+        self.current_filter = ""
         # -- 
         self.hide()  # Hidden by default
         self.parent().setFocus()
     def build_parts(self):
         self.layout = VLayout()
-        set_properties_layout(self.layout)
         self.list_widget = new_list_widget(callback=self.item_double_click, get_filtered_event_from=self)
-        self.list_widget.customContextMenuRequested.connect(self.show_context_menu)
+        self.tabs = new_tab_bar("*", self.tab_changed)
+        self.tabs.addTab("Edible")
+        self.tabs.addTab("Weapons")
+        self.tabs.addTab("Resources")
         self.equip_button = new_button("Equip/Use", self.item_double_click)
         self.drop_button = new_button("Drop", self.drop_item)
     def assemble_parts(self):
-        self / (self.layout/self.list_widget/ (HLayout()/self.equip_button/self.drop_button) )
+        set_properties_layout(self.layout)        
+        self.list_widget.customContextMenuRequested.connect(self.show_context_menu)
+        self.tabs.currentChanged.connect(self.tab_changed)
+        self / (self.layout/self.tabs/self.list_widget/ (HLayout()/self.equip_button/self.drop_button) )
+    def tab_changed(self, index):
+        self.current_filter = self.tabs.tabText(index)
+        self.apply_filter()
+    def apply_filter(self):
+        match self.current_filter:
+            case "*": 
+                apply_filter_to_list_widget(self.list_widget,"")
+            case "Edible": 
+                apply_filter_to_list_widget(self.list_widget,"[ntr]")
+            case "Weapons": 
+                apply_filter_to_list_widget(self.list_widget,"[dmg]")
+            case "Resources": 
+                apply_filter_to_list_widget(self.list_widget,"[value]")
     def eventFilter(self, obj, event):
         if obj == self.list_widget and event.type() == QEvent.KeyPress:
             if event.key() in (Qt.Key_Return, Qt.Key_Enter):
@@ -469,18 +480,13 @@ class InventoryWindow(Dialog):
                 item_widget.setForeground(qt_color)
                 self.list_widget_objects.append(equipped_item)
                 wdg_index += 1
-        if player.items or b_equipped:
-            self.show()
-            set_relative_horizontal_position(self, self.parent(), 'left', 10)
-            self.parent().setFocus()
-        else:
-            self.hide()
-        if last_list_widget_size == len(self.list_widget_objects): # same size
-            self.list_widget.setCurrentRow(last_list_widget_current_item_index)
-        elif last_list_widget_size == len(self.list_widget_objects)-1: # size -1
-            self.list_widget.setCurrentRow(last_list_widget_current_item_index-1)
-        else:
-            self.list_widget.setCurrentRow( len(self.list_widget)//2 )
+        # --
+        self.apply_filter()
+        self.update_row_index(last_list_widget_size, last_list_widget_current_item_index)
+        # show         
+        self.show()
+        set_relative_horizontal_position(self, self.parent(), 'left', 10)
+        self.parent().setFocus()
     def show_context_menu(self, pos):
         """Show a context menu for equip and drop actions."""
         item = self.list_widget.itemAt(pos)
@@ -508,7 +514,7 @@ class InventoryWindow(Dialog):
                     else:
                         self.parent().add_message(f"Cannot equip {game_item.name}")
                     self.update_inventory(self.player)  # Refresh list
-                elif isinstance(game_item, Item):
+                elif isinstance(game_item, Usable):
                     if game_item in self.player.items:                    
                         self.parent().events.append(UseItemEvent(self.player, game_item))
                 else:
@@ -545,7 +551,20 @@ class InventoryWindow(Dialog):
                 self.parent().add_message("Cannot drop item: invalid tile")
             self.parent().game_iteration() 
         self.parent().setFocus()  # Return focus to game    
-
+    def update_row_index(self, last_size, last_index):
+        if last_size == len(self.list_widget_objects): # same size
+            #print("1", last_size, last_index)
+            self.list_widget.setCurrentRow(last_index)
+        elif last_size > len(self.list_widget_objects): # size -1
+            #print("2", last_size, last_index)
+            if last_index < len(self.list_widget) and last_index > 0:
+                self.list_widget.setCurrentRow(last_index - 1)
+            else:
+                self.list_widget.setCurrentRow( len(self.list_widget)//2 )
+        else:
+            #print("3", last_size, last_index)
+            self.list_widget.setCurrentRow( len(self.list_widget)//2 )
+    
 # menu components
 def common_menu_parts(menu, item, instance, game_instance, previous_menu = None):
     """ return True means that the menu should close """
