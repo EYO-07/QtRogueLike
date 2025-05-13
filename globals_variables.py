@@ -4,8 +4,10 @@ import random
 def Generate_Square_Diffs(radius=3):
     return [ (x,y) for y in range(-radius+1,radius) for x in range(-radius+1,radius) ]
     
-def d(a,b = None): # float dice 
-    if not b:
+def d(a = None,b = None): # float dice 
+    if (a is None) and (b is None):
+        return random.random()
+    if b is None:
         return random.uniform(1,a)
     else:
         return random.uniform(a,b)
@@ -31,7 +33,16 @@ PLAYER_MAX_HP = 100
 PLAYER_MAX_STAMINA = 200
 PLAYER_MAX_HUNGER = 1000
 
+# buildings 
+PROD_INV_FACTOR = 100.0 
+
+# Pop-up GUIs
+POPUP_GUI_ALPHA = 0.8 
+POPUP_WIDTH = 400
+POPUP_HEIGHT = 400 
+
 # cached diff moves 
+ADJACENT_DIFF_MOVES = [(1, 0), (-1, 0), (0, 1), (0, -1), (0, 0)]
 CHESS_KNIGHT_DIFF_MOVES = [
     (2, 1), (2, -1), (-2, 1), (-2, -1),
     (1, 2), (1, -2), (-1, 2), (-1, -2)
@@ -103,20 +114,13 @@ SPRITE_NAMES = SPRITE_NAMES_WEAPONS + SPRITE_NAMES_CHARACTERS + SPRITE_NAMES_FOO
     "quarry",
     "mill",
     "wood",
-    "tower"
+    "tower",
+    "red_flag"
 ]
 
 # loot
-EQUIPMENT_SLOTS = [
-    'primary_hand', 
-    'secondary_hand', 
-    'head', 
-    'neck', 
-    'torso', 
-    'waist', 
-    'legs', 
-    'foot'
-]
+HAND_SLOTS = ['primary_hand', 'secondary_hand' ]
+EQUIPMENT_SLOTS = HAND_SLOTS + ['head', 'neck', 'torso', 'waist', 'legs', 'foot']
 
 LOOT_TABLE = [
     { "item_name": "Food", "chance": 0.3, "name":"apple", "nutrition":10 },
@@ -171,6 +175,15 @@ LAKE_ENEMY_TABLE = [
     {"enemy": "Zombie", "chance": 0.75, "b_generate_items": True}
 ] 
 
+TILE_BUILDING_ENEMY_TABLE = [
+    {"enemy": "Mercenary", "chance": 0.4, "b_generate_items": True, "extra_items": [
+        {"item_name": "WeaponRepairTool", "name":"Whetstone", "uses": 5},
+        {"item_name": "Food", "name":"meat", "nutrition":250}
+    ]},
+    {"enemy": "Rogue", "chance": 0.7, "b_generate_items": True, "extra_items": [
+        {"item_name": "WeaponRepairTool", "name":"Whetstone", "uses": 2}
+    ]}
+]
 
 
 

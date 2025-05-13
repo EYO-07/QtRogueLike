@@ -8,7 +8,14 @@ from pathlib import Path
 import tempfile, shutil, os, json
 import threading
 from collections import defaultdict
-            
+
+# Serializable.to_dict() || {._serialize} || {}
+# Serializable.from_dict() || {._deserialize} || {}
+# Serializable.Save_JSON() || {.to_dict} || {}
+# Serializable.Load_JSON() || {.from_dict} || {}
+# Serializable._serialize() || {.to_dict} || {}
+# Serializable._deserialize() || {._get_class_by_name, .from_dict} || {}
+# Serializable._get_class_by_name() 
 class Serializable:
     """
     WARNING !!! This class could cause infinite saving process for cross referencing Serializables. Make sure only one class save the property. (oZumbiAnalitico) 
