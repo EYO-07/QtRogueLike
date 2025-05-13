@@ -266,7 +266,7 @@ class JournalWindow(Dialog):
         day = self.parent().current_day
         map_coords = self.parent().current_map
         # Format entry
-        self.append_text(f"Day {day}, Map ({map_coords[0]},{-map_coords[1]},{map_coords[2]})"+self.generate_quick_entry()+"\n")
+        self.append_text(f"Day {day}, Map ({map_coords[0]},{-map_coords[1]},{map_coords[2]}) "+self.generate_quick_entry()+"\n")
         self.parent().add_message("Diary entry logged")    
     def showEvent(self, event):
         """Ensure the text is scrolled to the end when the journal is shown."""
@@ -567,16 +567,16 @@ class InventoryWindow(Dialog):
     
 # menu components
 def common_menu_parts(menu, item, instance, game_instance, previous_menu = None):
-    """ return True means that the menu should close """
+    """ return True means that the menu should close, return False means that the caller should return, None if caller should process other statements. """
     if item == "..": 
         if previous_menu:
             instance.set_list(previous_menu)
         else:
             instance.set_list()
-        return False 
-    if menu == "main" and item.lower() == "exit": return True    
-    if item.lower() == "resume": return True 
-    return False 
+        return False # caller should return 
+    if menu == "main" and item.lower() == "exit": return True # caller should close the instance menu
+    if item.lower() == "resume": return True # caller should close the instance menu 
+    return None # caller process other statements
 
 # Menus 
 def main_menu(menu, item, instance, game_instance):
@@ -592,8 +592,12 @@ def main_menu(menu, item, instance, game_instance):
                     game_instance.start_new_game(new_name[0])
                     instance.close()
                     return 
-            case "Load Game >": instance.set_list("Load Game >", ["[ Main Menu > Load Game ]","Slot 1", ".."])
-            case "Save Game >": instance.set_list("Save Game >", ["[ Main Menu > Save Game ]","Slot 1", ".."])
+            case "Load Game >": 
+                instance.set_list("Load Game >", ["[ Main Menu > Load Game ]","Slot 1", ".."])
+                return 
+            case "Save Game >": 
+                instance.set_list("Save Game >", ["[ Main Menu > Save Game ]","Slot 1", ".."])
+                return 
             case "Quit to Desktop": 
                 game_instance.close()
                 return 
@@ -605,12 +609,15 @@ def main_menu(menu, item, instance, game_instance):
                     "Change Current Character Name",
                     ".."
                 ])
+                return 
     elif menu == "Character Settings >":
         match item:
             case "Select Player Sprite >": 
                 instance.set_list("Select Player Sprite >", ["[ Character Settings > Select Sprite ]"] + SPRITE_NAMES_PLAYABLES + [".."])
+                return 
             case "Select Player Character >": 
                 instance.set_list("Select Player Character >", ["[ Character Settings > Character Selection ]"] + [ k for k,v in game_instance.players.items() if v.current_map == game_instance.player.current_map and not v.party ] + [".."])
+                return 
             case "Change Current Character Name":
                 new_name = QInputDialog.getText(instance, 'Input Dialog', 'New Character Name :')
                 if new_name[0]:
@@ -683,11 +690,20 @@ def primary_menu(menu, item, instance, game_instance, list_of_weapons, slot):
     if common_menu_parts(menu, item, instance, game_instance): 
         instance.close()
         return 
+    if "-> primary" in item:
+        game_instance.player.unequip_item(slot = "primary_hand")
+        instance.close()
+        return 
+    if "-> secondary" in item:
+        game_instance.player.unequip_item(slot = "secondary_hand")
+        instance.close()
+        return 
     for wp in list_of_weapons:
         if item == wp[1]:
             game_instance.player.equip_item(wp[0], slot)
             game_instance.update_inv_window()
             instance.close()
+            break 
 def skill_menu(menu, item, instance, game_instance, stamina_bound):
     if common_menu_parts(menu, item, instance, game_instance): 
         instance.close()
@@ -706,8 +722,11 @@ def player_menu(menu,item, instance, game_instance, npc):
         return 
     player_items = { info(it)[0] : it for it in player.items }
     npc_items = { info(it)[0] : it for it in npc.items }
-    if common_menu_parts(menu, item, instance, game_instance): 
+    result = common_menu_parts(menu, item, instance, game_instance)
+    if result == True: 
         instance.close()
+        return 
+    elif result == False:
         return 
     if item == "Add to Party":
         if isinstance(npc, Player) and isinstance(player, Hero):
@@ -717,10 +736,12 @@ def player_menu(menu,item, instance, game_instance, npc):
     if item == "items+": 
         if len( player_items ) > 0:
             instance.set_list("items+", list( player_items.keys() )+[".."] )
+            return 
     if item == "items-": 
         if len( npc_items ) > 0:
             instance.set_list("items-", list( npc_items.keys() )+[".."] )
-    if menu == "items+":        
+            return 
+    if menu == "items+":
         player.give( player_items[item] , npc)
         instance.close()
         return 
@@ -738,8 +759,10 @@ def debugging_menu(menu, item, instance, game_instance):
         match item:
             case "Display Players Info >":
                 instance.set_list("Display Players Info >", [".."]+[ f"{k} {v.current_map} {v.party}" for k,v in game_instance.players.items() ])
+                return 
             case "Add Item >": 
                 instance.set_list("Add Item >", ["Resources","Whetstone","Mace","Long Sword","Food",".."])
+                return 
             case "Restore Status":
                 player.reset_stats()
                 instance.close()
@@ -754,6 +777,7 @@ def debugging_menu(menu, item, instance, game_instance):
                 return 
             case "Generate Enemies >":
                 instance.set_list("Generate Enemies >", ["Zombie","Bear","Rogue","Mercenary","Player","clear",".."])
+                return 
             case "Generate Dungeon Entrance":
                 if game_instance.map.add_dungeon_entrance_at(player.x, player.y):
                     game_instance.dirty_tiles.add((player.x, player.y)) 
@@ -762,6 +786,7 @@ def debugging_menu(menu, item, instance, game_instance):
                 return 
             case "Add a Cosmetic Layer >":
                 instance.set_list("Add a Cosmetic Layer >", ["House", "Enemy Tower","Castle","Lumber Mill","Clear","Mill","Tower",".."])
+                return 
     # --
     if menu == "Add Item >":
         match item:

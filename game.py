@@ -733,6 +733,8 @@ class Game_GUI:
 class Game_ITERATION:
     def __init__(self):
         self.events = []  # Initialize events list
+        # -- message flags || 100 turns 
+        self.flag_near_to_village = False 
     def game_iteration(self):
         """ return True if losing hp """
         prev_hp = self.player.hp 
@@ -796,6 +798,9 @@ class Game_ITERATION:
             self.Event_Every_100_Turns()
     def Event_Every_100_Turns(self):
         self.add_message(f"Day : {self.current_day} Turn : {self.turn}")
+        if self.flag_near_to_village:
+            self.add_message(f"I'm close to a village ... I should check it out")
+            self.flag_near_to_village = False 
         self.player.update_available_skills()
     def Event_NewDay(self):
         print(f"Day {self.current_day}")
@@ -842,7 +847,10 @@ class Game_ITERATION:
             self.save_current_game(slot = self.current_slot)
         self.update_prior_next_selection()
     def Event_DoAttack(self, event):
-        event.target.receive_damage(event.attacker, event.damage)
+        if event.target.receive_damage(event.attacker, event.damage):
+            if event.target is self.player: self.add_message("You parried the incoming attack.")
+        else:
+            if event.target is self.player: self.add_message("The enemy hits you ...")
         if hasattr(event.target, "description"): self.last_encounter_description = getattr(event.target,"description")
         if event.target is self.player: # player being attacked
             self.last_encounter_description = getattr(event.attacker,"description")

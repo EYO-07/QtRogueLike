@@ -317,7 +317,7 @@ class Container(Serializable): # Primitive
         return True 
         
 class Durable(Item): # interface : has durability_factor, quality
-    __serialize_only__ = ["durability_factor"]
+    __serialize_only__ = Item.__serialize_only__ + ["durability_factor"]
     def __init__(self, name="", description="", weight=1, durability_factor=0.995):
         Item.__init__(self, name = name, description = description, weight = weight, sprite=name.lower() )
         self.durability_factor = durability_factor
@@ -532,6 +532,7 @@ class Damageable:
         self.hp = self.max_hp
     def receive_damage(self, attacker, damage): 
         self.hp -= damage
+        return False 
         
 class OfensiveCharacter(Damageable):
     __serialize_only__ = Damageable.__serialize_only__ + ["base_damage"]
@@ -563,8 +564,10 @@ class DefensiveCharacter(OfensiveCharacter): # interface : characters that can p
     def receive_damage(self, attacker, damage):
         if d() < self.calculate_parry_factor(attacker, damage) + self.calculate_defense_factor():
             self.stamina -= damage
+            return True 
         else:
             super().receive_damage(attacker, damage)
+            return False 
     def calculate_defense_factor(self):
         S = 0
         for df in EQUIPMENT_SLOTS:
@@ -851,6 +854,8 @@ class SkilledCharacter(Character):
         self.can_use_tower_skill = False 
         self.can_use_bishop_skill = False 
         self.can_use_dodge_skill = False 
+    def update_available_skills(self):
+        pass 
 
 class Player(SkilledCharacter, RegenerativeCharacter): # player or playable npc 
     __serialize_only__ = SkilledCharacter.__serialize_only__+ RegenerativeCharacter.__serialize_only__ + [ 
@@ -887,10 +892,8 @@ class Player(SkilledCharacter, RegenerativeCharacter): # player or playable npc
         return False
     def generate_initial_items(self):
         self.equip_item(Sword(name="Bastard_Sword", damage=8.5, durability_factor=0.9995, description="although with no name, this Bastard Sword was master-crafted and passed as heirloom in generations of my family, that swords reminds me of the values my father teach me ..."), "primary_hand")
-        self.add_item(Food(name="Apple", nutrition=50))
-        self.add_item(Food(name="Apple", nutrition=50))
-        self.add_item(Food(name="Apple", nutrition=50))
-        self.add_item(Food(name="Bread", nutrition=100))
+        self.add_item(WeaponRepairTool(name="Whetstone", uses=12))
+        self.add_item(Food(name="Bread", nutrition=250))
     def get_forward_direction(self):
         dx = 0
         dy = -1
@@ -1213,6 +1216,7 @@ class TileBuilding(ActionTile): # interface class
         self.stone = d(0,2000)
         self.metal = d(0,2000)
     def production(self):
+        if self.b_enemy: return 
         self.villagers = min( 1.005*self.villagers, self.villagers_max )
         self.food += d(0,self.villagers/PROD_INV_FACTOR)
         self.wood += d(0,self.villagers/PROD_INV_FACTOR)
@@ -1220,6 +1224,14 @@ class TileBuilding(ActionTile): # interface class
         self.metal += d(0,self.villagers/PROD_INV_FACTOR)
     def update(self, game_instance = None):
         self.production()
+        # -- vars
+        if not game_instance: return 
+        ply_dist = game_instance.player.distance(self)
+        # message when close to a village 
+        if ply_dist < 14:
+            game_instance.flag_near_to_village = True 
+        else:
+            game_instance.flag_near_to_village = False 
         # % .b_enemy || add red flag cosmetic layer 
         # % .b_enemy | % else || remove red flag cosmetic layer 
         if self.b_enemy:
@@ -1227,10 +1239,10 @@ class TileBuilding(ActionTile): # interface class
             # % Player Distance to Building is Less than 5 || % has villagers || spawn rogue and mercenaries | reduze .villagers count 
             # % Player Distance to Building is Less than 5 || % has villagers || spawn rogue and mercenaries || spawn on free walkable and adjacent walkable adjacent tiles 
             # % Player Distance to Building is Less than 5 || % has villagers | % else || .b_enemy = False | add one villager 
-            if not game_instance: return 
             map = game_instance.map
-            if self.b_enemy: print( "TileBuilding.update() || ", self.villagers )
-            if game_instance.player.distance(self) < 4: 
+            if self.b_enemy: 
+                print( "TileBuilding.update() || villager count:", self.villagers, "distance :", ply_dist )
+            if ply_dist < 4: 
                 if self.villagers > 0:
                     enemy = map.generate_enemy_by_chance_by_list_at(self.x, self.y, TILE_BUILDING_ENEMY_TABLE)
                     if enemy:
@@ -1244,7 +1256,6 @@ class TileBuilding(ActionTile): # interface class
                     self.bonus_resources()
         else:
             self.remove_layer("red_flag")
-            
     def retrieve_food(self, game_instance, quantity = 500):
         if self.food >= quantity:
             self.food -= quantity
@@ -1372,6 +1383,7 @@ class Castle(TileBuilding):
         self.num_heroes = 0
         self.menu_list = []    
     def production(self):
+        if self.b_enemy: return 
         self.villagers = min( 1.005*self.villagers, self.villagers_max )
         self.food += d(0,self.villagers/PROD_INV_FACTOR)
     def action(self):
@@ -1502,6 +1514,7 @@ class Mill(TileBuilding):
             "Exit"
         ]
     def production(self):
+        if self.b_enemy: return 
         self.villagers = min( 1.005*self.villagers, self.villagers_max )
         self.food += d(0,2*self.villagers/PROD_INV_FACTOR)
 
@@ -1534,6 +1547,7 @@ class LumberMill(TileBuilding):
             "Exit"
         ]
     def production(self):
+        if self.b_enemy: return 
         self.villagers = min( 1.005*self.villagers, self.villagers_max )
         self.wood += d(0,2*self.villagers/PROD_INV_FACTOR)
 
@@ -1650,6 +1664,7 @@ class GuardTower(TileBuilding):
         game_instance.draw()
         return True    
     def production(self):
+        if self.b_enemy: return 
         self.villagers = min( 1.005*self.villagers, self.villagers_max )
 
 # --- END 
