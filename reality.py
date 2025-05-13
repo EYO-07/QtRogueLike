@@ -1270,10 +1270,20 @@ class TileBuilding(ActionTile): # interface class
             game_instance.update_inv_window()
             return True 
         return False
-    def retrieve_metal(self, game, quantity = 500):
-        pass 
-    def retrieve_stone(self, game, quantity = 500):
-        pass 
+    def retrieve_metal(self, game_instance, quantity = 500):
+        if self.metal >= quantity:
+            self.metal -= quantity
+            game_instance.player.add_item(Metal(value = quantity))
+            game_instance.update_inv_window()
+            return True 
+        return False
+    def retrieve_stone(self, game_instance, quantity = 500):
+        if self.stone >= quantity:
+            self.stone -= quantity
+            game_instance.player.add_item(Stone(value = quantity))
+            game_instance.update_inv_window()
+            return True 
+        return False
     def store_resource(self, res, char):
         if isinstance(res, Resource): res.store(char, self)
     def menu_garrison(self, current_menu, current_item, menu_instance, game_instance):
@@ -1338,7 +1348,7 @@ class TileBuilding(ActionTile): # interface class
         resources = { f"{counter[0]}. {info(e)[0]}" : e for e in game_instance.player.items if resource_counter(e, counter) }
         # -- 
         if current_item == "Resources >":
-            menu_instance.set_list("Resources >",[ f"-> food: {self.food:.0f}", f"-> wood: {self.wood:.0f}", "Resources+", "Resources++", "Food-", "Wood-", ".." ])
+            menu_instance.set_list("Resources >",[ f"-> food: {self.food:.0f}", f"-> wood: {self.wood:.0f}", "Resources+", "Resources++", "Food-", "Wood-", "Metal-", "Stone-", ".." ])
             return False 
         # -- 
         if current_menu == "Resources >":
@@ -1357,10 +1367,20 @@ class TileBuilding(ActionTile): # interface class
                         game_instance.update_inv_window()
                         return True 
                 case "Food-":
-                    if self.retrieve_food(game_instance):
+                    qtt, ok = QInputDialog.getDouble(menu_instance, 'Input Dialog', f'Quantity ({self.food:.1f}) :')
+                    if ok and qtt > 0 and self.retrieve_food(game_instance, qtt):
                         return True 
                 case "Wood-":
-                    if self.retrieve_wood(game_instance):
+                    qtt, ok = QInputDialog.getDouble(menu_instance, 'Input Dialog', f'Quantity ({self.wood:.1f}) :')
+                    if ok and qtt > 0 and self.retrieve_wood(game_instance, qtt):
+                        return True 
+                case "Metal-":
+                    qtt, ok = QInputDialog.getDouble(menu_instance, 'Input Dialog', f'Quantity ({self.metal:.1f}) :')
+                    if ok and qtt > 0 and self.retrieve_metal(game_instance, qtt):
+                        return True
+                case "Stone-":
+                    qtt, ok = QInputDialog.getDouble(menu_instance, 'Input Dialog', f'Quantity ({self.stone:.1f}) :')
+                    if ok and qtt > 0 and self.retrieve_stone(game_instance, qtt):
                         return True 
         if current_menu == "Resources+":
             res_obj = resources[current_item]
@@ -1394,6 +1414,16 @@ class Castle(TileBuilding):
             if current_item == "..": menu_instance.set_list()
             if current_item == "Overview >": self.set_population_menu(menu_instance)
             if current_item == "Exit": menu_instance.close()
+            if current_item == "Certificates >": 
+                menu_instance.set_list("Certificates >", ["Lumber Mill (500 Wood, 250 Food)", "Farm (500 Wood, 500 Food)", "Guard Tower (2000 Wood, 2500 Food)", ".."])
+                return 
+            if "Weapon Repair" in current_item: 
+                if self.metal >= 100:
+                    self.metal -= 100
+                    game_instance.player.add_item(WeaponRepairTool(name="Whetstone", uses=12))
+                    game_instance.add_message("Whetstone Added to Inventory")
+                    menu_instance.close()
+                    return 
             if "Guard Tower" in current_item:
                 if self.wood >= 2000 and self.food >= 2500:
                     self.wood -= 2000 
@@ -1441,9 +1471,8 @@ class Castle(TileBuilding):
             "New Hero (2000 Food)",
             "Garrison >",
             "Resources >",
-            "Lumber Mill (500 Wood, 250 Food)",
-            "Farm (500 Wood, 500 Food)",
-            "Guard Tower (2000 Wood, 2500 Food)",
+            "Certificates >",
+            "Weapon Repair (100 Metal)",
             "Exit"
         ]
     def new_hero(self, game_instance):
