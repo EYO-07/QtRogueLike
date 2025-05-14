@@ -740,6 +740,72 @@ class Game_ITERATION:
         self.events = []  # Initialize events list
         # -- message flags || 100 turns 
         self.flag_near_to_village = False 
+    def game_iteration_not_draw(self):
+        prev_hp = self.player.hp 
+        # -- 
+        self.turn += 1
+        
+        largest_dt = 0
+        culprit = ""
+        t = 0
+        
+        t1 = tic()
+        self.Event_NewTurn()
+        dt1, txt1 = toc(t1, "Game.Event_NewTurn()")
+        t += dt1
+        
+        if dt1 > largest_dt:
+            largest_dt = dt1
+            culprit = txt1
+        
+        t2 = tic()
+        self.process_events() 
+        dt2, txt2 = toc(t2, "Game.process_events()")
+        t += dt2
+        
+        if dt2 > largest_dt:
+            largest_dt = dt2
+            culprit = txt2
+        
+        t3 = tic()
+        self.update_players() # which include player and allies 
+        dt3, txt3 = toc(t3, "Game.update_players()")
+        t += dt3
+        
+        if dt3 > largest_dt:
+            largest_dt = dt3
+            culprit = txt3
+        
+        t4 = tic()
+        self.update_enemies()
+        dt4, txt4 = toc(t4, "Game.update_enemies()")
+        t += dt4
+        
+        if dt4 > largest_dt:
+            largest_dt = dt4
+            culprit = txt4
+        
+        t5 = tic()
+        self.update_buildings()
+        dt5, txt5 = toc(t5, "Game.update_buildings()")
+        t += dt5
+        
+        if dt5 > largest_dt:
+            largest_dt = dt5
+            culprit = txt5
+        
+        t6 = tic()
+        self.update_messages() # Critical: Update message window 
+        dt6, txt6 = toc(t6, "Game.update_messages()")
+        t += dt6
+        
+        if dt6 > largest_dt:
+            largest_dt = dt6
+            culprit = txt6
+        
+        print(f"{culprit} : {100.0*largest_dt/t:.1f} %")
+        
+        return ( self.player.hp < prev_hp )
     def game_iteration(self):
         """ return True if losing hp """
         prev_hp = self.player.hp 
@@ -1100,7 +1166,7 @@ class Game(QGraphicsView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_P
                         return False 
                 px, py = self.player.get_forward_direction()
                 tile2 = self.map.get_tile(self.player.x+px, self.player.y+py)
-                if tile:
+                if tile2:
                     char = tile2.current_char
                     if char and isinstance(char, Player):
                         SB = SelectionBox( [
@@ -1144,11 +1210,21 @@ class Game(QGraphicsView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_P
         elif key == Qt.Key_D:
             dx, dy = self.rotated_direction(1, 0)
         elif key == Qt.Key_H:
-            for i in range(10): 
-                if self.game_iteration(): 
-                    self.add_message(f"Rested {i} turns")
-                    break 
+            ptr_b_exit = [ False ]
+            def is_exit(last_result, it):
+                if last_result: 
+                    ptr_b_exit[0] = True 
+                    self.add_message(f"Rested {it} turns")
+                return ptr_b_exit[0] 
+            T1 = tic()
+            [ i for i in range(10) if not is_exit( self.game_iteration_not_draw(), i+1 ) ]
+            self.draw()
+            # for i in range(10): 
+                # if self.game_iteration(): 
+                    # self.add_message(f"Rested {i} turns")
+                    # break 
             self.add_message(f"Rested 10 turns")
+            toc(T1, f"Key Press H || Enemies:{len(self.map.enemies)} | Buildings:{len(self.map.buildings)} |") 
             return False
         elif key == Qt.Key_Space:
             return True

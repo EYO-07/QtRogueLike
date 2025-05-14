@@ -38,6 +38,7 @@ def toc(initial, message = "", t_bound = 0.25):
         Computation done dt = 0.347
     """
     dt = time.perf_counter() - initial
-    if dt < t_bound: return 
+    if dt < t_bound: return dt, f"{message}"
     print(f"{message} dt = {dt:.3f}")
+    return dt, f"{message}" 
 

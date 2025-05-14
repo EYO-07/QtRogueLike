@@ -341,7 +341,7 @@ class Map(Serializable):
         print(f"Added {len(self.enemies)} enemies for map {self.coords}")
         return self.enemies 
     
-    def update_enemies(self, game_instance):        
+    def update_enemies(self, game_instance):
         for enemy in self.enemies:
             enemy.behaviour_update(game_instance)
         # if len(self.enemies) < 5:

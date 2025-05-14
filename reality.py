@@ -993,8 +993,12 @@ class Hero(Player): # playable character that can "carry" a party
         for dx,dy in CROSS_DIFF_MOVES_1x1:
             if not game_instance.map.can_place_character_at(x+dx,y+dy): continue 
             if dx == 0 and dy == 0: continue
+            to_remove = set()
             for key in self.party_members:
                 value = game_instance.players.get(key, None)
+                if value is None: # Bug Fix - Character can't Release Party
+                    to_remove.add(key) # self.party_members.remove(key)
+                    continue 
                 if value and value.party:
                     value.x = x+dx 
                     value.y = y+dy 
@@ -1003,6 +1007,8 @@ class Hero(Player): # playable character that can "carry" a party
                     game_instance.map.place_character(value)
                     game_instance.draw()
                     break 
+            for key in to_remove:
+                self.party_members.remove(key)
     def count_party(self):
         return len(self.party_members)
                     
@@ -1240,8 +1246,8 @@ class TileBuilding(ActionTile): # interface class
             # % Player Distance to Building is Less than 5 || % has villagers || spawn rogue and mercenaries || spawn on free walkable and adjacent walkable adjacent tiles 
             # % Player Distance to Building is Less than 5 || % has villagers | % else || .b_enemy = False | add one villager 
             map = game_instance.map
-            if self.b_enemy: 
-                print( "TileBuilding.update() || villager count:", self.villagers, "distance :", ply_dist, "cosmetic len :", len(self.cosmetic_layer_sprite_keys) )
+            # if self.b_enemy: 
+                # print( "TileBuilding.update() || villager count:", self.villagers, "distance :", ply_dist, "cosmetic len :", len(self.cosmetic_layer_sprite_keys) )
             if ply_dist < 4: 
                 if self.villagers > 0:
                     enemy = map.generate_enemy_by_chance_by_list_at(self.x, self.y, TILE_BUILDING_ENEMY_TABLE)
@@ -1249,14 +1255,14 @@ class TileBuilding(ActionTile): # interface class
                         self.villagers -= 5
                         map.enemies.append(enemy)
                         map.place_character(enemy)
-                        game_instance.draw()
+                        # game_instance.draw()
                 else:
                     self.b_enemy = False 
                     self.villagers = 1
                     self.bonus_resources()
         else:
             self.remove_layer("red_flag")
-            game_instance.draw()
+            # game_instance.draw()
     def retrieve_food(self, game_instance, quantity = 500):
         if self.food >= quantity:
             self.food -= quantity
