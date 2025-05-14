@@ -56,13 +56,18 @@ class Game_SOUNDMANAGER:
                 lambda error: self.add_message(f"Music error: {self.music_player.errorString()}")
             )
             # Set looping
-            try:
-                self.music_player.setLoops(QMediaPlayer.Infinite)  # PyQt5 5.15+
-            except AttributeError:
+            # Fallback for older PyQt5
+            self.music_player.mediaStatusChanged.connect(
+                lambda status: self.music_player.play() if status == QMediaPlayer.EndOfMedia and not self.is_music_muted else None
+            )
+                        
+            # try:
+                # self.music_player.setLoops(QMediaPlayer.Infinite)  # PyQt5 5.15+
+            # except AttributeError:
                 # Fallback for older PyQt5
-                self.music_player.mediaStatusChanged.connect(
-                    lambda status: self.music_player.play() if status == QMediaPlayer.EndOfMedia and not self.is_music_muted else None
-                )
+                # self.music_player.mediaStatusChanged.connect(
+                    # lambda status: self.music_player.play() if status == QMediaPlayer.EndOfMedia and not self.is_music_muted else None
+                # )
         else:
             self.add_message(f"Music file {music_path} not found")
             print(f"Music file {music_path} not found")

@@ -1228,7 +1228,7 @@ class TileBuilding(ActionTile): # interface class
         if not game_instance: return 
         ply_dist = game_instance.player.distance(self)
         # message when close to a village 
-        if ply_dist < 14:
+        if ply_dist < 20:
             game_instance.flag_near_to_village = True 
         else:
             game_instance.flag_near_to_village = False 
@@ -1241,7 +1241,7 @@ class TileBuilding(ActionTile): # interface class
             # % Player Distance to Building is Less than 5 || % has villagers | % else || .b_enemy = False | add one villager 
             map = game_instance.map
             if self.b_enemy: 
-                print( "TileBuilding.update() || villager count:", self.villagers, "distance :", ply_dist )
+                print( "TileBuilding.update() || villager count:", self.villagers, "distance :", ply_dist, "cosmetic len :", len(self.cosmetic_layer_sprite_keys) )
             if ply_dist < 4: 
                 if self.villagers > 0:
                     enemy = map.generate_enemy_by_chance_by_list_at(self.x, self.y, TILE_BUILDING_ENEMY_TABLE)
@@ -1256,6 +1256,7 @@ class TileBuilding(ActionTile): # interface class
                     self.bonus_resources()
         else:
             self.remove_layer("red_flag")
+            game_instance.draw()
     def retrieve_food(self, game_instance, quantity = 500):
         if self.food >= quantity:
             self.food -= quantity

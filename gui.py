@@ -13,7 +13,7 @@ from datetime import datetime
 # third-party
 from PyQt5.QtWidgets import QWidget, QListWidget, QVBoxLayout, QPushButton, QHBoxLayout, QMenu, QDialog, QLabel, QTextEdit, QSizePolicy, QInputDialog, QTabBar
 from PyQt5.QtCore import Qt, QEvent
-from PyQt5.QtGui import QTextCursor, QColor
+from PyQt5.QtGui import QTextCursor, QColor, QIcon
 
 # -- helpers 
 def item_text_color(game_item):
@@ -130,7 +130,43 @@ def new_tab_bar(label="tab 1", callback = None):
     # tab_widget.setFocusPolicy(Qt.StrongFocus)
     if callback: tab_.currentChanged.connect(callback)
     return tab_
+def add_simple_context_menu(widget, item_list = None, action_callback = lambda x: print(x.text()), **kwargs):
+    """
+    Attach a customizable right-click (context) menu to any PyQt5 widget.
 
+    Parameters:
+    -----------
+    widget : QWidget
+        The widget to which the context menu will be attached.
+
+    item_list : list of str, optional
+        A list of strings representing the menu item labels.
+        Defaults to ["Option 1"] if not provided.
+
+    action_callback : function, optional
+        A function that will be called when a menu item is selected.
+        It receives the triggered QAction object as its first argument.
+        Defaults to printing the action's text.
+
+    **kwargs : dict
+        Additional keyword arguments passed to `action_callback`.
+
+    Example:
+    --------
+    add_context_menu(my_button,
+                     item_list=["Copy", "Paste", "Delete"],
+                     action_callback=lambda action: print("Selected:", action.text()))
+    """
+    if item_list is None: item_list = ["Option 1"]
+    widget.setContextMenuPolicy(3)  # Qt.CustomContextMenu
+    def show_context_menu(position):
+        menu = QMenu()
+        triggered_action  = menu.exec_(widget.mapToGlobal(position))
+        for act in [ menu.addAction(it) for it in item_list ]:
+            if triggered_action  == act:
+                action_callback(act, **kwargs)
+    widget.customContextMenuRequested.connect(show_context_menu)
+    
 # -- set window properties
 
 # 1. don't steals focus 
@@ -138,12 +174,12 @@ def new_tab_bar(label="tab 1", callback = None):
 # 3. small square size 
 def set_properties_non_modal_popup(wdg, title):
     if not isinstance(wdg, QDialog): return 
-    #self.setWindowFlags(Qt.FramelessWindowHint) # don't work 
     wdg.setAttribute(Qt.WA_TranslucentBackground)
     wdg.setWindowOpacity(POPUP_GUI_ALPHA) 
     wdg.setFocusPolicy(Qt.NoFocus) # Prevent stealing focus
     wdg.setModal(False) # Non-blocking
     wdg.setWindowTitle(title)
+    wdg.setWindowIcon(QIcon(QPixmap(1, 1)))
 def set_properties_layout(layout):
     layout.setContentsMargins(10, 10, 10, 10)
     layout.setSpacing(5)
@@ -692,10 +728,12 @@ def primary_menu(menu, item, instance, game_instance, list_of_weapons, slot):
         return 
     if "-> primary" in item:
         game_instance.player.unequip_item(slot = "primary_hand")
+        game_instance.update_inv_window()
         instance.close()
         return 
     if "-> secondary" in item:
         game_instance.player.unequip_item(slot = "secondary_hand")
+        game_instance.update_inv_window()
         instance.close()
         return 
     for wp in list_of_weapons:
