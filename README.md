@@ -44,4 +44,4 @@ This game was designed to be difficult and with no leveling system, the items, s
 
 Mainly developed using A.I. assistance (Grok, ChatGPT, Copilot) and a single human brain cell.
 
-![](poster.png)
+
