@@ -96,13 +96,17 @@ class Game_SOUNDMANAGER:
             else:
                 self.add_message("Music not ready, will play when loaded")
                 print("Music not ready, waiting for LoadedMedia state")
+
+# [ Game_VIEWPORT.draw ] { Game_VIEWPORT }
+# -> Game_VIEWPORT.draw() || .draw_grid() | .draw_hud()
+# -> Game_VIEWPORT.draw() || .draw_grid() || { .get_tiles_to_draw() | get_anchor() | .rotate_vector_for_camera() | .is_ingrid() | .is_inview() }
 class Game_VIEWPORT:
     def __init__(self):
         self.rotation = 0  # degrees: 0, 90, 180, 270
         self.grid_width = MAP_WIDTH
         self.grid_height = MAP_HEIGHT
         self.view_width = VIEW_WIDTH_IN_TILES
-        self.view_height = VIEW_HEIGHT_IN_TILES
+        self.view_height = VIEW_HEIGHT_IN_TILES+2
         self.tile_size = TILE_SIZE 
         # -- 
         self.dirty_tiles = set()  # Track tiles that need redrawing
@@ -112,54 +116,50 @@ class Game_VIEWPORT:
     def draw(self):
         self.draw_grid()
         self.draw_hud()
-    def draw_grid(self):        
-        if not self.dirty_tiles:  # Full redraw
-            self.scene.clear()
-            tiles_to_draw = [(x, y) for y in range(self.grid_height) for x in range(self.grid_width)]
-            #print("Full redraw: all tiles")
-        else:
-            self.scene.clear()  # Clear scene to remove stale sprites
-            tiles_to_draw = set(self.dirty_tiles)  # Start with dirty tiles (includes MoveEvent old positions)
-            # Add all tiles in the 7x7 viewport
-            px, py = self.player.x, self.player.y
-            view_range_x = range(-self.view_width // 2, self.view_width // 2 + 1)  # -3 to 3
-            view_range_y = range(-self.view_height // 2 - 1, self.view_height // 2)  # -4 to 2, adjusted for anchor
-            for dy in view_range_y:
-                for dx in view_range_x:
-                    # Reverse rotation to get world coordinates
-                    if self.rotation == 0:
-                        wx, wy = dx, dy
-                    elif self.rotation == 90:
-                        wx, wy = -dy, dx
-                    elif self.rotation == 180:
-                        wx, wy = -dx, -dy
-                    elif self.rotation == 270:
-                        wx, wy = dy, -dx
-                    x, y = px + wx, py + wy
-                    if 0 <= x < self.grid_width and 0 <= y < self.grid_height:
-                        tiles_to_draw.add((x, y))
-            tiles_to_draw = list(tiles_to_draw)
-            #print(f"Partial redraw: tiles_to_draw={tiles_to_draw}")
-
+    def get_tiles_to_draw(self):
+        safety_draw_dy = 1
+        # view range : controls the tiles to draw 
+        # view measures : the size of viewport 
+        if not self.dirty_tiles: return [(x, y) for y in range(self.grid_height) for x in range(self.grid_width)]
+        # -- 
+        tiles_to_draw = set(self.dirty_tiles)  # Start with dirty tiles (includes MoveEvent old positions)
         px, py = self.player.x, self.player.y
-        anchor_screen_x = (self.view_width // 2) * self.tile_size  # Center x
-        anchor_screen_y = (self.view_height - 2) * self.tile_size  # Player at y=5
-
-        player_rendered = False
+        view_range_x = range(-self.view_width // 2, self.view_width // 2 + 1)  # -3 to 3
+        view_range_y = range(-self.view_height // 2 - 1 - safety_draw_dy , self.view_height // 2)  # -4 to 2, adjusted for anchor
+        for dy in view_range_y:
+            for dx in view_range_x:
+                # Reverse rotation to get world coordinates
+                if self.rotation == 0:
+                    wx, wy = dx, dy
+                elif self.rotation == 90:
+                    wx, wy = -dy, dx
+                elif self.rotation == 180:
+                    wx, wy = -dx, -dy
+                elif self.rotation == 270:
+                    wx, wy = dy, -dx
+                x, y = px + wx, py + wy
+                if self.is_ingrid(x,y): tiles_to_draw.add((x, y))
+        return list(tiles_to_draw)
+    def is_ingrid(self,x,y):
+        return (0 <= x < self.grid_width and 0 <= y < self.grid_height)
+    def is_inview(self,x,y):
+        return (0 <= x < self.view_width * self.tile_size and 0 <= y < self.view_height * self.tile_size)
+    def get_anchor(self):
+        return (self.view_width // 2) * self.tile_size, (self.view_height - 2) * self.tile_size
+    def draw_grid(self):
+        self.scene.clear()
+        tiles_to_draw = self.get_tiles_to_draw()
+        # -- 
+        px, py = self.player.x, self.player.y
+        anchor_screen_x, anchor_screen_y = self.get_anchor()
         for x, y in tiles_to_draw:
             dx, dy = x - px, y - py
             rx, ry = self.rotate_vector_for_camera(dx, dy)
-            screen_x = anchor_screen_x + rx * self.tile_size
-            screen_y = anchor_screen_y + ry * self.tile_size
-            # Relax bounds to include edge tiles
-            if (0 <= x < self.grid_width and 0 <= y < self.grid_height and 0 <= screen_x < self.view_width * self.tile_size and 0 <= screen_y < self.view_height * self.tile_size):
+            screen_x = anchor_screen_x + (rx) * self.tile_size
+            screen_y = anchor_screen_y + (ry) * self.tile_size
+            if self.is_ingrid(x,y) and self.is_inview(screen_x, screen_y):
                 tile = self.map.get_tile(x, y)
-                if tile:
-                    if tile.current_char == self.player:
-                        if player_rendered:
-                            print(f"Warning: Multiple player renderings detected at ({x}, {y})")
-                        player_rendered = True
-                    tile.draw(self.scene, screen_x, screen_y, self.tile_size)
+                if tile: tile.draw(self.scene, screen_x, screen_y)
         self.scene.setSceneRect(0, 0, self.view_width * self.tile_size, self.view_height * self.tile_size)
         self.dirty_tiles.clear() 
     def draw_hud(self):
@@ -238,6 +238,7 @@ class Game_VIEWPORT:
             return dy, -dx            
     def rotated_direction(self, dx, dy):
         return self.rotate_vector_for_movement(dx, dy)
+
 class Game_PLAYERS:
     def __init__(self):
         self.turn = 0
@@ -365,6 +366,8 @@ class Game_PLAYERS:
         self.player.release_party(self)
         self.update_prior_next_selection()
     def count_party(self):
+        if isinstance(self.player, Hero):
+            return self.player.count_party()
         S = 0
         for i in self.players:
             if self.players[i].party == True:

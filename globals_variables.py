@@ -77,6 +77,7 @@ SPRITE_NAMES_PLAYABLES = [
 
 SPRITE_NAMES_CHARACTERS = SPRITE_NAMES_PLAYABLES + [
     "zombie", 
+    "zombie_2",
     "bear",
     "enemy", 
     "rogue",

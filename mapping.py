@@ -85,269 +85,9 @@ class Room:
     def add_random_loot(self, loot_table):
         pass 
 
-# Map.__init__() || { .generate } || { .generate_procedural_dungeon, .generate_procedural_field, .generate_procedural_road, .generate_procedural_lake, .generate_procedural_forest, ._generate_default }
-# Map.from_dict() || { Serializable.from_dict | .place_character } || { }
-# Map.generate() || { .generate_procedural_dungeon | .generate_procedural_field | .generate_procedural_road | .generate_procedural_lake | .generate_procedural_forest | ._generate_default } || { .grid_init_uniform, .add_patches, .add_trees, .add_rocks, .add_rooms_with_connectors, .ensure_connection, .add_dungeon_loot }
-# Map.generate_enemy_by_chance_by_list_at() || { .generate_enemy_by_chance_at } || { Character.add_item_by_chance }
-# Map.generate_enemy_at() || { .generate_enemy_by_chance_by_list_at | .place_character } || { .generate_enemy_by_chance_at, Character.add_item_by_chance }
-# Map.fill_enemies() || { .get_tile | .generate_enemy_at } || { .generate_enemy_by_chance_by_list_at, .place_character, .generate_enemy_by_chance_at, Character.add_item_by_chance }
-# Map.update_enemies() || { .get_tile | Character.update | .place_character | .fill_enemies } || { .generate_enemy_by_chance_by_list_at, .generate_enemy_at, .generate_enemy_by_chance_at, Character.add_item_by_chance }
-# Map.add_rooms_with_connectors() || { .add_rooms | .add_L_shaped_connectors | .repaint_floor_rooms } || { .foreach_rooms_tiles }
-# Map.foreach_rooms_tiles() || { .get_tile } || { }
-# Map.repaint_floor_rooms() || { .foreach_rooms_tiles } || { .get_tile, .set_tile }
-# Map.get_random_tile_from_rooms() || { } || { .foreach_rooms_tiles }
-# Map.get_random_tiles_from_rooms() || { } || { .foreach_rooms_tiles }
-# Map.add_dungeon_loot() || { .get_random_tiles_from_rooms } || { .foreach_rooms_tiles, Tile.add_item_by_chance }
-# Map.is_adjacent_walkable() || { .get_tile } || { }
-# Map.is_adjacent_walkable_at() || { .get_tile } || { }
-# Map.get_random_walkable_tile() || { .is_adjacent_walkable } || { .get_tile }
-# Map.add_dungeon_entrance() || { .get_random_walkable_tile } || { .is_adjacent_walkable, .get_tile }
-# Map.add_dungeon_entrance_at() || { .get_tile | .get_default_pixmap | .Save_JSON } || { }
-# Map.ensure_connection() || { .carve_corridor } || { }
-# Map._generate_default() || { .grid_init_uniform | .add_patches | .add_trees | .add_rocks } || { }
-# Map.generate_procedural_forest() || { .grid_init_uniform | .add_rooms_with_connectors | .add_patches | .ensure_connection | .add_dungeon_loot } || { .add_rooms, .add_L_shaped_connectors, .repaint_floor_rooms, .foreach_rooms_tiles, .get_random_tiles_from_rooms, Tile.add_item_by_chance }
-# Map.generate_procedural_dungeon() || { .grid_init_uniform | .add_rooms_with_connectors } || { .add_rooms, .add_L_shaped_connectors, .repaint_floor_rooms, .foreach_rooms_tiles }
-# Map.generate_procedural_field() || { .grid_init_uniform | .add_patches | .add_rocks | .get_random_walkable_tile | .set_tile } || { .is_adjacent_walkable, .get_tile }
-# Map.generate_procedural_road() || { .grid_init_uniform | .add_patches | .get_random_walkable_tile | .set_tile } || { .is_adjacent_walkable, .get_tile }
-# Map.generate_procedural_lake() || { .grid_init_uniform | .add_patches | .add_dungeon_entrance } || { .get_random_walkable_tile, .is_adjacent_walkable, .get_tile }
-# Map.get_char() || { .get_tile } || { }
-# Map.can_place_character() || { .get_tile } || { }
-# Map.can_place_character_at() || { .get_tile } || { }
-# Map.place_character() || { .get_tile } || { }
-# Map.remove_character() || { .get_tile } || { }
-# Map.move_character() || { .get_tile | .place_character } || { }
-# Map.find_path() || { .get_tile } || { }
-# Map.line_of_sight() || { .get_tile } || { }
-class Map(Serializable):
-    __serialize_only__ = ["width","height","filename","grid","enemy_type","coords","enemies"]
-    def __init__(
-            self, 
-            filename="default", 
-            coords=(0, 0, 0), 
-            width=MAP_WIDTH, 
-            height=MAP_HEIGHT, 
-            b_generate = True, 
-            previous_coords = (0,0,0), 
-            prev_x = MAP_WIDTH//2, 
-            prev_y = MAP_HEIGHT//2, 
-            going_up = False
-        ):
-        Serializable.__init__(self)
-        self.width = width
-        self.height = height
-        self.filename = filename
-        
-        self.grid = [] 
-        # 1. self.grid[y][x] ~ (x,y) means that the matrix is a row vector matrix 
-        # 2. grid_1 equals to grid_2
-        # grid_1 = [ [ (i,j) for i in range(size) ] for j in range(size) ]
-        # grid_2 = [ [ None for i in range(size) ] for j in range(size) ]
-        # for i in range(size):
-        #    for j in range(size):
-        #       grid_2[j][i] = (i,j)
-        # 3. grid[y] is a row vector
-        # 4. [ grid[j][x] for j ] is a column vector 
-        
-        self.enemy_type = "default" # used for fill_enemies to know which type of enemies should spawn. 
-        self.path_cache = {}
-        self.coords = coords # maybe would be necessary 
-        self.previous_coords = previous_coords 
-        self.prev_x = prev_x
-        self.prev_y = prev_y
-        self.going_up = going_up
-        self.enemies = []
-        self.starting_x = None
-        self.starting_y = None
-        self.rooms = None # could be tuple (x,y,w,h) of rectangular room of could be a Room instance 
-        self.buildings = []
-        if b_generate: self.generate()
-    
-    def update_buildings_list(self):
-        self.buildings = [ self.grid[y][x] for y in range(self.height) for x in range(self.width) if isinstance(self.grid[y][x], TileBuilding) ]
-    
-    # override
-    def from_dict(self, dictionary):
-        if not super().from_dict(dictionary):
-            return False
-        # Place characters after loading grid
-        for enemy in self.enemies:
-            self.place_character(enemy)
-        self.buildings = [ self.grid[y][x] for y in range(self.height) for x in range(self.width) if isinstance(self.grid[y][x], TileBuilding) ]
-        print("Buildings :", len(self.buildings))
-        return True
-    
-    def generate(self):
-        if self.filename == "procedural_dungeon":
-            # Default to descending from (0, 0, 0) if no previous coords provided
-            return self.generate_procedural_dungeon(self.previous_coords, self.prev_x, self.prev_y, self.going_up)
-        elif self.filename == "procedural_field":
-            self.generate_procedural_field()
-        elif self.filename == "procedural_road":
-            self.generate_procedural_road()
-        elif self.filename == "procedural_lake":
-            self.generate_procedural_lake()
-        elif self.filename == "procedural_forest":
-            self.generate_procedural_forest()
-        elif self.filename == "default":
-            self._generate_default()
-        else:
-            if self.filename:
-                try:
-                    with open(f"maps/{self.filename}.txt", 'r') as f:
-                        lines = f.readlines()
-                        for y in range(lines):
-                            line = lines[y]
-                            LS = line.strip()
-                            for x in range(LS):
-                                self.grid[y][x] = Tile(x,y,walkable=LS[x] != '#', sprite_key="wall" if LS[x] == '#' else "grass")
-                        # self.grid = [
-                            # [Tile(walkable=c != '#', sprite_key="wall" if c == '#' else "grass") for c in line.strip()]
-                            # for line in lines
-                        # ]
-                except FileNotFoundError:
-                    print(f"Map file {self.filename}.txt not found, using default map")
-                    self._generate_default()
-    
-    # -- enemies 
-    def generate_enemy_by_chance_at(self, x,y, enemy = Enemy, chance = 1.0, extra_items = None, **kwargs):
-        """
-        Attempts to spawn an enemy at a given position with a certain probability.
-
-        This method supports both direct class references and string-based enemy names,
-        allowing for dynamic, data-driven enemy generation. It optionally equips the enemy
-        with items by chance, if specified.
-
-        Args:
-            x (int | float): X-coordinate for the enemy spawn position.
-            y (int | float): Y-coordinate for the enemy spawn position.
-            enemy (type | str): The enemy class to instantiate (e.g., `Zombie` or "Zombie").
-                                If a string is provided, the class is looked up in the global scope.
-            chance (float): A value between 0.0 and 1.0 representing the spawn probability.
-            extra_items (list[dict], optional): A list of item descriptors to attempt adding to
-                                                the spawned enemy via `add_item_by_chance`.
-                                                Defaults to an empty list.
-            **kwargs: Additional keyword arguments passed to the enemy constructor.
-
-        Returns:
-            object | None: The created enemy instance if spawned; otherwise, `None`.
-
-        Raises:
-            ValueError: If `enemy` is a string that doesn't correspond to a known global class.
-
-        Example:
-            >>> self.generate_enemy_by_chance_at(50, 50, **{
-            ...     "enemy": "Zombie",
-            ...     "chance": 0.9,
-            ...     "b_generate_items": True,
-            ...     "extra_items": [
-            ...         {"item": "WeaponRepairTool", "name": "Whetstone", "uses": 3}
-            ...     ]
-            ... })
-        """
-        if isinstance(enemy, str):
-            enemy = globals().get(enemy)
-            if enemy is None:                
-                return None
-        if extra_items is None:
-            extra_items = [] 
-        if d(0.0,1.0) < chance:
-            enemy_instance = enemy(x=x, y=y, **kwargs)
-            for kw in extra_items:
-                enemy_instance.add_item_by_chance(**kw)
-            return enemy_instance
-        else:
-            return None
-            
-    def generate_enemy_by_chance_by_list_at(self, x,y, enemy_list):
-        """
-        Attempts to spawn an enemy at a given position from a list of possible enemy configurations.
-
-        This method iterates over a list of enemy definitions (dicts) and passes each to
-        `generate_enemy_by_chance_at`. It returns the first successfully spawned enemy,
-        or `None` if none were spawned.
-
-        Args:
-            x (int | float): X-coordinate for the enemy spawn position.
-            y (int | float): Y-coordinate for the enemy spawn position.
-            enemy_list (list[dict]): A list of keyword-argument dictionaries. Each dict is a
-                                     configuration to pass to `generate_enemy_by_chance_at`.
-                                     Must include at least the "enemy" key (class or string name).
-
-        Returns:
-            object | None: The first enemy instance successfully spawned based on chance;
-                           otherwise, `None`.
-
-        Example:
-            >>> self.generate_enemy_by_chance_by_list_at(100, 200, [
-            ...     {"enemy": "Skeleton", "chance": 0.3},
-            ...     {"enemy": "Zombie", "chance": 0.5, "extra_items": [...]}
-            ... ])
-        """
-        for config in enemy_list:  # Try all but if fails fallback to the last 
-            enemy = self.generate_enemy_by_chance_at(x, y, **config)
-            if enemy:
-                return enemy
-
-        # Fallback: guaranteed spawn
-        fallback_config = enemy_list[-1].copy()
-        fallback_config["chance"] = 1.0  # force spawn
-        return self.generate_enemy_by_chance_at(x, y, **fallback_config)
-    
-    def generate_enemy_at(self, x,y, enemy_class=None, *args, **kwargs):
-        if enemy_class:
-            enemy = enemy_class(x=x,y=y,*args, **kwargs)
-            self.enemies.append(enemy)
-            return self.place_character(enemy)
-        coin = random.uniform(0,1)
-        enemy = None
-        match self.enemy_type:    
-            case "dungeon":
-                enemy = self.generate_enemy_by_chance_by_list_at(x,y,DUNGEON_ENEMY_TABLE)
-            case "deep_forest":
-                enemy = self.generate_enemy_by_chance_by_list_at(x,y,FOREST_ENEMY_TABLE)
-            case "field":
-                enemy = self.generate_enemy_by_chance_by_list_at(x,y,FIELD_ENEMY_TABLE)
-            case "default":
-                enemy = self.generate_enemy_by_chance_by_list_at(x,y,DEFAULT_ENEMY_TABLE)
-            case "road":
-                enemy = self.generate_enemy_by_chance_by_list_at(x,y,ROAD_ENEMY_TABLE)
-            case "lake":
-                enemy = self.generate_enemy_by_chance_by_list_at(x,y,LAKE_ENEMY_TABLE)
-            case _:
-                enemy = Zombie("Zombie",x=x,y=y,b_generate_items=True)
-        if not enemy: return False
-        self.enemies.append(enemy)
-        return self.place_character(enemy)
-        
-    def fill_enemies(self, num_enemies=100):
-        #print(f"Filling enemies for map {self.current_map}")
-        placed = 0
-        attempts = 0
-        max_attempts = num_enemies * 5
-        while placed < num_enemies and attempts < max_attempts:
-            x = random.randint(1, self.width - 1)
-            y = random.randint(1, self.height - 1)
-            tile = self.get_tile(x, y)
-            if not tile:
-                attempts += 1
-                continue
-            if tile.current_char or not tile.walkable: 
-                attempts += 1
-                continue
-            if self.generate_enemy_at(x,y): placed += 1
-            attempts += 1
-        if placed < num_enemies:
-            print(f"Warning: Only placed {placed} of {num_enemies} enemies due to limited valid tiles")
-        print(f"Added {len(self.enemies)} enemies for map {self.coords}")
-        return self.enemies 
-    
-    def update_enemies(self, game_instance):
-        for enemy in self.enemies:
-            enemy.behaviour_update(game_instance)
-        # if len(self.enemies) < 5:
-            # self.fill_enemies()
-    
-    # -- procedural generators || generator helpers
+class Map_MODELLING:
+    def __init__(self):
+        pass 
     def grid_init_uniform(self, spriteKey = "grass", is_walkable = True, x1 = 0, x2 = None, y1 = 0, y2 = None):
         if not x2: x2 = self.width
         if not y2: y2 = self.height 
@@ -405,7 +145,7 @@ class Map(Serializable):
         self.add_rooms()
         self.add_L_shaped_connectors(sprite_corridor_floor = sprite_corridor_floor)            
         self.repaint_floor_rooms(sprite_floor)
-        
+            
     def foreach_rooms_tiles(self, f_lambda = lambda tile,i,j: print((i,j)), *args, **kwargs):
         """
         Applies a function to each tile within all defined rooms.
@@ -461,12 +201,6 @@ class Map(Serializable):
             return None
         self.foreach_rooms_tiles(inner_function)
 
-    def get_random_tile_from_rooms(self):
-        return GetRandomTile_Reservoir_Sampling( self, Map.foreach_rooms_tiles )
-
-    def get_random_tiles_from_rooms(self, k=20):
-        return GetRandomTiles_Reservoir_Sampling( self, Map.foreach_rooms_tiles, k=k )
-
     def add_patches(self, spriteKey = "dirt", is_walkable = True, scale = 0.1):
         # Generate dirt patches using Perlin noise or random clusters
         for i in range(self.width):
@@ -474,14 +208,7 @@ class Map(Serializable):
                 noise_value = noise.snoise2(i * scale, j * scale, octaves=1)  # Adjust scale (0.1) for patch size
                 if noise_value > 0.2:  # Threshold for dirt
                     self.grid[j][i] = Tile(i,j,walkable=is_walkable, sprite_key=spriteKey)
-                    
-    def add_dungeon_loot(self, k=20):
-        # -> add_dungeon_loot () || $ Sample | & (Tile) X : Sample || Random Choice in Loot Table || Add to X the Loot 
-        Sampled_Tiles = self.get_random_tiles_from_rooms(k=k)
-        for tile in Sampled_Tiles:
-            LootKwargs = random.choice(LOOT_TABLE)
-            tile[0].add_item_by_chance(**LootKwargs)
-    
+        
     def add_trees(self):
         # Add trees with slight clustering
         for i in range(1, self.width-1):
@@ -503,78 +230,7 @@ class Map(Serializable):
                     self.grid[j][i] = Tile(i,j, walkable=False, sprite_key="water")
                 elif random.random() < 0.05:  # 5% chance for rocks
                     self.grid[j][i] = Tile(i,j, walkable=is_walkable, sprite_key=spriteKey)
-                    
-    def is_adjacent_walkable(self,tile, x,y):
-        for dx,dy in CROSS_DIFF_MOVES:
-            tile_2 = self.get_tile(x+dx,y+dy)
-            if tile_2:
-                if not tile_2.walkable: return False
-        return True
     
-    def is_adjacent_walkable_at(self,x,y):
-        for dx,dy in CROSS_DIFF_MOVES:
-            tile_2 = self.get_tile(x+dx,y+dy)
-            if tile_2:
-                if not tile_2.walkable: return False
-        return True
-    
-    def get_random_walkable_tile(self, border_factor = 0.0):
-        dx = int(border_factor*self.width)
-        dy = int(border_factor*self.height)
-        walkable_tiles = [(i, j) for j in range(dy,self.height-dy) for i in range(dx,self.width-dx) if self.is_adjacent_walkable(self.grid[j][i],i,j) ]
-        if not walkable_tiles: return None
-        return random.choice(walkable_tiles)
-    
-    def add_enemy_tower(self, probability = 0.3, border_factor = 0.0):
-        coin = random.random()
-        if coin > probability: return False
-        xy = self.get_random_walkable_tile(border_factor = border_factor)
-        if not xy: return False
-        x = xy[0]
-        y = xy[1]
-        self.set_tile( x, y, GuardTower(x=x, y =y, b_enemy = True))
-        print(f"Generated Enemy Tower at {x}, {y}")
-    
-    def add_dungeon_entrance(self, probability = 1.0, border_factor = 0.0):
-        coin = random.random()
-        if coin > probability: return False
-        xy = self.get_random_walkable_tile(border_factor = border_factor)
-        if not xy: return False
-        entrance_x = xy[0]
-        entrance_y = xy[1]
-        target_map = (self.coords[0], self.coords[1], -1)
-        self.grid[entrance_y][entrance_x] = Tile(entrance_x, entrance_y, walkable=True, sprite_key="dungeon_entrance")
-        self.grid[entrance_y][entrance_x].stair = target_map
-        self.grid[entrance_y][entrance_x].stair_x = entrance_x
-        self.grid[entrance_y][entrance_x].stair_y = entrance_y
-        print(f"Placed dungeon_entrance at ({entrance_x}, {entrance_y}) linking to {target_map}")
-        return True
-
-    def add_dungeon_entrance_at(self,x,y):
-        current_x, current_y, current_z = self.coords
-        target_map = (current_x, current_y, current_z - 1)
-        tile = self.get_tile(x, y)
-        if tile:
-            # Remove any existing character or items to simplify
-            char_ = tile.current_char
-            tile.current_char = None  # Temporarily remove
-            tile.items.clear()
-            # Set stair properties
-            tile.walkable = True
-            tile.default_sprite_key = "dungeon_entrance"
-            tile.get_default_pixmap()
-            tile.stair = target_map
-            # Place player back
-            if char_:
-                tile.current_char = char_
-                char_.current_tile = tile
-            # Save the map to persist the stair
-            saves_dir = "./saves"
-            map_file = os.path.join(saves_dir, f"map_{'_'.join(map(str, self.coords))}_1.json")
-            self.Save_JSON(map_file)
-            return True
-        return False
-
     def carve_corridor(self, x1, y1, x2, y2, sprite_key="dirt"):
         if random.choice([True, False]):
             for x in range(min(x1, x2), max(x1, x2) + 1):
@@ -619,168 +275,249 @@ class Map(Serializable):
         if closest_pair:
             (cx, cy), (ex, ey) = closest_pair
             self.carve_corridor(cx, cy, ex, ey, sprite_key="dirt")
-            
-    # -- procedural generators || full map generator
-    def _generate_default(self):
-        # inner floors, random trees
-        self.enemy_type = "default"
-        self.grid_init_uniform()
-        self.add_patches()
-        self.add_trees()
-        self.add_rocks()
-
-    def generate_procedural_forest(self):
-        self.enemy_type = "deep_forest"
-        # initialize grid
-        self.grid_init_uniform("grass",True)
-        self.grid_init_uniform("tree", False,x1 = 1, x2 = self.width-1, y1 = 1, y2=self.height-1)
-        self.add_rooms_with_connectors("grass","dirt")
-        self.add_patches(scale = 0.4)
-        self.ensure_connection()  # <--- Here!
-        self.add_dungeon_loot(k=10)
-        self.add_enemy_tower()
-
-    def generate_procedural_dungeon(self, previous_map_coords, prev_x, prev_y, up=False):
-        """
-        Generate a multi-level RogueLike dungeon with rooms, corridors, and a stair_down.
-        
-        Args:
-            previous_map_coords (tuple): (x, y, z) coordinates from the previous map.
-            prev_x (int): x-coordinate of the stair/entrance on the previous map.
-            prev_y (int): y-coordinate of the stair/entrance on the previous map.
-            up (bool): True if ascending, False if descending.
-        
-        Returns:
-            tuple: (x, y, z) of the starting point (stair_up or stair_down position).
-        """
-        prev_x_map, prev_y_map, prev_z = previous_map_coords
-        new_z = prev_z + 1 if up else prev_z - 1
-        self.coords = (prev_x_map, prev_y_map, new_z)  # Update map coords, it's necessary? 
-        self.enemy_type = "dungeon"
-
-        # initialize grid
-        self.grid_init_uniform("wall",False)
-        self.add_rooms_with_connectors("floor","dirt")
-        
-        # Choose starting point (stair_up or stair_down to previous map)
-        start_room = random.choice(self.rooms)
-        room_x, room_y, room_w, room_h = start_room
-        new_x = room_x + room_w // 2
-        new_y = room_y + room_h // 2
-        stair_sprite = "stair_down" if up else "stair_up"
-        self.grid[new_y][new_x] = Tile(new_x, new_y, walkable=True, sprite_key=stair_sprite)
-        self.grid[new_y][new_x].stair = previous_map_coords
-        self.grid[new_y][new_x].stair_x = prev_x  # Point to the stair/entrance on previous map
-        self.grid[new_y][new_x].stair_y = prev_y
-        new_coords = (new_x, new_y, new_z)
-        
-        # Add stair_down to deeper level with 50% probability (not on topmost level if up=True)
-        if not up and random.random() < 0.5:
-            available_rooms = [(rx, ry, rw, rh) for rx, ry, rw, rh in self.rooms
-                              if (rx + rw // 2, ry + rh // 2) != (new_x, new_y)]
-            if available_rooms:
-                down_room = random.choice(available_rooms)
-                down_x = down_room[0] + down_room[2] // 2
-                down_y = down_room[1] + down_room[3] // 2
-                target_map = (prev_x_map, prev_y_map, new_z - 1)
-                self.grid[down_y][down_x] = Tile(down_x, down_y, walkable=True, sprite_key="stair_down")
-                self.grid[down_y][down_x].stair = target_map
-                self.grid[down_y][down_x].stair_x = down_x  # Point to stair_up on next level
-                self.grid[down_y][down_x].stair_y = down_y
-                print(f"Placed stair_down at ({down_x}, {down_y}) linking to {target_map}")
-
-        print(f"generate_procedural_dungeon(): from {previous_map_coords} to ({prev_x_map}, {prev_y_map}, {new_z}), entry at ({new_x}, {new_y})")
-        self.starting_x = new_x
-        self.starting_y = new_y
-        #self.ensure_connection([(new_x,new_y)])
-        self.add_dungeon_loot()
-        return new_x, new_y, new_z
-    
-    def generate_procedural_field(self):
-        self.enemy_type = "field"
-        self.grid_init_uniform("grass",True)
-        self.add_patches()
-        self.add_rocks()
-        for i in range(self.width-1):
-            for j in range(self.height-1):
-                n = noise.pnoise2(i * 0.1, j * 0.1, octaves=1, persistence=0.5, lacunarity=2.0)
-                if n > 0.2:
-                    self.grid[j][i] = Tile(i,j,walkable=False, sprite_key="tree")
-                elif random.random() < 0.01:
-                    self.grid[j][i].add_item(Food(name ="Apple", nutrition=10))
-        xy = self.get_random_walkable_tile()
-        if xy:
-            self.set_tile( xy[0], xy[1], Mill(x=xy[0], y =xy[1], b_enemy = True) )
-        self.add_enemy_tower()    
-        
-    def generate_procedural_road(self):
-        self.enemy_type = "road"
-        self.grid_init_uniform("grass",True)
-        self.add_patches()
-        # Vertical road with noise
-        road_x = self.width//2
-        for y in range(self.width):
-            offset = int(noise.pnoise1(y * 0.1, octaves=1, persistence=0.5, lacunarity=2.0) * 10)
-            road_x += offset
-            road_x = max(1, min(self.width-2, road_x))
-            self.grid[y][road_x] = Tile(road_x, y, walkable=True, sprite_key="grass")
-            if random.random() < 0.05:
-                self.grid[y][road_x].add_item(Food(name ="Bread", nutrition=15))
-        for i in range(self.height):
-            for j in range(self.height):
-                if random.random() < 0.1 and abs(j - road_x) > 2:
-                    self.grid[j][i] = Tile(i,j,walkable=False, sprite_key="tree")
-        xy = self.get_random_walkable_tile()
-        if xy:
-            self.set_tile( xy[0], xy[1], Mill(x=xy[0], y =xy[1], b_enemy = True) )
-    def generate_procedural_lake(self):
-        self.enemy_type = "lake"
-        self.grid_init_uniform("grass", True)
-        self.add_patches()
-        center_x, center_y = self.width//2, self.height//2
-        for i in range(self.width-1):
-            for j in range(self.height-1):
-                n = noise.pnoise2(i * 0.05, j * 0.05, octaves=1, persistence=0.5, lacunarity=2.0)
-                dist = ((i - center_x) ** 2 + (j - center_y) ** 2) ** 0.5
-                if n > -0.1 and dist < 30:
-                    self.grid[j][i] = Tile(i,j,walkable=False, sprite_key="water")
-                elif random.random() < 0.1:
-                    self.grid[j][i] = Tile(i,j,walkable=False, sprite_key="tree")
-                elif random.random() < 0.001:
-                    self.grid[j][i].add_item(Food(name = "Fish", nutrition=80))
-                elif random.random() < 0.0005:
-                    self.grid[j][i].add_item(WeaponRepairTool("Whetstone", uses=10))
-        self.add_dungeon_entrance()
-        self.add_enemy_tower()
-                    
-    # -- methods 
-    def get_tile(self, x, y):
-        try:
-            if 0 <= y < len(self.grid) and 0 <= x < len(self.grid[0]):
-                return self.grid[y][x]
-            return None
-        except Exception as e:
-            print(f"Error accessing tile ({x}, {y}): {e}")
-            return None
-
+class Map_SPECIAL:
+    def __init__(self):
+        pass 
+    def add_enemy_mill(self, probability = 0.3, border_factor = 0.0, quantity = 1):
+        if d() > probability: return False
+        for i in range(quantity):
+            xy = self.get_random_walkable_tile(border_factor = border_factor) # -- performance check 
+            if not xy: continue 
+            if self.is_xy_special(xy[0], xy[1]): continue 
+            M = Mill(x=xy[0], y =xy[1], b_enemy = True) 
+            self.set_tile( xy[0], xy[1], M)
+            self.buildings.append(M)
+            print("Added Mill at", xy[0], xy[1])
+        return True 
+    def add_enemy_lumber_mill(self, probability = 0.3, border_factor = 0.0, quantity = 1):
+        if d() > probability: return False
+        for i in range(quantity):
+            xy = self.get_random_walkable_tile(border_factor = border_factor) # -- performance check 
+            if not xy: continue 
+            if self.is_xy_special(xy[0], xy[1]): continue 
+            LM = LumberMill(x=xy[0], y=xy[1], b_enemy = True)
+            self.set_tile( xy[0], xy[1], LM )
+            self.buildings.append(LM)
+            print("Added Lumber Mill at", xy[0], xy[1])
+        return True 
+    def add_enemy_tower(self, probability = 0.3, border_factor = 0.0, quantity = 1):
+        if d() > probability: return False
+        for i in range(quantity):
+            xy = self.get_random_walkable_tile(border_factor = border_factor) # -- performance check 
+            if not xy: continue 
+            if self.is_xy_special(xy[0], xy[1]): continue 
+            GT = GuardTower(x=xy[0], y=xy[1], b_enemy=True)
+            self.set_tile(xy[0],xy[1],GT)
+            self.buildings.append(GT)
+            print("Added Tower at", xy[0], xy[1])
+        return True 
+    def add_dungeon_entrance(self, probability = 1.0, border_factor = 0.0):
+        coin = random.random()
+        if coin > probability: return False
+        xy = self.get_random_walkable_tile(border_factor = border_factor)
+        if not xy: return False
+        entrance_x = xy[0]
+        entrance_y = xy[1]
+        target_map = (self.coords[0], self.coords[1], -1)
+        self.grid[entrance_y][entrance_x] = Tile(entrance_x, entrance_y, walkable=True, sprite_key="dungeon_entrance")
+        self.grid[entrance_y][entrance_x].stair = target_map
+        self.grid[entrance_y][entrance_x].stair_x = entrance_x
+        self.grid[entrance_y][entrance_x].stair_y = entrance_y
+        print(f"Placed dungeon_entrance at ({entrance_x}, {entrance_y}) linking to {target_map}")
+        return True
+    def add_dungeon_entrance_at(self,x,y):
+        current_x, current_y, current_z = self.coords
+        target_map = (current_x, current_y, current_z - 1)
+        tile = self.get_tile(x, y)
+        if tile:
+            # Remove any existing character or items to simplify
+            char_ = tile.current_char
+            tile.current_char = None  # Temporarily remove
+            tile.items.clear()
+            # Set stair properties
+            tile.walkable = True
+            tile.default_sprite_key = "dungeon_entrance"
+            tile.get_default_pixmap()
+            tile.stair = target_map
+            # Place player back
+            if char_:
+                tile.current_char = char_
+                char_.current_tile = tile
+            # Save the map to persist the stair
+            saves_dir = "./saves"
+            map_file = os.path.join(saves_dir, f"map_{'_'.join(map(str, self.coords))}_1.json")
+            self.Save_JSON(map_file)
+            return True
+        return False
+    def add_dungeon_loot(self, k=20):
+        # -> add_dungeon_loot () || $ Sample | & (Tile) X : Sample || Random Choice in Loot Table || Add to X the Loot 
+        Sampled_Tiles = self.get_random_tiles_from_rooms(k=k)
+        for tile in Sampled_Tiles:
+            LootKwargs = random.choice(LOOT_TABLE)
+            tile[0].add_item_by_chance(**LootKwargs)
+    def add_stair_down_by_chance(self, probability = 0.5, excluded = None):
+        if not excluded: excluded = set()
+        if d() > probability: return 
+        available_rooms = [(rx, ry, rw, rh) for rx, ry, rw, rh in self.rooms if not (rx + rw // 2, ry + rh // 2) in excluded ]
+        if available_rooms:
+            down_room = random.choice(available_rooms)
+            down_x = down_room[0] + down_room[2] // 2
+            down_y = down_room[1] + down_room[3] // 2
+            x,y,z = self.coords 
+            target_map = (x, y, z - 1)
+            self.grid[down_y][down_x] = Tile(down_x, down_y, walkable=True, sprite_key="stair_down")
+            self.grid[down_y][down_x].stair = target_map
+            self.grid[down_y][down_x].stair_x = down_x  # Point to stair_up on next level
+            self.grid[down_y][down_x].stair_y = down_y
+            print(f"Placed stair_down at ({down_x}, {down_y}) linking to {target_map}")
+class Map_CHARACTERS:
+    __serialize_only__ = ["enemies","enemy_type"]
+    def __init__(self):
+        self.enemy_type = "default" # used for fill_enemies to know which type of enemies should spawn. 
+        self.enemies = []
     def get_char(self, x, y):
         tile = self.get_tile(x,y)
         if not tile: return None 
         return tile.current_char
+    def generate_enemy_by_chance_at(self, x,y, enemy = Enemy, chance = 1.0, extra_items = None, **kwargs):
+        """
+        Attempts to spawn an enemy at a given position with a certain probability.
 
-    def set_tile(self, x, y, tile):
-        self.grid[y][x] = tile
+        This method supports both direct class references and string-based enemy names,
+        allowing for dynamic, data-driven enemy generation. It optionally equips the enemy
+        with items by chance, if specified.
 
+        Args:
+            x (int | float): X-coordinate for the enemy spawn position.
+            y (int | float): Y-coordinate for the enemy spawn position.
+            enemy (type | str): The enemy class to instantiate (e.g., `Zombie` or "Zombie").
+                                If a string is provided, the class is looked up in the global scope.
+            chance (float): A value between 0.0 and 1.0 representing the spawn probability.
+            extra_items (list[dict], optional): A list of item descriptors to attempt adding to
+                                                the spawned enemy via `add_item_by_chance`.
+                                                Defaults to an empty list.
+            **kwargs: Additional keyword arguments passed to the enemy constructor.
+
+        Returns:
+            object | None: The created enemy instance if spawned; otherwise, `None`.
+
+        Raises:
+            ValueError: If `enemy` is a string that doesn't correspond to a known global class.
+
+        Example:
+            >>> self.generate_enemy_by_chance_at(50, 50, **{
+            ...     "enemy": "Zombie",
+            ...     "chance": 0.9,
+            ...     "b_generate_items": True,
+            ...     "extra_items": [
+            ...         {"item": "WeaponRepairTool", "name": "Whetstone", "uses": 3}
+            ...     ]
+            ... })
+        """
+        if isinstance(enemy, str):
+            enemy = globals().get(enemy)
+            if enemy is None:                
+                return None
+        if extra_items is None:
+            extra_items = [] 
+        if d(0.0,1.0) < chance:
+            enemy_instance = enemy(x=x, y=y, **kwargs)
+            for kw in extra_items:
+                enemy_instance.add_item_by_chance(**kw)
+            return enemy_instance
+        else:
+            return None 
+    def generate_enemy_by_chance_by_list_at(self, x,y, enemy_list):
+        """
+        Attempts to spawn an enemy at a given position from a list of possible enemy configurations.
+
+        This method iterates over a list of enemy definitions (dicts) and passes each to
+        `generate_enemy_by_chance_at`. It returns the first successfully spawned enemy,
+        or `None` if none were spawned.
+
+        Args:
+            x (int | float): X-coordinate for the enemy spawn position.
+            y (int | float): Y-coordinate for the enemy spawn position.
+            enemy_list (list[dict]): A list of keyword-argument dictionaries. Each dict is a
+                                     configuration to pass to `generate_enemy_by_chance_at`.
+                                     Must include at least the "enemy" key (class or string name).
+
+        Returns:
+            object | None: The first enemy instance successfully spawned based on chance;
+                           otherwise, `None`.
+
+        Example:
+            >>> self.generate_enemy_by_chance_by_list_at(100, 200, [
+            ...     {"enemy": "Skeleton", "chance": 0.3},
+            ...     {"enemy": "Zombie", "chance": 0.5, "extra_items": [...]}
+            ... ])
+        """
+        for config in enemy_list:  # Try all but if fails fallback to the last 
+            enemy = self.generate_enemy_by_chance_at(x, y, **config)
+            if enemy:
+                return enemy
+
+        # Fallback: guaranteed spawn
+        fallback_config = enemy_list[-1].copy()
+        fallback_config["chance"] = 1.0  # force spawn
+        return self.generate_enemy_by_chance_at(x, y, **fallback_config)
+    def generate_enemy_at(self, x,y, enemy_class=None, *args, **kwargs):
+        if enemy_class:
+            enemy = enemy_class(x=x,y=y,*args, **kwargs)
+            self.enemies.append(enemy)
+            return self.place_character(enemy)
+        coin = random.uniform(0,1)
+        enemy = None
+        match self.enemy_type:    
+            case "dungeon":
+                enemy = self.generate_enemy_by_chance_by_list_at(x,y,DUNGEON_ENEMY_TABLE)
+            case "deep_forest":
+                enemy = self.generate_enemy_by_chance_by_list_at(x,y,FOREST_ENEMY_TABLE)
+            case "field":
+                enemy = self.generate_enemy_by_chance_by_list_at(x,y,FIELD_ENEMY_TABLE)
+            case "default":
+                enemy = self.generate_enemy_by_chance_by_list_at(x,y,DEFAULT_ENEMY_TABLE)
+            case "road":
+                enemy = self.generate_enemy_by_chance_by_list_at(x,y,ROAD_ENEMY_TABLE)
+            case "lake":
+                enemy = self.generate_enemy_by_chance_by_list_at(x,y,LAKE_ENEMY_TABLE)
+            case _:
+                enemy = Zombie("Zombie",x=x,y=y,b_generate_items=True)
+        if not enemy: return False
+        self.enemies.append(enemy)
+        return self.place_character(enemy)
+    def fill_enemies(self, num_enemies=100):
+        #print(f"Filling enemies for map {self.current_map}")
+        placed = 0
+        attempts = 0
+        max_attempts = num_enemies * 5
+        while placed < num_enemies and attempts < max_attempts:
+            x = random.randint(1, self.width - 1)
+            y = random.randint(1, self.height - 1)
+            tile = self.get_tile(x, y)
+            if not tile:
+                attempts += 1
+                continue
+            if tile.current_char or not tile.walkable: 
+                attempts += 1
+                continue
+            if self.generate_enemy_at(x,y): placed += 1
+            attempts += 1
+        if placed < num_enemies:
+            print(f"Warning: Only placed {placed} of {num_enemies} enemies due to limited valid tiles")
+        print(f"Added {len(self.enemies)} enemies for map {self.coords}")
+        return self.enemies 
+    def update_enemies(self, game_instance):
+        for enemy in self.enemies:
+            enemy.behaviour_update(game_instance)            
     def can_place_character(self, char):
         tile = self.get_tile(char.x, char.y)
         if not tile: return False 
         return (tile.walkable and not tile.current_char)
-    
     def can_place_character_at(self, x, y):
         tile = self.get_tile(x, y)
         if not tile: return False 
         return (tile.walkable and not tile.current_char)
-
     def place_character(self, char):
         try:
             tile = self.get_tile(char.x, char.y)
@@ -795,7 +532,6 @@ class Map(Serializable):
         except Exception as e:
             print(f"Error placing character {char.name}: {e}")
             return False
-            
     def remove_character(self, char):
         try:
             tile = self.get_tile(char.x, char.y)
@@ -811,7 +547,6 @@ class Map(Serializable):
         except Exception as e:
             print(f"Error removing character {char.name}: {e}")
             return False
-
     def move_character(self, char, dx, dy):
         try:
             new_x = char.x + dx
@@ -828,7 +563,6 @@ class Map(Serializable):
         except Exception as e:
             print(f"Error moving character {char.name}: {e}")
             return False
-
     def find_path(self, start_x: int, start_y: int, goal_x: int, goal_y: int) -> list[tuple[int, int]]:
         """A* pathfinding to find shortest path from (start_x, start_y) to (goal_x, goal_y)."""
         # Validate coordinates
@@ -875,14 +609,6 @@ class Map(Serializable):
 
         #print(f"No path found from ({start_x}, {start_y}) to ({goal_x}, {goal_y}): likely blocked by obstacles")
         return []  # No path found
-
-    def _get_sprite_key(self, tile):
-        """Return the sprite key for a tile's default_sprite."""
-        for key, sprite in Tile.SPRITES.items():
-            if tile.default_sprite == sprite:
-                return key
-        return "grass"  # Fallback if no match found    
-
     def line_of_sight(self, x1, y1, x2, y2):
         """
         Determines whether there is a clear line of sight between two points on a grid.
@@ -939,7 +665,56 @@ class Map(Serializable):
             if tile and tile.blocks_sight:
                 return False
         return True    
-
+class Map_TILES:
+    def __init__(self):
+        pass 
+    def get_random_tile_from_rooms(self):
+        return GetRandomTile_Reservoir_Sampling( self, Map.foreach_rooms_tiles )
+    def get_random_tiles_from_rooms(self, k=20):
+        return GetRandomTiles_Reservoir_Sampling( self, Map.foreach_rooms_tiles, k=k )
+    def is_xy_special(self,x,y):
+        tile = self.get_tile(x,y)
+        if not tile: return False
+        if tile.stair: return True 
+        return isinstance(tile, ActionTile)
+    def is_walkable(self,x,y):
+        tile = self.get_tile(x,y)
+        if not tile: return False 
+        return tile.walkable 
+    def is_adjacent_walkable(self,tile, x,y):
+        for dx,dy in CROSS_DIFF_MOVES:
+            tile_2 = self.get_tile(x+dx,y+dy)
+            if tile_2:
+                if not tile_2.walkable: return False
+        return True
+    def is_adjacent_walkable_at(self,x,y):
+        for dx,dy in CROSS_DIFF_MOVES:
+            tile_2 = self.get_tile(x+dx,y+dy)
+            if tile_2:
+                if not tile_2.walkable: return False
+        return True
+    def get_random_walkable_tile(self, border_factor = 0.0):
+        dx = int(border_factor*self.width)
+        dy = int(border_factor*self.height)
+        walkable_tiles = [(i, j) for j in range(dy,self.height-dy) for i in range(dx,self.width-dx) if self.is_adjacent_walkable(self.grid[j][i],i,j) ]
+        if not walkable_tiles: return None
+        return random.choice(walkable_tiles)
+    def get_tile(self, x, y):
+        try:
+            if 0 <= y < len(self.grid) and 0 <= x < len(self.grid[0]):
+                return self.grid[y][x]
+            return None
+        except Exception as e:
+            print(f"Error accessing tile ({x}, {y}): {e}")
+            return None
+    def set_tile(self, x, y, tile):
+        self.grid[y][x] = tile
+    def _get_sprite_key(self, tile):
+        """Return the sprite key for a tile's default_sprite."""
+        for key, sprite in Tile.SPRITES.items():
+            if tile.default_sprite == sprite:
+                return key
+        return "grass"  # Fallback if no match found    
     def find_stair_tile_xy(self, target_stair_coords):
         """Find a tile in map_obj with a stair attribute matching target_stair_coords."""
         for y in range(self.height):
@@ -948,5 +723,212 @@ class Map(Serializable):
                 if tile and tile.stair == target_stair_coords:
                     return (x, y)
         return None
-
+class Map(Serializable, Map_SPECIAL, Map_MODELLING, Map_CHARACTERS, Map_TILES):
+    __serialize_only__ = Map_CHARACTERS.__serialize_only__ + ["width","height","filename","grid","coords"]
+    def __init__(
+            self, 
+            filename="default", 
+            coords=(0, 0, 0), 
+            width=MAP_WIDTH, 
+            height=MAP_HEIGHT, 
+            b_generate = True, 
+            previous_coords = (0,0,0), 
+            prev_x = MAP_WIDTH//2, 
+            prev_y = MAP_HEIGHT//2, 
+            going_up = False
+        ):
+        # -- 
+        Serializable.__init__(self)
+        Map_SPECIAL.__init__(self)
+        Map_MODELLING.__init__(self)
+        Map_CHARACTERS.__init__(self)
+        Map_TILES.__init__(self)
+        # --
+        self.width = width
+        self.height = height
+        self.filename = filename
+        # -- 
+        self.grid = [] 
+        # 1. self.grid[y][x] ~ (x,y) means that the matrix is a row vector matrix 
+        # 2. grid_1 equals to grid_2
+        # grid_1 = [ [ (i,j) for i in range(size) ] for j in range(size) ]
+        # grid_2 = [ [ None for i in range(size) ] for j in range(size) ]
+        # for i in range(size):
+        #    for j in range(size):
+        #       grid_2[j][i] = (i,j)
+        # 3. grid[y] is a row vector
+        # 4. [ grid[j][x] for j ] is a column vector 
+        # -- 
+        self.path_cache = {}
+        self.coords = coords # maybe would be necessary 
+        self.previous_coords = previous_coords 
+        self.prev_x = prev_x
+        self.prev_y = prev_y
+        self.going_up = going_up
+        self.starting_x = None
+        self.starting_y = None
+        self.rooms = None # could be tuple (x,y,w,h) of rectangular room of could be a Room instance 
+        self.buildings = []
+        if b_generate: self.generate()
+    def from_dict(self, dictionary):
+        if not super().from_dict(dictionary):
+            return False
+        # Place characters after loading grid
+        for enemy in self.enemies:
+            self.place_character(enemy)
+        self.buildings = [ self.grid[y][x] for y in range(self.height) for x in range(self.width) if isinstance(self.grid[y][x], TileBuilding) ]
+        print("Buildings :", len(self.buildings))
+        return True
+    # -- 
+    def update_buildings_list(self):
+        self.buildings = [ self.grid[y][x] for y in range(self.height) for x in range(self.width) if isinstance(self.grid[y][x], TileBuilding) ]
+    def generate(self):
+        if self.filename == "procedural_dungeon":
+            # Default to descending from (0, 0, 0) if no previous coords provided
+            return self.generate_procedural_dungeon(self.previous_coords, self.prev_x, self.prev_y, self.going_up)
+        elif self.filename == "procedural_field":
+            self.generate_procedural_field()
+        elif self.filename == "procedural_road":
+            self.generate_procedural_road()
+        elif self.filename == "procedural_lake":
+            self.generate_procedural_lake()
+        elif self.filename == "procedural_forest":
+            self.generate_procedural_forest()
+        elif self.filename == "default":
+            self._generate_default()
+        else:
+            if self.filename:
+                try:
+                    with open(f"maps/{self.filename}.txt", 'r') as f:
+                        lines = f.readlines()
+                        for y in range(lines):
+                            line = lines[y]
+                            LS = line.strip()
+                            for x in range(LS):
+                                self.grid[y][x] = Tile(x,y,walkable=LS[x] != '#', sprite_key="wall" if LS[x] == '#' else "grass")
+                except FileNotFoundError:
+                    print(f"Map file {self.filename}.txt not found, using default map")
+                    self._generate_default()
+    def _generate_default(self):
+        # inner floors, random trees
+        self.enemy_type = "default"
+        self.grid_init_uniform()
+        self.add_patches()
+        self.add_trees()
+        self.add_rocks()
+    def generate_procedural_forest(self):
+        self.enemy_type = "deep_forest"
+        self.grid_init_uniform("grass",True)
+        self.grid_init_uniform("tree", False,x1 = 1, x2 = self.width-1, y1 = 1, y2=self.height-1)
+        self.add_rooms_with_connectors("grass","dirt")
+        self.add_patches(scale = 0.4)
+        self.ensure_connection()  # <--- Here!
+        self.add_dungeon_loot(k=10)
+        self.add_enemy_lumber_mill(quantity=4)
+        self.add_enemy_tower(quantity=2)
+    def generate_procedural_dungeon(self, previous_map_coords, prev_x, prev_y, up=False):
+        """
+        Generate a multi-level RogueLike dungeon with rooms, corridors, and a stair_down.
+        
+        Args:
+            previous_map_coords (tuple): (x, y, z) coordinates from the previous map.
+            prev_x (int): x-coordinate of the stair/entrance on the previous map.
+            prev_y (int): y-coordinate of the stair/entrance on the previous map.
+            up (bool): True if ascending, False if descending.
+        
+        Returns:
+            tuple: (x, y, z) of the starting point (stair_up or stair_down position).
+        """
+        prev_x_map, prev_y_map, prev_z = previous_map_coords
+        new_z = prev_z + 1 if up else prev_z - 1
+        self.coords = (prev_x_map, prev_y_map, new_z)  # Update map coords, it's necessary? 
+        self.enemy_type = "dungeon"
+        # initialize grid
+        self.grid_init_uniform("wall",False)
+        self.add_rooms_with_connectors("floor","dirt")
+        # Choose starting point (stair_up or stair_down to previous map)
+        start_room = random.choice(self.rooms)
+        room_x, room_y, room_w, room_h = start_room
+        new_x = room_x + room_w // 2
+        new_y = room_y + room_h // 2
+        stair_sprite = "stair_down" if up else "stair_up"
+        self.grid[new_y][new_x] = Tile(new_x, new_y, walkable=True, sprite_key=stair_sprite)
+        self.grid[new_y][new_x].stair = previous_map_coords
+        self.grid[new_y][new_x].stair_x = prev_x  # Point to the stair/entrance on previous map
+        self.grid[new_y][new_x].stair_y = prev_y
+        new_coords = (new_x, new_y, new_z)
+        # Add stair_down to deeper level with 50% probability (not on topmost level if up=True)
+        if not up: self.add_stair_down_by_chance(excluded = { (new_x, new_y) }) # [testing]
+        # if not up and random.random() < 0.5:
+            # available_rooms = [(rx, ry, rw, rh) for rx, ry, rw, rh in self.rooms if (rx + rw // 2, ry + rh // 2) != (new_x, new_y)]
+            # if available_rooms:
+                # down_room = random.choice(available_rooms)
+                # down_x = down_room[0] + down_room[2] // 2
+                # down_y = down_room[1] + down_room[3] // 2
+                # target_map = (prev_x_map, prev_y_map, new_z - 1)
+                # self.grid[down_y][down_x] = Tile(down_x, down_y, walkable=True, sprite_key="stair_down")
+                # self.grid[down_y][down_x].stair = target_map
+                # self.grid[down_y][down_x].stair_x = down_x  # Point to stair_up on next level
+                # self.grid[down_y][down_x].stair_y = down_y
+                # print(f"Placed stair_down at ({down_x}, {down_y}) linking to {target_map}")
+        print(f"generate_procedural_dungeon(): from {previous_map_coords} to ({prev_x_map}, {prev_y_map}, {new_z}), entry at ({new_x}, {new_y})")
+        self.starting_x = new_x
+        self.starting_y = new_y
+        #self.ensure_connection([(new_x,new_y)])
+        self.add_dungeon_loot()
+        self.add_enemy_tower(quantity=2)
+        return new_x, new_y, new_z
+    def generate_procedural_field(self):
+        self.enemy_type = "field"
+        self.grid_init_uniform("grass",True)
+        self.add_patches()
+        self.add_rocks()
+        for i in range(self.width-1):
+            for j in range(self.height-1):
+                n = noise.pnoise2(i * 0.1, j * 0.1, octaves=1, persistence=0.5, lacunarity=2.0)
+                if n > 0.2:
+                    self.grid[j][i] = Tile(i,j,walkable=False, sprite_key="tree")
+                elif random.random() < 0.01:
+                    if self.is_walkable(i,j): self.grid[j][i].add_item(Food(name ="Apple", nutrition=d(20,60)))
+        self.add_enemy_mill(quantity=3)
+        self.add_enemy_tower(quantity=2)
+    def generate_procedural_road(self):
+        self.enemy_type = "road"
+        self.grid_init_uniform("grass",True)
+        self.add_patches()
+        # Vertical road with noise
+        road_x = self.width//2
+        for y in range(self.width):
+            offset = int(noise.pnoise1(y * 0.1, octaves=1, persistence=0.5, lacunarity=2.0) * 10)
+            road_x += offset
+            road_x = max(1, min(self.width-2, road_x))
+            self.grid[y][road_x] = Tile(road_x, y, walkable=True, sprite_key="grass")
+            if random.random() < 0.05:
+                self.grid[y][road_x].add_item(Food(name ="Bread", nutrition=15))
+        for i in range(self.height):
+            for j in range(self.height):
+                if random.random() < 0.1 and abs(j - road_x) > 2:
+                    self.grid[j][i] = Tile(i,j,walkable=False, sprite_key="tree")
+        self.add_enemy_mill(quantity=3)
+        self.add_enemy_tower(quantity=2)
+    def generate_procedural_lake(self):
+        self.enemy_type = "lake"
+        self.grid_init_uniform("grass", True)
+        self.add_patches()
+        center_x, center_y = self.width//2, self.height//2
+        for i in range(self.width-1):
+            for j in range(self.height-1):
+                n = noise.pnoise2(i * 0.05, j * 0.05, octaves=1, persistence=0.5, lacunarity=2.0)
+                dist = ((i - center_x) ** 2 + (j - center_y) ** 2) ** 0.5
+                if n > -0.1 and dist < 30:
+                    self.grid[j][i] = Tile(i,j,walkable=False, sprite_key="water")
+                elif random.random() < 0.1:
+                    self.grid[j][i] = Tile(i,j,walkable=False, sprite_key="tree")
+                elif random.random() < 0.001:
+                    self.grid[j][i].add_item(Food(name = "Fish", nutrition=80))
+                elif random.random() < 0.0005:
+                    self.grid[j][i].add_item(WeaponRepairTool("Whetstone", uses=10))
+        self.add_dungeon_entrance()
+        self.add_enemy_tower(quantity=2)
+                    
 # --- END

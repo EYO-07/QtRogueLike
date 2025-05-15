@@ -1035,7 +1035,7 @@ class Zombie(Enemy):
         Enemy.__init__(self, name = name, hp = hp, x = x, y = y, b_generate_items = b_generate_items)
         self.type = "Zombie"
         self.description = "Zombies, people affected by the plague, they are still alive but because of this strange disease their bodies smells like rotten flesh. Before they lose their minds, they try to acummulate food to satiate hunger, it's almost certain to find food with them ..."
-        self.sprite = "zombie"
+        self.sprite = Tile.get_random_sprite("zombie")
     def do_damage(self):
         return d(0, 10)
     def generate_initial_items(self):
@@ -1110,11 +1110,6 @@ class Tile(Container):
         self.stair_y = None # points to the stair tile from the map with coord self.stair 
     def add_layer(self, sprite_key):
         self.cosmetic_layer_sprite_keys.append( sprite_key )
-    # def remove_layer(self, sprite_key = None):
-        # if not sprite_key: 
-            # self.cosmetic_layer_sprite_keys.clear()
-            # return 
-        # self.cosmetic_layer_sprite_keys.remove( sprite_key )
     def get_transparent_image(self):
         # todo 
         return 
@@ -1172,13 +1167,19 @@ class Tile(Container):
         idx = self.get_layer_index(sprite_name)
         if idx is None: return 
         self.cosmetic_layer_sprite_keys.pop(idx)
+        
+    @classmethod    
+    def get_random_sprite(cls, key_filter=""):
+        cdts = [ key for key in cls.SPRITES.keys() if key_filter in key ]
+        if cdts: return random.choice(cdts)
+        return None
 
     @classmethod
-    def _try_load(cls, key):
+    def _try_load(cls, key, size = TILE_SIZE):
         # cls.SPRITES will store the sprites in memory 
         try: 
             qpx = QPixmap("./assets/"+key)
-            cls.SPRITES[key] = qpx.scaled(TILE_SIZE, TILE_SIZE, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            cls.SPRITES[key] = qpx.scaled(size, size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
         except Exception as e:
             print(f"Failed to load sprites: {e}")
             cls.SPRITES[key] = QPixmap()
@@ -1374,19 +1375,39 @@ class TileBuilding(ActionTile): # interface class
                         game_instance.update_inv_window()
                         return True 
                 case "Food-":
-                    qtt, ok = QInputDialog.getDouble(menu_instance, 'Input Dialog', f'Quantity ({self.food:.1f}) :')
+                    qtt, ok = QInputDialog.getDouble(
+                        menu_instance, 
+                        'Input Dialog', 
+                        f'Quantity ({self.food:.1f}) :',
+                        self.food
+                    )
                     if ok and qtt > 0 and self.retrieve_food(game_instance, qtt):
                         return True 
                 case "Wood-":
-                    qtt, ok = QInputDialog.getDouble(menu_instance, 'Input Dialog', f'Quantity ({self.wood:.1f}) :')
+                    qtt, ok = QInputDialog.getDouble(
+                        menu_instance, 
+                        'Input Dialog', 
+                        f'Quantity ({self.wood:.1f}) :',
+                        self.wood 
+                    )
                     if ok and qtt > 0 and self.retrieve_wood(game_instance, qtt):
                         return True 
                 case "Metal-":
-                    qtt, ok = QInputDialog.getDouble(menu_instance, 'Input Dialog', f'Quantity ({self.metal:.1f}) :')
+                    qtt, ok = QInputDialog.getDouble(
+                        menu_instance, 
+                        'Input Dialog', 
+                        f'Quantity ({self.metal:.1f}) :',
+                        self.metal 
+                    )
                     if ok and qtt > 0 and self.retrieve_metal(game_instance, qtt):
                         return True
                 case "Stone-":
-                    qtt, ok = QInputDialog.getDouble(menu_instance, 'Input Dialog', f'Quantity ({self.stone:.1f}) :')
+                    qtt, ok = QInputDialog.getDouble(
+                        menu_instance, 
+                        'Input Dialog', 
+                        f'Quantity ({self.stone:.1f}) :',
+                        self.stone 
+                    )
                     if ok and qtt > 0 and self.retrieve_stone(game_instance, qtt):
                         return True 
         if current_menu == "Resources+":
@@ -1455,8 +1476,8 @@ class Castle(TileBuilding):
             if "New Hero" in current_item:
                 if self.food >= 2000:
                     if self.new_hero(game_instance):
-                        self.num_heroes += 1
                         self.food -= 2000 
+                        self.villagers -= 15
                 else:
                     game_instance.add_message("Can't afford to purchase new heroes ...")
                 menu_instance.close()
@@ -1483,6 +1504,9 @@ class Castle(TileBuilding):
             "Exit"
         ]
     def new_hero(self, game_instance):
+        if self.villagers < 15: 
+            game_instance.add_message("There are no villagers to recruit ...")
+            return False 
         dx, dy = game_instance.player.get_forward_direction()
         player = game_instance.player 
         spawn_tile = game_instance.map.get_tile(player.x+dx, player.y + dy)
@@ -1607,7 +1631,7 @@ class GuardTower(TileBuilding):
             if "Recruit Swordman" in current_item:
                 if self.food >= 500:
                     if self.new_swordman(game_instance):
-                        self.num_heroes += 1
+                        self.villagers -= 5
                         self.food -= 500 
                 else:
                     game_instance.add_message("Can't afford to purchase Swordman ...")
@@ -1615,7 +1639,7 @@ class GuardTower(TileBuilding):
             if "Recruit Mounted Knight" in current_item:
                 if self.food >= 700 and self.wood >= 1200:
                     if self.new_mounted_knight(game_instance):
-                        self.num_heroes += 1
+                        self.villagers -= 10 
                         self.food -= 700 
                         self.wood -= 1200 
                 else:
@@ -1643,6 +1667,9 @@ class GuardTower(TileBuilding):
             "Exit"
         ]
     def new_swordman(self, game_instance):
+        if self.villagers < 5:
+            game_instance.add_message("There are no villagers to recruit ...")
+            return False 
         dx, dy = game_instance.player.get_forward_direction()
         player = game_instance.player 
         spawn_tile = game_instance.map.get_tile(player.x+dx, player.y + dy)
@@ -1671,6 +1698,9 @@ class GuardTower(TileBuilding):
         game_instance.draw()
         return True
     def new_mounted_knight(self, game_instance): # not used yet 
+        if self.villagers < 10:
+            game_instance.add_message("There are no villagers to recruit ...")
+            return False 
         dx, dy = game_instance.player.get_forward_direction()
         player = game_instance.player 
         spawn_tile = game_instance.map.get_tile(player.x+dx, player.y + dy)

@@ -599,7 +599,7 @@ class MainWindow(Widget, Serializable):
         self.build_parts()
         self.assemble_parts()
         self.tabs.setCurrentIndex( self.tab_current_index % self.tabs.count() )
-        self.update()
+        self.update( self.tab_current_index % self.tabs.count() )
     def clear_tabs(self):
         while self.tabs.count() > 1:
             self.tabs.removeTab(1)    
@@ -692,7 +692,10 @@ class MainWindow(Widget, Serializable):
         self.update_tabs()
         self.list_widget.setFocus()
     def set_item_color(self, text):
-        if "add_" in text: return QColor(255,150,150,255)
+        if "new_" in text: return QColor("cyan")
+        if "rotate" in text: return QColor(175,51,255,255)
+        if "draw" in text: return QColor(162,255,51,255)
+        if "add" in text: return QColor(255,150,150,255)
         if "is_" in text: return QColor(150,150,255,255)
         if "can_" in text: return QColor(150,150,255,255)
         if "get_" in text: return QColor("orange")
