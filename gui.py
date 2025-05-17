@@ -508,6 +508,26 @@ class InventoryWindow(Dialog):
         self.parent().setFocus()
     def build_parts(self):
         self.layout = VLayout()
+        
+        # Inventory [ QLabel ] { PyQt5 }
+        # 1. QLabel(parent=None) ; Creates a new label widget, optionally with a parent.
+        # 2. setText(str) ; Sets the text displayed on the label.
+        # 3. text() ; Returns the current text of the label.
+        # 4. setPixmap(QPixmap) ; Displays a QPixmap image on the label.
+        # 5. pixmap() ; Returns the currently displayed QPixmap.
+        # 6. setAlignment(Qt.Alignment) ; Sets alignment of the text or pixmap (e.g., Qt.AlignCenter).
+        # 7. setWordWrap(bool) ; Enables or disables word wrapping for text.
+        # 8. setTextFormat(Qt.TextFormat) ; Sets how text is interpreted (PlainText, RichText).
+        # 9. setScaledContents(bool) ; Scales the pixmap to fit the label size.
+        # 10. setMargin(int) ; Sets the margin around the contents of the label.
+        # 11. setIndent(int) ; Sets the indentation between the edge and text/pixmap.
+        # 12. setOpenExternalLinks(bool) ; Enables clickable links (when using rich text).
+        # 13. setBuddy(QWidget) ; Associates a keyboard shortcut with another widget.
+        # 14. clear() ; Clears the text or pixmap from the label.
+        # 15. hasScaledContents() ; Returns whether the label scales its contents.
+        self.selected_item_label = QLabel()
+        self.selected_item_label_desc = QLabel()
+        
         self.list_widget = new_list_widget(callback=self.item_double_click, get_filtered_event_from=self)
         self.tabs = new_tab_bar("*", self.tab_changed)
         self.tabs.addTab("Edible")
@@ -515,11 +535,28 @@ class InventoryWindow(Dialog):
         self.tabs.addTab("Resources")
         self.equip_button = new_button("Equip/Use", self.item_double_click)
         self.drop_button = new_button("Drop", self.drop_item)
+    def update_selected_item_label_content(self, obj=None):
+        if not hasattr(self,"list_widget_objects"): return 
+        self.selected_item_label.clear()
+        self.selected_item_label_desc.clear()
+        if not obj: 
+            last_list_widget_current_item_index = self.list_widget.currentRow()
+            if last_list_widget_current_item_index is None: return 
+            obj = self.list_widget_objects[last_list_widget_current_item_index]
+        self.selected_item_label.setPixmap( obj.get_sprite() )
+        self.selected_item_label_desc.setText( obj.description if obj.description else "Inventory Item" )
     def assemble_parts(self):
+        # --
         set_properties_layout(self.layout)        
+        self.selected_item_label_desc.setStyleSheet("color: white;")  # Just to test
+        self.selected_item_label_desc.setWordWrap(True)
+        self.selected_item_label_desc.adjustSize()
         self.list_widget.customContextMenuRequested.connect(self.show_context_menu)
         self.tabs.currentChanged.connect(self.tab_changed)
-        self / (self.layout/self.tabs/self.list_widget/ (HLayout()/self.equip_button/self.drop_button) )
+        # --
+        label_layout = HLayout() / self.selected_item_label
+        label_layout.addWidget(self.selected_item_label_desc,3)
+        self / ( self.layout/label_layout/self.tabs/self.list_widget/ (HLayout()/self.equip_button/self.drop_button) )
     def tab_changed(self, index):
         self.current_filter = self.tabs.tabText(index)
         self.apply_filter()
@@ -534,17 +571,77 @@ class InventoryWindow(Dialog):
             case "Resources": 
                 apply_filter_to_list_widget(self.list_widget,"[value]")
     def eventFilter(self, obj, event):
-        if obj == self.list_widget and event.type() == QEvent.KeyPress:
-            if event.key() in (Qt.Key_Return, Qt.Key_Enter):
-                current_item = self.list_widget.currentItem()
-                if current_item:
-                    self.item_double_click(current_item)
-                    return True
-            elif event.key() == Qt.Key_Delete:
-                current_item = self.list_widget.currentItem()
-                if current_item:
-                    self.drop_item(current_item)
-                    return True
+        
+        # Inventory [ QEvent ] { For use in eventFilter }
+        # 1. QEvent.MouseButtonPress ; Triggered when a mouse button is pressed. Use event.button(), event.pos().
+        # 2. QEvent.MouseButtonRelease ; Triggered when a mouse button is released. Use event.button(), event.pos().
+        # 3. QEvent.MouseButtonDblClick ; Triggered on double-click. Same attributes as MouseButtonPress.
+        # 4. QEvent.MouseMove ; Triggered when the mouse moves. Use event.pos(), event.globalPos().
+        # 5. QEvent.KeyPress ; Triggered when a key is pressed. Use event.key(), event.text(), event.modifiers().
+        # 6. QEvent.KeyRelease ; Triggered when a key is released. Same attributes as KeyPress.
+        # 7. QEvent.Enter ; Triggered when the mouse enters a widget. No attributes.
+        # 8. QEvent.Leave ; Triggered when the mouse leaves a widget. No attributes.
+        # 9. QEvent.FocusIn ; Triggered when the widget gains keyboard focus. Use event.reason().
+        # 10. QEvent.FocusOut ; Triggered when the widget loses keyboard focus. Use event.reason().
+        # 11. QEvent.ContextMenu ; Triggered on right-click/context menu request. Use event.globalPos(), event.pos().
+        # 12. QEvent.Wheel ; Triggered on mouse wheel scroll. Use event.angleDelta(), event.pixelDelta().
+        # 13. QEvent.Resize ; Triggered when widget is resized. Use event.size(), event.oldSize().
+        # 14. QEvent.Move ; Triggered when widget is moved. Use event.pos(), event.oldPos().
+        # 15. QEvent.Paint ; Triggered when a widget needs repainting. Use with QPainter in paintEvent().
+        # 16. QEvent.Close ; Triggered when a widget is closed. Use event.accept(), event.ignore().
+        # 17. QEvent.Show ; Triggered when the widget is shown. No attributes.
+        # 18. QEvent.Hide ; Triggered when the widget is hidden. No attributes.
+        # 19. QEvent.DragEnter ; Triggered when a drag enters the widget. Use event.mimeData(), event.pos().
+        # 20. QEvent.Drop ; Triggered when a drop occurs. Use event.mimeData(), event.pos().
+        # 21. QEvent.HoverEnter ; Triggered when hover starts. Use event.pos() (QHoverEvent).
+        # 22. QEvent.HoverLeave ; Triggered when hover ends.
+        # 23. QEvent.HoverMove ; Triggered when the mouse hovers and moves over a widget.
+        # 24. QEvent.TouchBegin ; Triggered when a touch event begins. Use event.touchPoints().
+        # 25. QEvent.InputMethod ; Used for input method editors (IME). Use event.commitString(), event.preeditString().
+        
+        # Inventory [ QListWidget ] { PyQt5 }
+        # 1. QListWidget(parent=None) ; Creates a list widget, optionally with a parent.
+        # 2. addItem(str or QListWidgetItem) ; Adds a new item to the list.
+        # 3. addItems(list[str]) ; Adds multiple string items to the list.
+        # 4. insertItem(row, str or QListWidgetItem) ; Inserts an item at the given row.
+        # 5. takeItem(row) ; Removes and returns the item at the given row.
+        # 6. item(row) ; Returns the QListWidgetItem at the given row.
+        # 7. count() ; Returns the number of items in the list.
+        # 8. clear() ; Removes all items from the list.
+        # 9. currentItem() ; Returns the currently selected QListWidgetItem.
+        # 10. currentRow() ; Returns the index of the current item.
+        # 11. setCurrentRow(row) ; Sets the current item by row.
+        # 12. selectedItems() ; Returns a list of selected QListWidgetItems.
+        # 13. setSelectionMode(QAbstractItemView.SelectionMode) ; Sets how items can be selected (Single, Multi, etc.).
+        # 14. sortItems(order=Qt.AscendingOrder) ; Sorts the items in the list.
+        # 15. scrollToItem(item, hint=QAbstractItemView.EnsureVisible) ; Scrolls to the given item.
+        # 16. findItems(text, flags) ; Finds and returns items matching text with Qt.MatchFlags.
+        # 17. itemWidget(item) ; Returns the custom widget set for the item.
+        # 18. setItemWidget(item, widget) ; Sets a custom widget for the item.
+        # 19. indexFromItem(item) ; Returns QModelIndex for a given item.
+        # 20. itemFromIndex(QModelIndex) ; Returns item from a given model index.
+        # 21. visualItemRect(item) ; Returns QRect of where the item is displayed.
+        # 22. editItem(item) ; Opens inline editor for the item.
+        # 23. isItemSelected(item) ; Returns whether the given item is selected.
+        # 24. setItemSelected(item, bool) ; Selects or deselects the item.
+
+        # self.update_selected_item_label_content()
+        if obj == self.list_widget:
+            self.update_selected_item_label_content()
+            match event.type():
+                case QEvent.KeyPress:
+                    if event.key() in (Qt.Key_Return, Qt.Key_Enter):
+                        current_item = self.list_widget.currentItem()
+                        if current_item:
+                            self.item_double_click(current_item)
+                            return True
+                    elif event.key() == Qt.Key_Delete:
+                        current_item = self.list_widget.currentItem()
+                        if current_item:
+                            self.drop_item(current_item)
+                            return True
+                # case QEvent.FocusIn:
+                    # self.update_selected_item_label_content()    
         return super().eventFilter(obj, event)
     def get_quality(self, game_item):
         if not hasattr(game_item, "durability_factor"): return ""
@@ -654,18 +751,21 @@ class InventoryWindow(Dialog):
             self.parent().game_iteration() 
         self.parent().setFocus()  # Return focus to game    
     def update_row_index(self, last_size, last_index):
+        if len(self.list_widget_objects) == 0: 
+            self.update_selected_item_label_content()
+            return 
+        new_idx = 0
         if last_size == len(self.list_widget_objects): # same size
-            #print("1", last_size, last_index)
-            self.list_widget.setCurrentRow(last_index)
+            new_idx = last_index
         elif last_size > len(self.list_widget_objects): # size -1
-            #print("2", last_size, last_index)
             if last_index < len(self.list_widget) and last_index > 0:
-                self.list_widget.setCurrentRow(last_index - 1)
+                new_idx = last_index - 1
             else:
-                self.list_widget.setCurrentRow( len(self.list_widget)//2 )
+                new_idx = len(self.list_widget)//2
         else:
-            #print("3", last_size, last_index)
-            self.list_widget.setCurrentRow( len(self.list_widget)//2 )
+            new_idx = len(self.list_widget)//2
+        self.list_widget.setCurrentRow(new_idx)
+        self.update_selected_item_label_content() # self.list_widget_objects[new_idx] )
     
 # menu components
 def common_menu_parts(menu, item, instance, game_instance, previous_menu = None):
@@ -718,7 +818,10 @@ def main_menu(menu, item, instance, game_instance):
                 instance.set_list("Select Player Sprite >", ["[ Character Settings > Select Sprite ]"] + SPRITE_NAMES_CHARACTERS + [".."])
                 return 
             case "Select Player Character >": 
-                instance.set_list("Select Player Character >", ["[ Character Settings > Character Selection ]"] + [ k for k,v in game_instance.players.items() if v.current_map == game_instance.player.current_map and not v.party ] + [".."])
+                instance.set_list(
+                    "Select Player Character >", 
+                    ["[ Character Settings > Character Selection ]"] + [ k for k,v in game_instance.players.items() if game_instance.can_select_player(v) ] + [".."]
+                )
                 return 
             case "Change Current Character Name":
                 new_name = QInputDialog.getText(instance, 'Input Dialog', 'New Character Name :')

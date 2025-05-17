@@ -67,6 +67,13 @@ def clear_layout(layout):
         elif item.widget():
             widget = item.widget()
             widget.setParent(None)
+def is_widget_in_list(list_widget: QListWidget, widget: QWidget) -> bool:
+    for i in range(list_widget.count()):
+        item = list_widget.item(i)
+        if list_widget.itemWidget(item) == widget:
+            return True
+    return False
+
 # -- helper classes
 class VLayout(QVBoxLayout):
     def __truediv__(self, other):

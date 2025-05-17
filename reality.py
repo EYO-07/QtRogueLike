@@ -249,6 +249,7 @@ class Item(Serializable, Entity): # Primitive
         Serializable.__init__(self)
         Entity.__init__(self)
         self.name = name
+        if not description: description = "inventory item"
         self.description = description
         self.weight = weight # not used yet 
         self.sprite = sprite 
@@ -270,6 +271,7 @@ class Item(Serializable, Entity): # Primitive
 class Usable(Item): # Interface : use item
     __serialize_only__ = Item.__serialize_only__+["uses"]
     def __init__(self, name="", description="", weight=1, sprite="item", uses = 1):
+        if not description: description = "usable item"
         Item.__init__(self, name = name, description = description, weight = weight, sprite = sprite)
         self.uses = uses 
     def use(self, char):
@@ -350,6 +352,7 @@ class Durable(Item): # interface : has durability_factor, quality
 class Equippable(Durable): # Interface : equipment
     __serialize_only__ = Durable.__serialize_only__+["slot"]
     def __init__(self, name="", description="", weight=1, slot="primary_hand", durability_factor=0.995):
+        if not description: description = "equippable item"
         Durable.__init__(self, name = name, description = description, weight = weight, durability_factor = durability_factor)
         self.slot = slot
     def get_equipped_slot(self, char):
@@ -374,6 +377,7 @@ class Equippable(Durable): # Interface : equipment
 class Weapon(Equippable): 
     __serialize_only__ = Equippable.__serialize_only__+["damage","stamina_consumption","max_damage"]
     def __init__(self, name="", damage=0 ,description="", weight=1, stamina_consumption=1, durability_factor=0.995):
+        if not description: description = "equippable item"
         Equippable.__init__(self, name = name, description=description, weight=weight, slot="primary_hand", durability_factor=durability_factor)
         self.damage = damage # damages decrease when successfully hit and restored to max_damage using special item 
         self.stamina_consumption = stamina_consumption 
@@ -412,6 +416,7 @@ class Sword(Parriable, SpecialSkillWeapon):
         Parriable.__init__(self, name = name, damage = damage, description = description, weight = weight, stamina_consumption = stamina_consumption, durability_factor = durability_factor)
         SpecialSkillWeapon.__init__(self)
         self.days_to_unlock_special = 20
+        if not description: self.description = f"It's a {self.get_quality()} long sword. Swords can parry other swords and weapons exchanging hp for stamina consumption, useful against humanoid creatures. You can repair the swords with whetstones."
     def get_parry_chance(self,player, enemy, damage):
         if not super().get_parry_chance(player, enemy, damage): return 0.0
         primary = enemy.primary_hand
@@ -428,6 +433,7 @@ class Mace(Parriable, SpecialSkillWeapon):
         Parriable.__init__(self, name = name, damage = damage, description = description, weight = weight, stamina_consumption = stamina_consumption, durability_factor = durability_factor)
         SpecialSkillWeapon.__init__(self)
         self.days_to_unlock_special = 10
+        if not description: self.description = f"It's a {self.get_quality()} mace. A Mace can parry other swords and weapons exchanging hp for stamina consumption, useful against humanoid creatures. You can repair the Maces with whetstones."
     def get_parry_chance(self, player, enemy, damage):
         if not super().get_parry_chance(player, enemy, damage): return 0.0
         primary = enemy.primary_hand
@@ -447,6 +453,7 @@ class Food(Usable, Resource):
         Resource.__init__(self)
         self.nutrition = float(nutrition)/food_uses
         self.type = "food"
+        if not description: self.description = f"It's an edible, you can store as resource or eat to satiate hunger."
         self.update_value()
     def use(self, char):
         super().use(char)
@@ -469,6 +476,7 @@ class Wood(Item, Resource):
         Resource.__init__(self)
         self.value = value 
         self.type = "wood"
+        if not description: self.description = f"It's a resource, you can store in a building pressing C. Used to buy creatures or building certificates."
     def get_utility_info(self):
         return Resource.get_utility_info(self)
 
@@ -479,6 +487,7 @@ class Stone(Item, Resource):
         Resource.__init__(self)
         self.value = value 
         self.type = "stone"
+        if not description: self.description = f"It's a resource, you can store in a building pressing C. Used to buy creatures or building certificates."
     def get_utility_info(self):
         return Resource.get_utility_info(self)
         
@@ -489,6 +498,7 @@ class Metal(Item, Resource):
         Resource.__init__(self)
         self.value = value 
         self.type = "metal"
+        if not description: self.description = f"It's a resource, you can store in a building pressing C. Used to buy creatures or building certificates."
     def get_utility_info(self):
         return Resource.get_utility_info(self)
         
@@ -498,6 +508,7 @@ class WeaponRepairTool(Usable):
     def __init__(self, name="", repairing_factor=1.05, description="", weight=1, uses = 10):
         Usable.__init__(self, name = name, description = description, weight = weight, sprite=name.lower(), uses = uses)
         self.repairing_factor = repairing_factor
+        if not description: self.description = f"It's a repair tool, press R to repair the currently primary hand weapon."
     def use(self, char):
         if char.primary_hand:
             primary = char.primary_hand
@@ -891,7 +902,7 @@ class Player(SkilledCharacter, RegenerativeCharacter): # player or playable npc
             return moved
         return False
     def generate_initial_items(self):
-        self.equip_item(Sword(name="Bastard_Sword", damage=8.5, durability_factor=0.9995, description="although with no name, this Bastard Sword was master-crafted and passed as heirloom in generations of my family, that swords reminds me of the values my father teach me ..."), "primary_hand")
+        self.equip_item(Sword(name="Bastard_Sword", damage=8.5, durability_factor=0.9995, description="Although with no name, this Bastard Sword was master-crafted and passed as heirloom in generations of my family, that swords reminds me of the values my father teach me ..."), "primary_hand")
         self.add_item(WeaponRepairTool(name="Whetstone", uses=12))
         self.add_item(Food(name="Bread", nutrition=250))
     def get_forward_direction(self):
@@ -1211,12 +1222,13 @@ class TileBuilding(ActionTile): # interface class
     def __init__(self, x=0,y=0,front_sprite = "Castle", walkable=True, sprite_key="grass", b_enemy = False):
         ActionTile.__init__(self, x = x, y = y, front_sprite = front_sprite, walkable=walkable, sprite_key=sprite_key )
         self.villagers = 5
-        self.villagers_max = 20
+        self.villagers_max = 40
         self.food = 0
         self.wood = 0
         self.stone = 0
         self.metal = 0
         self.b_enemy = b_enemy
+        if self.b_enemy: self.villagers = self.villagers_max 
     def bonus_resources(self):
         self.food = d(0,2000)
         self.wood = d(0,2000)
