@@ -1340,6 +1340,7 @@ class TileBuilding(ActionTile): # interface class
                 game_instance.players.update({current_item: hero})
                 print( hero.name, hero.party, hero.current_map )
                 game_instance.place_players()
+                if game_instance.journal_window: game_instance.journal_window.update() 
                 game_instance.draw()
                 return True
         return False
@@ -1504,7 +1505,7 @@ class Castle(TileBuilding):
             "Exit"
         ]
     def new_hero(self, game_instance):
-        if self.villagers < 15: 
+        if self.villagers <= 15: 
             game_instance.add_message("There are no villagers to recruit ...")
             return False 
         dx, dy = game_instance.player.get_forward_direction()
@@ -1667,7 +1668,7 @@ class GuardTower(TileBuilding):
             "Exit"
         ]
     def new_swordman(self, game_instance):
-        if self.villagers < 5:
+        if self.villagers <= 5:
             game_instance.add_message("There are no villagers to recruit ...")
             return False 
         dx, dy = game_instance.player.get_forward_direction()
@@ -1698,7 +1699,7 @@ class GuardTower(TileBuilding):
         game_instance.draw()
         return True
     def new_mounted_knight(self, game_instance): # not used yet 
-        if self.villagers < 10:
+        if self.villagers <= 10:
             game_instance.add_message("There are no villagers to recruit ...")
             return False 
         dx, dy = game_instance.player.get_forward_direction()

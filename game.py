@@ -27,10 +27,34 @@ import re
 from PyQt5.QtMultimedia import QMediaPlayer, QMediaContent
 from PyQt5.QtWidgets import QGraphicsView, QGraphicsScene, QGraphicsRectItem, QGraphicsTextItem, QGraphicsOpacityEffect  
 from PyQt5.QtCore import Qt, QRectF, QUrl, QPropertyAnimation, QTimer
-from PyQt5.QtGui import QColor, QTransform, QFont
+from PyQt5.QtGui import QColor, QTransform, QFont, QBrush
 
+# --
 class Game_SOUNDMANAGER:
     def __init__(self):
+        # Inventory [QMediaPlayer] {PyQt5.QtMultimedia}
+        # 1. play() ; Inicia a reprodução do conteúdo de mídia atual.
+        # 2. pause() ; Pausa a reprodução do conteúdo de mídia atual.
+        # 3. stop() ; Interrompe a reprodução do conteúdo de mídia atual.
+        # 4. setMedia(media, stream=None) ; Define o conteúdo de mídia a ser reproduzido.
+        # 5. setMuted(muted) ; Define o estado de mudo do áudio.
+        # 6. setPlaybackRate(rate) ; Define a taxa de reprodução do conteúdo de mídia.
+        # 7. setPlaylist(playlist) ; Define a lista de reprodução associada ao player.
+        # 8. setPosition(position) ; Define a posição atual de reprodução em milissegundos.
+        # 9. setVolume(volume) ; Define o volume do áudio (0 a 100).
+        # 10. setVideoOutput(output) ; Define o destino de saída de vídeo (QVideoWidget ou QGraphicsVideoItem).
+        # 11. audioAvailableChanged(available) ; Sinal emitido quando a disponibilidade de áudio muda.
+        # 12. audioRoleChanged(role) ; Sinal emitido quando o papel do áudio muda.
+        # 13. bufferStatusChanged(percentFilled) ; Sinal emitido quando o status do buffer muda.
+        # 14. currentMediaChanged(media) ; Sinal emitido quando o conteúdo de mídia atual muda.
+        # 15. mediaChanged(media) ; Sinal emitido quando o conteúdo de mídia muda.
+        # 16. mediaStatusChanged(status) ; Sinal emitido quando o status da mídia muda.
+        # 17. mutedChanged(muted) ; Sinal emitido quando o estado de mudo do áudio muda.
+        # 18. playbackRateChanged(rate) ; Sinal emitido quando a taxa de reprodução muda.
+        # 19. positionChanged(position) ; Sinal emitido quando a posição de reprodução muda.
+        # 20. stateChanged(state) ; Sinal emitido quando o estado do player muda.
+        # 21. volumeChanged(volume) ; Sinal emitido quando o volume do áudio muda.
+        self.music_player = None
         self.is_music_muted = False
     def get_random_music_filename(self,directory="music", pattern=""):
         # Compile the regex pattern
@@ -60,14 +84,6 @@ class Game_SOUNDMANAGER:
             self.music_player.mediaStatusChanged.connect(
                 lambda status: self.music_player.play() if status == QMediaPlayer.EndOfMedia and not self.is_music_muted else None
             )
-                        
-            # try:
-                # self.music_player.setLoops(QMediaPlayer.Infinite)  # PyQt5 5.15+
-            # except AttributeError:
-                # Fallback for older PyQt5
-                # self.music_player.mediaStatusChanged.connect(
-                    # lambda status: self.music_player.play() if status == QMediaPlayer.EndOfMedia and not self.is_music_muted else None
-                # )
         else:
             self.add_message(f"Music file {music_path} not found")
             print(f"Music file {music_path} not found")
@@ -102,11 +118,15 @@ class Game_SOUNDMANAGER:
 # -> Game_VIEWPORT.draw() || .draw_grid() || { .get_tiles_to_draw() | get_anchor() | .rotate_vector_for_camera() | .is_ingrid() | .is_inview() }
 class Game_VIEWPORT:
     def __init__(self):
+        self.scene = QGraphicsScene()
+        self.setScene(self.scene)
+        self.scene.setBackgroundBrush(QBrush(QColor(0, 0, 0)))
+        # -- 
         self.rotation = 0  # degrees: 0, 90, 180, 270
         self.grid_width = MAP_WIDTH
         self.grid_height = MAP_HEIGHT
         self.view_width = VIEW_WIDTH_IN_TILES
-        self.view_height = VIEW_HEIGHT_IN_TILES+2
+        self.view_height = VIEW_HEIGHT_IN_TILES
         self.tile_size = TILE_SIZE 
         # -- 
         self.dirty_tiles = set()  # Track tiles that need redrawing
@@ -170,6 +190,36 @@ class Game_VIEWPORT:
         bar_width = (hud_width - 20) // 3
         bar_height = 10
         padding = 5
+        
+        # Inventory [ QGraphicsTextItem ]
+        # 1. QGraphicsTextItem([str text], [QGraphicsItem parent]) ; Constructor, optionally sets text and parent item
+        # 2. setPlainText(str text) ; Sets the displayed text (plain, not rich text)
+        # 3. toPlainText() -> str ; Returns the current text
+        # 4. setDefaultTextColor(QColor color) ; Sets the color of the text
+        # 5. defaultTextColor() -> QColor ; Gets the current text color
+        # 6. setFont(QFont font) ; Sets the font used for rendering the text
+        # 7. font() -> QFont ; Returns the current font
+        # 8. setTextWidth(float width) ; Sets the width for wrapping the text
+        # 9. textWidth() -> float ; Gets the current text width (used for wrapping)
+        # 10. setHtml(str html) ; Sets the text as rich HTML-formatted content
+        # 11. toHtml() -> str ; Gets the current HTML content
+        # 12. setPos(float x, float y) ; Sets the position of the text item in the scene
+        # 13. pos() -> QPointF ; Gets the current position
+        # 14. setRotation(float angle) ; Rotates the text item
+        # 15. setZValue(float z) ; Sets the stacking order (z-index)
+        # 16. zValue() -> float ; Returns the z-order value
+        # 17. setScale(float factor) ; Uniformly scales the item
+        # 18. setTransform(QTransform transform) ; Applies a custom transformation (e.g., rotate, scale, shear)
+        # 19. setFlag(QGraphicsItem.GraphicsItemFlag, bool enabled=True) ; Sets item-specific behavior (e.g., movable, selectable)
+        # 20. boundingRect() -> QRectF ; Returns the bounding rectangle of the text item
+
+        # position label 
+        pos_label = QGraphicsTextItem(f"{self.player.x}, {self.map.height - self.player.y}")
+        pos_label.setDefaultTextColor(QColor("yellow"))  # White text
+        pos_label_width = pos_label.boundingRect().width()
+        pos_label.setPos(self.view_width*self.tile_size- pos_label_width - 10, 10)
+        pos_label.setZValue(10) 
+        self.scene.addItem(pos_label)
 
         # HP Bar (Red)
         hp_ratio = self.player.hp / self.player.max_hp
@@ -238,7 +288,6 @@ class Game_VIEWPORT:
             return dy, -dx            
     def rotated_direction(self, dx, dy):
         return self.rotate_vector_for_movement(dx, dy)
-
 class Game_PLAYERS:
     def __init__(self):
         self.turn = 0
@@ -285,7 +334,6 @@ class Game_PLAYERS:
             if v.current_map != self.current_map: continue 
             self.map.place_character(v)
         return self.map.place_character(self.player)
-        
     def remove_player(self, key = None):
         if not key: key = self.current_player
         if len(self.players) <= 1: 
@@ -317,6 +365,7 @@ class Game_PLAYERS:
         self.set_player(new_key_name)
         self.update_prior_next_selection()
     def update_prior_next_selection(self):
+        if self.journal_window: self.journal_window.update()
         def ply_filter(value):
             if value is None: return False 
             if not isinstance(value, Player): return False 
@@ -373,6 +422,8 @@ class Game_PLAYERS:
             if self.players[i].party == True:
                 S += 1
         return S
+    def can_select_player(self, player_obj):
+        return player_obj.current_map == self.player.current_map and not player_obj.party 
 class Game_MAPTRANSITION:
     def __init__(self):
         self.current_map = (0,0,0) # Current map coordinates
@@ -961,8 +1012,7 @@ class Game(QGraphicsView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_P
     ]
     def __init__(self):
         QGraphicsView.__init__(self)
-        self.scene = QGraphicsScene()
-        self.setScene(self.scene)
+        self.setFocusPolicy(Qt.StrongFocus) 
         #print(Game.__mro__)
         Serializable.__init__(self)
         Game_VIEWPORT.__init__(self)
@@ -1106,8 +1156,8 @@ class Game(QGraphicsView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_P
                     self.journal_window.hide()
                 else:
                     self.journal_window.load_journal(self.current_slot)  # Refresh contents
+                    self.journal_window.update()
                     self.journal_window.show()
-                    self.journal_window.update_position()
                 self.setFocus()
                 return True 
             case Qt.Key_I:  # Toggle inventory window

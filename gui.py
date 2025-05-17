@@ -198,11 +198,73 @@ class JournalWindow(Dialog):
         if self.parent(): self.parent().setFocus()
     def build_parts(self):
         self.layout = VLayout() # vertical 
+        self.button_layout = HLayout()
+        self.update_character_buttons()
         self.text_edit = new_text(foreground = "yellow")
         self.save_button = new_button("Save", self.save_journal)
         self.log_button = new_button("Log Entry", self.log_diary_entry)
+    def update_character_buttons(self):
+
+        # Inventory [ QPushButton ] { PyQt5 GUI button component }
+        # 1. QPushButton(text, parent=None) ; Create a push button with optional text label
+        # 2. .setText(str) ; Set the text displayed on the button
+        # 3. .text() ; Get the current button text
+        # 4. .setIcon(QIcon) ; Set an icon (image) on the button
+        # 5. .icon() ; Get the current icon of the button
+        # 6. .setIconSize(QSize) ; Set the display size of the button icon
+        # 7. .setCheckable(bool) ; Make the button toggleable (like a switch)
+        # 8. .isCheckable() ; Check if the button is checkable
+        # 9. .setChecked(bool) ; Programmatically check/uncheck the button
+        # 10. .isChecked() ; Return True if the button is checked
+        # 11. .setEnabled(bool) ; Enable or disable the button
+        # 12. .isEnabled() ; Check if the button is currently enabled
+        # 13. .click() ; Programmatically click the button (emits `clicked` signal)
+        # 14. .toggle() ; Toggle the checked state (if checkable)
+        # 15. .setFlat(bool) ; Make button flat (no 3D shadow)
+        # 16. .isFlat() ; Return True if the button is flat
+        # 17. .setShortcut(QKeySequence or str) ; Set keyboard shortcut to trigger the button
+        # 18. .setStyleSheet(str) ; Apply CSS-style custom styling to the button
+        # 19. .clicked.connect(func) ; Connect a function to the button click event
+        # 20. .pressed.connect(func) ; Connect a function to the button pressed-down event
+        # 21. .released.connect(func) ; Connect a function to the button released event
+        # 22. .toggled.connect(func) ; Connect a function to the toggled signal (checkable buttons)
+        
+        # Inventory [ QHBoxLayout ] { Horizontal layout manager in PyQt5 }
+        # 1. QHBoxLayout(parent=None) ; Create a new horizontal layout
+        # 2. .addWidget(widget) ; Add a widget to the layout, from left to right
+        # 3. .addSpacing(pixels) ; Add fixed horizontal space (in pixels)
+        # 4. .addStretch(stretch=1) ; Add stretchable empty space (pushes widgets apart)
+        # 5. .insertWidget(index, widget) ; Insert a widget at a specific position
+        # 6. .insertSpacing(index, pixels) ; Insert fixed space at specific index
+        # 7. .insertStretch(index, stretch=1) ; Insert stretch at a specific index
+        # 8. .addLayout(layout) ; Nest another layout inside this one
+        # 9. .setSpacing(pixels) ; Set the space between widgets in the layout
+        # 10. .setContentsMargins(left, top, right, bottom) ; Set outer margins of the layout
+        # 11. .count() ; Return number of items (widgets/spacers) in the layout
+        # 12. .itemAt(index) ; Get the layout item at given index
+        # 13. .takeAt(index) ; Remove and return the item at given index
+        # 14. .removeWidget(widget) ; Remove a specific widget from the layout
+        # 15. .invalidate() ; Mark the layout as dirty, forcing a relayout
+        # 16. .setAlignment(widget or layout, alignment) ; Align a specific widget or layout (e.g. Qt.AlignRight)
+        
+        def button_callback(k,v):
+            print(k,v)
+            if not self.parent().can_select_player(v): return 
+            self.parent().set_player(k) 
+            self.parent().draw() 
+            self.parent().setFocus()
+            
+        clear_layout(self.button_layout)
+        for k,v in self.parent().players.items():
+            if not self.parent().can_select_player(v): continue 
+            button = new_button(label = "", callback = lambda x,a=k,b=v: button_callback(a,b), foreground='white')
+            pix = v.get_sprite()
+            button.setIcon(QIcon(pix))
+            button.setIconSize(pix.size())
+            self.button_layout / button
     def assemble_parts(self):
         set_properties_layout(self.layout)
+        self.layout / self.button_layout 
         self/( self.layout/self.text_edit/( HLayout()/self.save_button/self.log_button ) )
     def whereAmI(self):
         player = self.parent().player
@@ -241,6 +303,9 @@ class JournalWindow(Dialog):
             else: # southest
                 return "I'm on southeast part of this region, where should I go ? ..."
         return ""
+    def update(self):
+        self.update_position()
+        self.update_character_buttons()
     def update_position(self):
         set_relative_horizontal_position(self, self.parent(), side = "right")
     def load_journal(self, slot=1):
@@ -395,10 +460,11 @@ class SelectionBox(Widget):
         row_height = self.list_widget.sizeHintForRow(0) if row_count > 0 else 20
         spacing = self.list_widget.spacing()
         frame = 2 * self.list_widget.frameWidth()
-        total_height = row_height * row_count + spacing + frame
+        total_height = self.parent().height() if self.parent() else row_height * row_count + spacing + frame
         # Get max width of all items
         max_width = max(self.list_widget.sizeHintForIndex(self.list_widget.model().index(i, 0)).width() for i in range(row_count)) if row_count > 0 else 100
-        self.list_widget.resize(max_width+100, total_height)
+        self.list_widget.resize(max_width+100, total_height-15)
+        self.resize(max_width+100, total_height-10)
     def eventFilter(self, obj, event):
         if obj == self.list_widget and event.type() == QEvent.KeyPress:
             key = event.key() 
@@ -649,7 +715,7 @@ def main_menu(menu, item, instance, game_instance):
     elif menu == "Character Settings >":
         match item:
             case "Select Player Sprite >": 
-                instance.set_list("Select Player Sprite >", ["[ Character Settings > Select Sprite ]"] + SPRITE_NAMES_PLAYABLES + [".."])
+                instance.set_list("Select Player Sprite >", ["[ Character Settings > Select Sprite ]"] + SPRITE_NAMES_CHARACTERS + [".."])
                 return 
             case "Select Player Character >": 
                 instance.set_list("Select Player Character >", ["[ Character Settings > Character Selection ]"] + [ k for k,v in game_instance.players.items() if v.current_map == game_instance.player.current_map and not v.party ] + [".."])

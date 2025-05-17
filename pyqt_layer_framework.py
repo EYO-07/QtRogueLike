@@ -58,7 +58,15 @@ def apply_filter_to_list_widget(list_widget, text):
     for index in range(list_widget.count()):
         item = list_widget.item(index)
         item.setHidden(text.lower() not in item.text().lower())
-
+def clear_layout(layout):
+    while layout.count():
+        item = layout.takeAt(0)
+        # If the item is a layout, clear it recursively
+        if item.layout(): clear_layout(item.layout())
+        # If it's a widget, delete it
+        elif item.widget():
+            widget = item.widget()
+            widget.setParent(None)
 # -- helper classes
 class VLayout(QVBoxLayout):
     def __truediv__(self, other):
