@@ -563,6 +563,8 @@ class Map_CHARACTERS:
         except Exception as e:
             print(f"Error moving character {char.name}: {e}")
             return False
+    def find_entity_path(self, entity_1, entity_2):
+        return self.find_path( entity_1.x, entity_1.y, entity_2.x, entity_2.y )
     def find_path(self, start_x: int, start_y: int, goal_x: int, goal_y: int) -> list[tuple[int, int]]:
         """A* pathfinding to find shortest path from (start_x, start_y) to (goal_x, goal_y)."""
         # Validate coordinates

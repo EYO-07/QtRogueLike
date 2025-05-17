@@ -43,6 +43,7 @@ POPUP_HEIGHT = 500
 
 # cached diff moves 
 ADJACENT_DIFF_MOVES = [(1, 0), (-1, 0), (0, 1), (0, -1), (0, 0)]
+CARDINAL_DIFF_MOVES = [(1, 0), (-1, 0), (0, 1), (0, -1)]
 CHESS_KNIGHT_DIFF_MOVES = [
     (2, 1), (2, -1), (-2, 1), (-2, -1),
     (1, 2), (1, -2), (-1, 2), (-1, -2)
@@ -66,7 +67,9 @@ SPRITE_NAMES_WEAPONS = [
     "bastard_sword",
     "mace",
     "wand", # +
-    "staff" # +
+    "staff", # +
+    "crossbow",
+    "bolt"
 ]
 
 SPRITE_NAMES_PLAYABLES = [

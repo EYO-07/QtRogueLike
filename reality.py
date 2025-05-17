@@ -281,6 +281,20 @@ class Usable(Item): # Interface : use item
     def get_utility_info(self):
         return f"({self.uses:.0f})"
 
+class Ammo(Usable):
+    __serialize_only__ = Usable.__serialize_only__
+    def __init__(self, name="bolt", description="", weight=1, uses = 100):
+        if not description: description = "Ammo for Crossbows. Use it to reload."
+        Usable.__init__(self, name = name, description = description, weight = weight, sprite=name.lower(), uses = uses )
+    def use(self, char):
+        primary = char.primary_hand
+        if not isinstance(primary, Fireweapon): return 
+        if primary.ammo_type != self.name: return 
+        d_ammo = min(30, self.uses)
+        self.uses -= d_ammo
+        if self.uses <= 0: char.remove_item(self)
+        primary.ammo += d_ammo
+
 class Container(Serializable): # Primitive 
     __serialize_only__ = ["items"]
     def __init__(self, current_char = None):
@@ -396,6 +410,77 @@ class Weapon(Equippable):
     def get_utility_info(self):
         return f"{self.damage:.1f} [dmg] "+Durable.get_utility_info(self)
 
+class Fireweapon(Weapon, SpecialSkillWeapon): # interface class 
+    __serialize_only__ = Weapon.__serialize_only__ + ["ammo", "range", "projectile_sprite","ammo_type"]
+    def __init__(self, 
+            name="Crossbow", 
+            damage=7,
+            description="", 
+            weight=1, 
+            stamina_consumption=1, 
+            durability_factor=0.995, 
+            ammo = 0, 
+            range = 12, 
+            projectile_sprite = "bolt",
+            ammo_type = "bolt"
+        ):
+        Weapon.__init__(self, name=name, damage=damage ,description=description, weight=weight, stamina_consumption=stamina_consumption, durability_factor=durability_factor)
+        SpecialSkillWeapon.__init__(self)
+        if not description: self.description = f"It's a {self.get_quality()} {self.name}. Pressing F you can attack targets at distance."
+        self.ammo = ammo 
+        self.range = range
+        self.projectile_sprite = projectile_sprite
+        self.ammo_type = ammo_type
+    def use_special_F(self, char, game):
+        # print("Fireweapon.use_special_F() || ...")
+        if self.ammo <=0: 
+            game.add_message("Not enough ammo")
+            return 
+        if not char is game.player: return 
+        target, positions = self.find_target(char, game)
+        if not char.can_see_character(target, game.map, self.range): 
+            game.add_message("Can't find a target")
+            return 
+        if not target or not positions:
+            game.add_message("Can't find a target")
+            return 
+        # --
+        # print("Fireweapon.use_special_F() || start animation", positions)
+        game.draw_animation_on_grid(sprite_key = self.projectile_sprite, positions = positions)
+        game.events.append( AttackEvent(char, target, d(self.damage/3.0, 1.5*self.damage)) )
+        print(target, target.hp)
+        game.game_iteration()
+    def do_ammo_consumption(self):
+        if self.ammo > 0: self.ammo -= 1
+    def stats_update(self, player):
+        if Weapon.stats_update(self, player):
+            self.do_ammo_consumption()
+    def find_target(self, char, game):
+        # -> find_target() || % player || & find a valid target on range in forward direction | % if a valid target is found return 
+        # -> find_target() || % player | % else || & direction : north, south, east, west || & search through direction || % if a valid target is found return 
+        map = game.map 
+        player = game.player
+        x = player.x 
+        y = player.y 
+        path = []
+        if char is player:
+            dx, dy = player.get_forward_direction()
+            for i in range(self.range):
+                if i!=self.range-1: path.append( (x+dx*i,y+dy*i) )
+                target = map.get_char(x+dx*i,y+dy*i)
+                if isinstance(target, Character) and is_enemy_of(char, target):
+                    return target, path 
+        else:
+            for dx,dy in CARDINAL_DIFF_MOVES:
+                for i in range(self.range):
+                    path.append( (x+dx*i,y+dy*i) )
+                    target = map.get_char(x+dx*i,y+dy*i)
+                    if isinstance(target, Character) and is_enemy_of(char, target):
+                        return target, path  
+        return None, None
+    def get_utility_info(self):
+        return f"{self.damage:.1f} [dmg] {self.range} [range] ({self.ammo}) "+Durable.get_utility_info(self)
+
 class Parriable(Weapon): 
     """ Weapons that has probability to exchange hp damage for stamina consumption. """
     __serialize_only__ = Weapon.__serialize_only__
@@ -416,7 +501,7 @@ class Sword(Parriable, SpecialSkillWeapon):
         Parriable.__init__(self, name = name, damage = damage, description = description, weight = weight, stamina_consumption = stamina_consumption, durability_factor = durability_factor)
         SpecialSkillWeapon.__init__(self)
         self.days_to_unlock_special = 20
-        if not description: self.description = f"It's a {self.get_quality()} long sword. Swords can parry other swords and weapons exchanging hp for stamina consumption, useful against humanoid creatures. You can repair the swords with whetstones."
+        if not description: self.description = f"It's a {self.get_quality()} {name}. Swords can parry other swords and weapons exchanging hp for stamina consumption, useful against humanoid creatures. You can repair the swords with whetstones."
     def get_parry_chance(self,player, enemy, damage):
         if not super().get_parry_chance(player, enemy, damage): return 0.0
         primary = enemy.primary_hand
@@ -553,9 +638,11 @@ class OfensiveCharacter(Damageable):
     def do_damage(self):
         damage = self.base_damage
         if self.primary_hand and hasattr(self.primary_hand, 'damage'):
-            damage += d(self.primary_hand.damage/2.0, 1.5*self.primary_hand.damage)
+            if not isinstance(self.primary_hand, Fireweapon):
+                damage += d(self.primary_hand.damage/2.0, 1.5*self.primary_hand.damage)
         if self.secondary_hand and hasattr(self.secondary_hand, 'damage'):
-            damage += d(self.secondary_hand.damage/2.0, 1.5*self.secondary_hand.damage)/2.0
+            if not isinstance(self.primary_hand, Fireweapon):
+                damage += d(self.secondary_hand.damage/2.0, 1.5*self.secondary_hand.damage)/2.0
         return damage
     def weapons_stats_update(self):
         primary = self.primary_hand
@@ -778,10 +865,10 @@ class Character(EquippedCharacter, BehaviourCharacter):
                 if item and random.uniform(0,1)<0.2:
                     self.current_tile.add_item(item)
             self.items.clear()    
-    def can_see_character(self, another, game_map):
+    def can_see_character(self, another, game_map, max_dist = 7):
         if not isinstance(another, Character): return None
         distance = self.distance(another)
-        if distance <= 7:
+        if distance <= max_dist:
             return game_map.line_of_sight(self.x, self.y, another.x, another.y)
         return False
     def use_first_item_of(self, item_class_name, game_instance):
@@ -879,8 +966,8 @@ class Player(SkilledCharacter, RegenerativeCharacter): # player or playable npc
         "party"
     ]
     def __init__(self, name="", hp=PLAYER_MAX_HP, x=MAP_WIDTH//2, y=MAP_HEIGHT//2, b_generate_items = False, sprite = "player", current_map = (0,0,0)):
-        SkilledCharacter.__init__(self, name = name, hp = hp, x = x, y = y)
         RegenerativeCharacter.__init__(self)
+        SkilledCharacter.__init__(self, name = name, hp = hp, x = x, y = y)
         self.rotation = 0
         self.field_of_view = 70
         self.name = name
@@ -943,8 +1030,8 @@ class Player(SkilledCharacter, RegenerativeCharacter): # player or playable npc
         angle_deg = math.degrees(angle_rad)
         # Compare with half the field of view
         return angle_deg <= fov_deg / 2.0
-    def can_see_character(self, another, game_map):
-        if super().can_see_character(another, game_map):
+    def can_see_character(self, another, game_map, max_dist=7):
+        if super().can_see_character(another, game_map, max_dist):
             return self.is_in_cone_vision( (self.x,self.y), (another.x, another.y), self.get_forward_direction(), self.field_of_view )
         return False
     def update(self, game_instance): # on turn 
@@ -1026,8 +1113,8 @@ class Hero(Player): # playable character that can "carry" a party
 class Enemy(Character, OfensiveCharacter):
     __serialize_only__ = Character.__serialize_only__ + OfensiveCharacter.__serialize_only__ +["type","stance","canSeeCharacter","patrol_direction"]
     def __init__(self, name="", hp=30, x=50, y=50, b_generate_items = False):
-        Character.__init__(self, name = name, hp = hp, x = x, y = y)
         OfensiveCharacter.__init__(self)
+        Character.__init__(self, name = name, hp = hp, x = x, y = y)
         self.description = ""
         self.type = "Generic"
         self.stance = "Aggressive"

@@ -964,11 +964,20 @@ def debugging_menu(menu, item, instance, game_instance):
     player = game_instance.player 
     if menu == "main":
         match item:
+            case "Test Animation":
+                print("Test Animation")
+                x = game_instance.player.x
+                y = game_instance.player.y
+                positions = game_instance.map.find_path(x, y, x, y-3) 
+                print(positions)
+                game_instance.draw_animation_on_grid(sprite_key="player", positions = positions)
+                instance.close()
+                return 
             case "Display Players Info >":
                 instance.set_list("Display Players Info >", [".."]+[ f"{k} {v.current_map} {v.party}" for k,v in game_instance.players.items() ])
                 return 
             case "Add Item >": 
-                instance.set_list("Add Item >", ["Resources","Whetstone","Mace","Long Sword","Food",".."])
+                instance.set_list("Add Item >", ["Resources","Whetstone","Mace","Long Sword","Food", "Crossbow",".."])
                 return 
             case "Restore Status":
                 player.reset_stats()
@@ -997,6 +1006,11 @@ def debugging_menu(menu, item, instance, game_instance):
     # --
     if menu == "Add Item >":
         match item:
+            case "Crossbow":
+                player.add_item(Fireweapon(ammo=10, range=7))
+                player.add_item(Ammo())
+                instance.close()
+                return 
             case "Resources":
                 player.add_item(Wood(3000))
                 player.add_item(Stone(3000))

@@ -131,6 +131,8 @@ class Game_VIEWPORT:
         # -- 
         self.dirty_tiles = set()  # Track tiles that need redrawing
         self.tile_items = {}  # For optimized rendering
+        # --
+        self.flag_is_animating = False
         # -- 
         Tile._load_sprites()
     def draw(self):
@@ -166,6 +168,44 @@ class Game_VIEWPORT:
         return (0 <= x < self.view_width * self.tile_size and 0 <= y < self.view_height * self.tile_size)
     def get_anchor(self):
         return (self.view_width // 2) * self.tile_size, (self.view_height - 2) * self.tile_size
+    def draw_next_frame(self):
+        if self.animation_index > len(self.animation_positions):
+            self.animation_timer.stop()
+            self.draw()
+            self.flag_is_animating = False  # <<< UNBLOCK INPUT
+            return
+        ent_x, ent_y = None, None     
+        if self.animation_index != len(self.animation_positions):
+            ent_x, ent_y = self.animation_positions[self.animation_index]
+        self.scene.clear()
+        px, py = self.player.x, self.player.y
+        anchor_screen_x, anchor_screen_y = self.get_anchor()
+        tiles_to_draw = self.get_tiles_to_draw()
+        for x, y in tiles_to_draw:
+            dx, dy = x - px, y - py
+            rx, ry = self.rotate_vector_for_camera(dx, dy)
+            screen_x = anchor_screen_x + (rx) * self.tile_size
+            screen_y = anchor_screen_y + (ry) * self.tile_size
+
+            if self.is_ingrid(x, y) and self.is_inview(screen_x, screen_y):
+                tile = self.map.get_tile(x, y)
+                if tile:
+                    if ent_x == x and ent_y == y:
+                        tile.add_layer(self.sprite_key)
+                    tile.draw(self.scene, screen_x, screen_y)
+                    if ent_x == x and ent_y == y:
+                        tile.remove_layer(self.sprite_key)
+        self.scene.setSceneRect(0, 0, self.view_width * self.tile_size, self.view_height * self.tile_size)
+        self.animation_index += 1
+    def draw_animation_on_grid(self, sprite_key, positions):
+        if not positions: return
+        self.flag_is_animating = True  # <<< BLOCK INPUT
+        self.animation_index = 0
+        self.animation_positions = positions
+        self.sprite_key = sprite_key
+        self.animation_timer = QTimer()
+        self.animation_timer.timeout.connect(self.draw_next_frame)
+        self.animation_timer.start(50)  # 1000ms = 1s per frame
     def draw_grid(self):
         self.scene.clear()
         tiles_to_draw = self.get_tiles_to_draw()
@@ -1321,6 +1361,7 @@ class Game(QGraphicsView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_P
                 return True 
         return False 
     def keyPressEvent(self, event):
+        if self.flag_is_animating: return 
         key = event.key()        
         match key:
             case Qt.Key_Escape: # main menu
@@ -1339,6 +1380,7 @@ class Game(QGraphicsView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_P
             case Qt.Key_F12: # debug menu
                 SelectionBox(parent=self, item_list = [
                     "[ DEBUG MENU ]",
+                    "Test Animation", 
                     "Display Players Info >",
                     "Set Day 100", 
                     "Add Item >", 
@@ -1349,6 +1391,8 @@ class Game(QGraphicsView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_P
                     "Exit"
                 ], action = debugging_menu, game_instance = self).show()
                 return 
+            case Qt.Key_F11:
+                pass 
         if self.key_press_move_app_window(key): return 
         if self.key_press_cycle_between_playables(key): return 
         if self.key_press_choose_weapon_menu(key): return 
