@@ -14,11 +14,9 @@ from itertools import product
 
 # third-party 
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QPixmap, QPainter
+from PyQt5.QtGui import QPixmap, QPainter, QTransform, QColor
 from PyQt5.QtWidgets import QGraphicsPixmapItem, QInputDialog
 import noise  # Use python-perlin-noise instead of pynoise
-
-# TRANSPARENT_IMAGE = 0 # QPixmap(TILE_SIZE,TILE_SIZE)
 
 def is_enemy_of(char1, char2):
     if isinstance(char1, Player) and isinstance(char2, Player): return False 
@@ -30,6 +28,39 @@ def is_enemy_of(char1, char2):
 # SANITY COMMENTS
 # 1. Entity.get_tile don't means that the Entity is properly placed at 
 
+# Inventory [ QPainter ] { pyqt5 }
+# 1. QPainter(device) ; Constructs a painter to begin drawing on a paint device (e.g., QPixmap, QWidget, QImage).
+# 2. begin(device) ; Begins painting on the given device (alternative to constructor).
+# 3. end() ; Ends painting and flushes changes.
+# 4. isActive() ; Returns True if the painter is currently active.
+# 5. setPen(QPen or QColor) ; Sets the pen for outlining shapes and text.
+# 6. setBrush(QBrush or QColor) ; Sets the brush for filling shapes.
+# 7. setFont(QFont) ; Sets the font used for drawing text.
+# 8. setRenderHint(hint, on=True) ; Enables rendering hints (e.g., Antialiasing, TextAntialiasing).
+# 9. drawLine(x1, y1, x2, y2) ; Draws a line between two points.
+#10. drawRect(x, y, w, h) ; Draws a rectangle.
+#11. drawEllipse(x, y, w, h) ; Draws an ellipse inside the given rectangle.
+#12. drawPolygon(QPolygon or list of QPoint) ; Draws a polygon.
+#13. drawPixmap(x, y, QPixmap) ; Draws a pixmap at a given position.
+#14. drawImage(x, y, QImage) ; Draws an image.
+#15. drawText(x, y, text) ; Draws text at the specified position.
+#16. drawPath(QPainterPath) ; Draws a complex path.
+#17. translate(dx, dy) ; Moves the coordinate system origin.
+#18. rotate(angle) ; Rotates the coordinate system.
+#19. scale(sx, sy) ; Scales the coordinate system.
+#20. shear(sh, sv) ; Applies a shear transformation.
+#21. setTransform(QTransform[, combine]) ; Applies or replaces the transformation matrix.
+#22. resetTransform() ; Resets transformations to identity.
+#23. save() ; Saves the current painter state (pen, brush, transform, etc.).
+#24. restore() ; Restores the previously saved state.
+#25. clipRect() ; Returns the current clip rectangle.
+#26. setClipRect(x, y, w, h[, operation]) ; Sets a clip rectangle to limit the drawing area.
+#27. setOpacity(opacity) ; Sets the global opacity (0.0–1.0).
+#28. fillRect(x, y, w, h, brush or color) ; Fills a rectangle with a brush or color.
+#29. eraseRect(x, y, w, h) ; Erases a rectangle area (sets it to background).
+#30. compositionMode() ; Returns the current composition mode.
+#31. setCompositionMode(mode) ; Sets how pixels are blended (e.g., SourceOver, Multiply).
+
 # Entity.paint_to() || { Entity.get_sprite() } || {}
 class Entity: # Interface : distance and painting on tile 
     """ Has a paint_to method which is used by the Tile.draw to paint the entity over the tile sprite. """
@@ -39,18 +70,26 @@ class Entity: # Interface : distance and painting on tile
         self.x = 0
         self.y = 0
         self.current_tile = None # don't serialize this, avoid infinite saving 
-    def get_sprite(self):
-        TRANSPARENT_IMAGE = QPixmap(TILE_SIZE,TILE_SIZE)
-        TRANSPARENT_IMAGE.fill(Qt.transparent)
+        self._transparent_image = None
+    def get_transparent_image(self):
+        if not self._transparent_image:
+            self._transparent_image = QPixmap(TILE_SIZE,TILE_SIZE)
+            self._transparent_image.fill(Qt.transparent)
+        return self._transparent_image
+    def get_sprite(self, rotation = 0):
         if not self.sprite: 
             print(f"Warning: {self} sprite not found")
-            return TRANSPARENT_IMAGE 
+            return self.get_transparent_image()
         try:
-            return Tile.SPRITES[self.sprite]
+            if rotation == 0:
+                return Tile.SPRITES[self.sprite]
+            else:                
+                transform = QTransform().rotate(-rotation)
+                return Tile.SPRITES[self.sprite].transformed( transform , mode = 1 )
         except KeyError:
             print(f"Warning: {self} sprite not found")
-            return TRANSPARENT_IMAGE # Fallback    
-    def paint_to(self, painter):
+            return self.get_transparent_image()
+    def paint_to(self, painter, game_instance = None):
         painter.drawPixmap(0, 0, self.get_sprite())
     def distance(self, entity):
         return abs(entity.x - self.x) + abs(entity.y - self.y)
@@ -431,6 +470,20 @@ class Fireweapon(Weapon, SpecialSkillWeapon): # interface class
         self.range = range
         self.projectile_sprite = projectile_sprite
         self.ammo_type = ammo_type
+    def perform_attack(self, char, target, positions, game):
+        if self.ammo <=0: 
+            return False 
+        if char is game.player:
+            if not char.can_see_character(target, game.map, self.range): 
+                return False
+        else:
+            if not Character.can_see_character(char, target, game.map, self.range):
+                return False
+        if not target or not positions:
+            return False
+        game.draw_animation_on_grid(sprite_key = self.projectile_sprite, positions = positions)
+        game.events.append( AttackEvent(char, target, d(self.damage/3.0, 1.5*self.damage)) )
+        return True 
     def use_special_F(self, char, game):
         # print("Fireweapon.use_special_F() || ...")
         if self.ammo <=0: 
@@ -438,17 +491,8 @@ class Fireweapon(Weapon, SpecialSkillWeapon): # interface class
             return 
         if not char is game.player: return 
         target, positions = self.find_target(char, game)
-        if not char.can_see_character(target, game.map, self.range): 
+        if not self.perform_attack(char, target, positions, game):
             game.add_message("Can't find a target")
-            return 
-        if not target or not positions:
-            game.add_message("Can't find a target")
-            return 
-        # --
-        # print("Fireweapon.use_special_F() || start animation", positions)
-        game.draw_animation_on_grid(sprite_key = self.projectile_sprite, positions = positions)
-        game.events.append( AttackEvent(char, target, d(self.damage/3.0, 1.5*self.damage)) )
-        print(target, target.hp)
         game.game_iteration()
     def do_ammo_consumption(self):
         if self.ammo > 0: self.ammo -= 1
@@ -460,8 +504,8 @@ class Fireweapon(Weapon, SpecialSkillWeapon): # interface class
         # -> find_target() || % player | % else || & direction : north, south, east, west || & search through direction || % if a valid target is found return 
         map = game.map 
         player = game.player
-        x = player.x 
-        y = player.y 
+        x = char.x 
+        y = char.y 
         path = []
         if char is player:
             dx, dy = player.get_forward_direction()
@@ -472,6 +516,7 @@ class Fireweapon(Weapon, SpecialSkillWeapon): # interface class
                     return target, path 
         else:
             for dx,dy in CARDINAL_DIFF_MOVES:
+                path.clear()
                 for i in range(self.range):
                     path.append( (x+dx*i,y+dy*i) )
                     target = map.get_char(x+dx*i,y+dy*i)
@@ -561,7 +606,7 @@ class Wood(Item, Resource):
         Resource.__init__(self)
         self.value = value 
         self.type = "wood"
-        if not description: self.description = f"It's a resource, you can store in a building pressing C. Used to buy creatures or building certificates."
+        self.description = f"It's a resource, you can store in a building pressing C. Used to buy creatures or building certificates."
     def get_utility_info(self):
         return Resource.get_utility_info(self)
 
@@ -572,7 +617,7 @@ class Stone(Item, Resource):
         Resource.__init__(self)
         self.value = value 
         self.type = "stone"
-        if not description: self.description = f"It's a resource, you can store in a building pressing C. Used to buy creatures or building certificates."
+        self.description = f"It's a resource, you can store in a building pressing C. Used to buy creatures or building certificates."
     def get_utility_info(self):
         return Resource.get_utility_info(self)
         
@@ -583,7 +628,7 @@ class Metal(Item, Resource):
         Resource.__init__(self)
         self.value = value 
         self.type = "metal"
-        if not description: self.description = f"It's a resource, you can store in a building pressing C. Used to buy creatures or building certificates."
+        self.description = f"It's a resource, you can store in a building pressing C. Used to buy creatures or building certificates."
     def get_utility_info(self):
         return Resource.get_utility_info(self)
         
@@ -795,6 +840,12 @@ class BehaviourCharacter(Entity): # interface : artificially controlled characte
         if hasattr(self,"current_map"):
             if self.current_map != game_instance.map.coords: return False
             if self.current_map != game_instance.current_map: return False
+        primary = self.primary_hand 
+        if isinstance(primary, Fireweapon):            
+            target, path = primary.find_target(self, game_instance)
+            if primary.perform_attack(self, target, path, game_instance):
+                #print("behaviour_update() || Attack Performed || ", target, path )
+                return True 
         if self.pursue_target(entities, game_instance, default_target): return True 
         self.random_walk(game_instance) 
         return True 
@@ -955,6 +1006,27 @@ class SkilledCharacter(Character):
     def update_available_skills(self):
         pass 
 
+# Inventory [ QPixmap ] { pyqt5 }
+# 1. QPixmap(filePath) ; Loads an image from a file into the pixmap.
+# 2. QPixmap() ; Creates an empty pixmap.
+# 3. QPixmap(width, height) ; Creates a pixmap with given dimensions.
+# 4. isNull() ; Returns True if the pixmap is null (i.e., uninitialized).
+# 5. load(filePath[, format[, flags]]) ; Loads an image from a file path with optional format and flags.
+# 6. save(filePath[, format[, quality]]) ; Saves the pixmap to a file.
+# 7. width() ; Returns the width of the pixmap.
+# 8. height() ; Returns the height of the pixmap.
+# 9. size() ; Returns the QSize of the pixmap.
+#10. scaled(width, height[, aspectRatioMode[, transformMode]]) ; Returns a scaled copy of the pixmap.
+#11. scaled(QSize[, aspectRatioMode[, transformMode]]) ; Returns a scaled copy with a QSize.
+#12. copy(x, y, width, height) ; Returns a copy of a rectangular area of the pixmap.
+#13. toImage() ; Converts the pixmap to a QImage.
+#14. fill(color) ; Fills the pixmap with the specified color.
+#15. fromImage(QImage) ; Static method to create a QPixmap from a QImage.
+#16. hasAlphaChannel() ; Returns True if the pixmap has an alpha channel.
+#17. setDevicePixelRatio(ratio) ; Sets the device pixel ratio for high-DPI support.
+#18. devicePixelRatio() ; Returns the current device pixel ratio.
+#19. cacheKey() ; Returns a cache key that uniquely identifies the pixmap.
+
 class Player(SkilledCharacter, RegenerativeCharacter): # player or playable npc 
     __serialize_only__ = SkilledCharacter.__serialize_only__+ RegenerativeCharacter.__serialize_only__ + [ 
         "hunger",
@@ -1007,6 +1079,27 @@ class Player(SkilledCharacter, RegenerativeCharacter): # player or playable npc
     def _normalize(self, v):
         length = math.hypot(v[0], v[1])
         return (v[0]/length, v[1]/length) if length != 0 else (0, 0)
+    def _angle(self, v1, v2):
+        dir_norm = self._normalize(v1)
+        vec_norm = self._normalize(v2)
+        # Compute dot product and angle
+        dot = dir_norm[0]*vec_norm[0] + dir_norm[1]*vec_norm[1]
+        angle_rad = math.acos(max(min(dot, 1.0), -1.0)) # Clamp dot to avoid domain errors
+        angle_deg = math.degrees(angle_rad)
+        return angle_deg
+    def _signed_angle(self, v1, v2):
+        dir_norm = self._normalize(v1)
+        vec_norm = self._normalize(v2)
+        # Dot product for angle magnitude
+        dot = dir_norm[0]*vec_norm[0] + dir_norm[1]*vec_norm[1]
+        dot = max(min(dot, 1.0), -1.0)  # Clamp to avoid domain errors
+        angle_rad = math.acos(dot)
+        # Cross product (scalar in 2D) to get the sign
+        cross = dir_norm[0]*vec_norm[1] - dir_norm[1]*vec_norm[0]
+        # Right-hand rule: positive if v2 is counter-clockwise from v1
+        if cross < 0: angle_rad = -angle_rad
+        angle_deg = math.degrees(angle_rad)
+        return angle_deg    
     def is_in_cone_vision(self,observer, point, direction=(0,-1), fov_deg=180):
         """
         Determines if a point is visible from the observer through a cone of vision.
@@ -1020,16 +1113,8 @@ class Player(SkilledCharacter, RegenerativeCharacter): # player or playable npc
         Returns:
         - True if the point is within the field of view, False otherwise
         """
-        # Compute vector from observer to point
         vec_to_point = (point[0] - observer[0], point[1] - observer[1])
-        dir_norm = self._normalize(direction)
-        vec_norm = self._normalize(vec_to_point)
-        # Compute dot product and angle
-        dot = dir_norm[0]*vec_norm[0] + dir_norm[1]*vec_norm[1]
-        angle_rad = math.acos(max(min(dot, 1.0), -1.0))  # Clamp dot to avoid domain errors
-        angle_deg = math.degrees(angle_rad)
-        # Compare with half the field of view
-        return angle_deg <= fov_deg / 2.0
+        return self._angle(direction, vec_to_point) <= fov_deg / 2.0
     def can_see_character(self, another, game_map, max_dist=7):
         if super().can_see_character(another, game_map, max_dist):
             return self.is_in_cone_vision( (self.x,self.y), (another.x, another.y), self.get_forward_direction(), self.field_of_view )
@@ -1063,6 +1148,21 @@ class Player(SkilledCharacter, RegenerativeCharacter): # player or playable npc
             self.can_use_tower_skill = True 
             self.can_use_bishop_skill = True 
             self.can_use_power_skill = True
+    def get_sprite_with_hud(self):
+        pix = QPixmap(self.get_sprite())
+        if pix is None: return None 
+        painter = QPainter(pix)
+        self.paint_hp_hud_to(painter)
+        painter.end()
+        return pix 
+    def paint_hp_hud_to(self, painter):
+        painter.setPen(QColor("black"))
+        painter.setBrush(QColor("red"))
+        painter.drawRect(0,TILE_SIZE-10,int(self.hp/self.max_hp*TILE_SIZE),5)
+    def paint_to(self, painter, game_instance = None):
+        Entity.paint_to(self, painter)
+        if game_instance and not (self is game_instance.player):
+            self.paint_hp_hud_to(painter)
 
 # Hero.add_to_party() || { Hero.remove_character() | Hero.place_character() } || {}
 # Hero.release_party() || { Hero.place_character() | Hero.draw() } || {}
@@ -1109,7 +1209,7 @@ class Hero(Player): # playable character that can "carry" a party
                 self.party_members.remove(key)
     def count_party(self):
         return len(self.party_members)
-                    
+    
 class Enemy(Character, OfensiveCharacter):
     __serialize_only__ = Character.__serialize_only__ + OfensiveCharacter.__serialize_only__ +["type","stance","canSeeCharacter","patrol_direction"]
     def __init__(self, name="", hp=30, x=50, y=50, b_generate_items = False):
@@ -1135,7 +1235,7 @@ class Zombie(Enemy):
         self.description = "Zombies, people affected by the plague, they are still alive but because of this strange disease their bodies smells like rotten flesh. Before they lose their minds, they try to acummulate food to satiate hunger, it's almost certain to find food with them ..."
         self.sprite = Tile.get_random_sprite("zombie")
     def do_damage(self):
-        return d(0, 10)
+        return d(5, 25)
     def generate_initial_items(self):
         if random.random() < 0.7:
             self.add_item(Food(name="bread", nutrition=random.randint(50, 100)))
@@ -1174,12 +1274,13 @@ class Mercenary(Rogue):
     
 class Bear(Enemy):
     __serialize_only__ = Enemy.__serialize_only__
-    def __init__(self, name="", hp=60 , x=50, y=50, b_generate_items = False):
+    def __init__(self, name="", hp=80 , x=50, y=50, b_generate_items = False):
         Enemy.__init__(self, name = name, hp = hp, x = x, y = y, b_generate_items = b_generate_items)
         self.description = "Bears, these woods are their home, stronger than any man, don't try to mess with them ..."
         self.sprite = "bear"
         self.activity = 0.1
         self.tolerance = 10 
+        self.base_damage = 20
     def generate_initial_items(self):
         self.add_item(Food(name="meat", nutrition=250))
     
@@ -1216,7 +1317,7 @@ class Tile(Container):
         if len(self.items) == 1: self.items[0].paint_to(painter)
         if len(self.items) > 1:
             painter.drawPixmap(0, 0, Tile.SPRITES.get("sack", self.get_default_pixmap() ))
-    def draw(self, scene, x, y, tile_size = TILE_SIZE):
+    def draw(self, scene, x, y, tile_size = TILE_SIZE, extra_pixmap = None, game_instance = None):
         # BEGIN Painter
         combined = QPixmap(tile_size, tile_size) # will be changed with QPainter 
         combined.fill(Qt.transparent)
@@ -1229,7 +1330,9 @@ class Tile(Container):
         # -- paint items 
         self.paint_items(painter) 
         # -- Char Paint 
-        if self.current_char: self.current_char.paint_to(painter) 
+        if self.current_char: self.current_char.paint_to(painter, game_instance = game_instance) 
+        if not extra_pixmap is None:
+            painter.drawPixmap(0, 0, extra_pixmap )
         # END Painter 
         painter.end()
         self.combined_sprite = combined
@@ -1265,7 +1368,12 @@ class Tile(Container):
         idx = self.get_layer_index(sprite_name)
         if idx is None: return 
         self.cosmetic_layer_sprite_keys.pop(idx)
-        
+    
+    @classmethod    
+    def get_rotated_sprite(cls, key, rotation = 0):
+        transform = QTransform().rotate(-rotation)
+        return cls.SPRITES[key].transformed( transform , mode = 1 )
+    
     @classmethod    
     def get_random_sprite(cls, key_filter=""):
         cdts = [ key for key in cls.SPRITES.keys() if key_filter in key ]

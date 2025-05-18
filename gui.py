@@ -11,7 +11,7 @@ import os
 from datetime import datetime
 
 # third-party
-from PyQt5.QtWidgets import QWidget, QListWidget, QVBoxLayout, QPushButton, QHBoxLayout, QMenu, QDialog, QLabel, QTextEdit, QSizePolicy, QInputDialog, QTabBar
+from PyQt5.QtWidgets import QWidget, QListWidget, QVBoxLayout, QPushButton, QHBoxLayout, QMenu, QDialog, QLabel, QTextEdit, QSizePolicy, QInputDialog, QTabBar, QSlider, QLayoutItem
 from PyQt5.QtCore import Qt, QEvent
 from PyQt5.QtGui import QTextCursor, QColor, QIcon
 
@@ -166,7 +166,100 @@ def add_simple_context_menu(widget, item_list = None, action_callback = lambda x
             if triggered_action  == act:
                 action_callback(act, **kwargs)
     widget.customContextMenuRequested.connect(show_context_menu)
-    
+def get_widget_list_from_layout(layout, widget_class):
+    sliders = []
+    for i in range(layout.count()):
+        item = layout.itemAt(i)
+        widget = item.widget()
+        if widget is not None:
+            if isinstance(widget, widget_class):
+                sliders.append(widget)
+        else:
+            # Check for nested layouts
+            child_layout = item.layout()
+            if child_layout is not None:
+                sliders.extend(get_slider_list(child_layout))  # recursive search
+    return sliders
+def get_slider_list(layout):
+    return get_widget_list_from_layout(layout = layout, widget_class = QSlider)
+def get_label_list(layout):
+    return get_widget_list_from_layout(layout = layout, widget_class = QLabel)
+
+# Inventory [ QSlider ] { pyqt5 }
+# 1. QSlider(Qt.Orientation) ; Constructs a slider (horizontal or vertical).
+# 2. setMinimum(value) ; Sets the minimum value of the slider.
+# 3. setMaximum(value) ; Sets the maximum value of the slider.
+# 4. setRange(min, max) ; Sets both minimum and maximum values.
+# 5. setValue(value) ; Sets the current slider value.
+# 6. value() ; Returns the current slider value.
+# 7. setOrientation(Qt.Horizontal or Qt.Vertical) ; Sets the slider's orientation.
+# 8. orientation() ; Returns the current orientation.
+# 9. setTickPosition(QSlider.TickPosition) ; Sets where ticks are drawn (e.g., TicksBelow).
+#10. tickPosition() ; Returns the tick position setting.
+#11. setTickInterval(interval) ; Sets the spacing between tick marks.
+#12. tickInterval() ; Returns the tick interval.
+#13. setSingleStep(step) ; Sets the step size for arrow key or scroll actions.
+#14. singleStep() ; Returns the current step size.
+#15. setPageStep(step) ; Sets how much the value changes on page up/down keys.
+#16. pageStep() ; Returns the page step value.
+#17. setTracking(bool) ; Enables or disables live value updates while dragging.
+#18. hasTracking() ; Returns whether tracking is enabled.
+#19. setInvertedAppearance(bool) ; Inverts visual direction of the slider.
+#20. setInvertedControls(bool) ; Inverts control behavior (e.g., key input).
+#21. setSliderPosition(position) ; Moves slider to a specific visual position.
+#22. sliderPosition() ; Returns the current slider's handle position.
+#23. setEnabled(bool) ; Enables or disables the slider.
+#24. isEnabled() ; Returns True if slider is enabled.
+#25. setVisible(bool) ; Shows or hides the slider.
+#26. valueChanged[int] ; Signal emitted when value changes (with int argument).
+#27. sliderPressed() ; Signal emitted when slider handle is pressed.
+#28. sliderReleased() ; Signal emitted when slider handle is released.
+#29. sliderMoved(int) ; Signal emitted when user moves the slider handle.
+#30. slider.valueChanged.connect(lambda val: print(f"New value: {val}"))
+
+def new_slider(minimum=0, maximum=100, value=0, orientation=Qt.Horizontal, layout=None):
+    slider = QSlider(orientation)
+    slider.setMinimum(minimum)
+    slider.setMaximum(maximum)
+    slider.setValue(value)
+    slider.setTickPosition(QSlider.TicksBelow)
+    slider.setTickInterval(10)
+    slider.setSingleStep(1)
+    slider.setStyleSheet("""
+        QSlider::groove:horizontal {
+            height: 6px;
+            background: rgba(255, 255, 255, 30);
+            border-radius: 3px;
+        }
+        QSlider::handle:horizontal {
+            background: rgba(255, 255, 255, 180);
+            border: 1px solid rgba(0, 0, 0, 80);
+            width: 14px;
+            height: 14px;
+            margin: -5px 0;
+            border-radius: 7px;
+        }
+        QSlider::handle:horizontal:hover {
+            background: rgba(0, 255, 255, 200);
+        }
+        QSlider::sub-page:horizontal {
+            background: rgba(0, 255, 255, 100);
+            border-radius: 3px;
+        }
+        QSlider::add-page:horizontal {
+            background: rgba(255, 255, 255, 20);
+            border-radius: 3px;
+        }
+    """)
+    # slider.setFocusPolicy(Qt.StrongFocus)
+    if layout is not None: layout.addWidget(slider)
+    return slider
+
+def new_horizontal_slider(label_text, minimum=0, maximum=100, value=0, layout=None):
+    slider = new_slider(minimum=minimum, maximum=maximum, value=value, orientation=Qt.Horizontal, layout=layout)
+    label = new_label(text=label_text, foreground='white', parent=None)
+    return VLayout() / label / slider
+
 # -- set window properties
 
 # 1. don't steals focus 
@@ -184,7 +277,53 @@ def set_properties_layout(layout):
     layout.setContentsMargins(10, 10, 10, 10)
     layout.setSpacing(5)
 
+# Inventory [ QPushButton ] { PyQt5 GUI button component }
+# 1. QPushButton(text, parent=None) ; Create a push button with optional text label
+# 2. .setText(str) ; Set the text displayed on the button
+# 3. .text() ; Get the current button text
+# 4. .setIcon(QIcon) ; Set an icon (image) on the button
+# 5. .icon() ; Get the current icon of the button
+# 6. .setIconSize(QSize) ; Set the display size of the button icon
+# 7. .setCheckable(bool) ; Make the button toggleable (like a switch)
+# 8. .isCheckable() ; Check if the button is checkable
+# 9. .setChecked(bool) ; Programmatically check/uncheck the button
+# 10. .isChecked() ; Return True if the button is checked
+# 11. .setEnabled(bool) ; Enable or disable the button
+# 12. .isEnabled() ; Check if the button is currently enabled
+# 13. .click() ; Programmatically click the button (emits `clicked` signal)
+# 14. .toggle() ; Toggle the checked state (if checkable)
+# 15. .setFlat(bool) ; Make button flat (no 3D shadow)
+# 16. .isFlat() ; Return True if the button is flat
+# 17. .setShortcut(QKeySequence or str) ; Set keyboard shortcut to trigger the button
+# 18. .setStyleSheet(str) ; Apply CSS-style custom styling to the button
+# 19. .clicked.connect(func) ; Connect a function to the button click event
+# 20. .pressed.connect(func) ; Connect a function to the button pressed-down event
+# 21. .released.connect(func) ; Connect a function to the button released event
+# 22. .toggled.connect(func) ; Connect a function to the toggled signal (checkable buttons)
+
+# Inventory [ QHBoxLayout ] { Horizontal layout manager in PyQt5 }
+# 1. QHBoxLayout(parent=None) ; Create a new horizontal layout
+# 2. .addWidget(widget) ; Add a widget to the layout, from left to right
+# 3. .addSpacing(pixels) ; Add fixed horizontal space (in pixels)
+# 4. .addStretch(stretch=1) ; Add stretchable empty space (pushes widgets apart)
+# 5. .insertWidget(index, widget) ; Insert a widget at a specific position
+# 6. .insertSpacing(index, pixels) ; Insert fixed space at specific index
+# 7. .insertStretch(index, stretch=1) ; Insert stretch at a specific index
+# 8. .addLayout(layout) ; Nest another layout inside this one
+# 9. .setSpacing(pixels) ; Set the space between widgets in the layout
+# 10. .setContentsMargins(left, top, right, bottom) ; Set outer margins of the layout
+# 11. .count() ; Return number of items (widgets/spacers) in the layout
+# 12. .itemAt(index) ; Get the layout item at given index
+# 13. .takeAt(index) ; Remove and return the item at given index
+# 14. .removeWidget(widget) ; Remove a specific widget from the layout
+# 15. .invalidate() ; Mark the layout as dirty, forcing a relayout
+# 16. .setAlignment(widget or layout, alignment) ; Align a specific widget or layout (e.g. Qt.AlignRight)
+
 # Classes 
+# -> JournalWindow.update() || .update_position() | .update_character_buttons() 
+# -> JournalWindow.update() || .update_position() || set_relative_horizontal_position() 
+# -> JournalWindow() || ... .build_parts() | .assemble_parts() | .update_position() 
+# -> JournalWindow() || ... .build_parts() || ... .update_character_buttons() 
 class JournalWindow(Dialog):
     def __init__(self, parent=None):
         Dialog.__init__(self, parent)
@@ -199,69 +338,39 @@ class JournalWindow(Dialog):
     def build_parts(self):
         self.layout = VLayout() # vertical 
         self.button_layout = HLayout()
+        self.char_button_list = []
         self.update_character_buttons()
         self.text_edit = new_text(foreground = "yellow")
         self.save_button = new_button("Save", self.save_journal)
         self.log_button = new_button("Log Entry", self.log_diary_entry)
-    def update_character_buttons(self):
-
-        # Inventory [ QPushButton ] { PyQt5 GUI button component }
-        # 1. QPushButton(text, parent=None) ; Create a push button with optional text label
-        # 2. .setText(str) ; Set the text displayed on the button
-        # 3. .text() ; Get the current button text
-        # 4. .setIcon(QIcon) ; Set an icon (image) on the button
-        # 5. .icon() ; Get the current icon of the button
-        # 6. .setIconSize(QSize) ; Set the display size of the button icon
-        # 7. .setCheckable(bool) ; Make the button toggleable (like a switch)
-        # 8. .isCheckable() ; Check if the button is checkable
-        # 9. .setChecked(bool) ; Programmatically check/uncheck the button
-        # 10. .isChecked() ; Return True if the button is checked
-        # 11. .setEnabled(bool) ; Enable or disable the button
-        # 12. .isEnabled() ; Check if the button is currently enabled
-        # 13. .click() ; Programmatically click the button (emits `clicked` signal)
-        # 14. .toggle() ; Toggle the checked state (if checkable)
-        # 15. .setFlat(bool) ; Make button flat (no 3D shadow)
-        # 16. .isFlat() ; Return True if the button is flat
-        # 17. .setShortcut(QKeySequence or str) ; Set keyboard shortcut to trigger the button
-        # 18. .setStyleSheet(str) ; Apply CSS-style custom styling to the button
-        # 19. .clicked.connect(func) ; Connect a function to the button click event
-        # 20. .pressed.connect(func) ; Connect a function to the button pressed-down event
-        # 21. .released.connect(func) ; Connect a function to the button released event
-        # 22. .toggled.connect(func) ; Connect a function to the toggled signal (checkable buttons)
-        
-        # Inventory [ QHBoxLayout ] { Horizontal layout manager in PyQt5 }
-        # 1. QHBoxLayout(parent=None) ; Create a new horizontal layout
-        # 2. .addWidget(widget) ; Add a widget to the layout, from left to right
-        # 3. .addSpacing(pixels) ; Add fixed horizontal space (in pixels)
-        # 4. .addStretch(stretch=1) ; Add stretchable empty space (pushes widgets apart)
-        # 5. .insertWidget(index, widget) ; Insert a widget at a specific position
-        # 6. .insertSpacing(index, pixels) ; Insert fixed space at specific index
-        # 7. .insertStretch(index, stretch=1) ; Insert stretch at a specific index
-        # 8. .addLayout(layout) ; Nest another layout inside this one
-        # 9. .setSpacing(pixels) ; Set the space between widgets in the layout
-        # 10. .setContentsMargins(left, top, right, bottom) ; Set outer margins of the layout
-        # 11. .count() ; Return number of items (widgets/spacers) in the layout
-        # 12. .itemAt(index) ; Get the layout item at given index
-        # 13. .takeAt(index) ; Remove and return the item at given index
-        # 14. .removeWidget(widget) ; Remove a specific widget from the layout
-        # 15. .invalidate() ; Mark the layout as dirty, forcing a relayout
-        # 16. .setAlignment(widget or layout, alignment) ; Align a specific widget or layout (e.g. Qt.AlignRight)
-        
+    def update_character_buttons(self):        
         def button_callback(k,v):
             print(k,v)
+            self.save_journal()
             if not self.parent().can_select_player(v): return 
             self.parent().set_player(k) 
             self.parent().draw() 
             self.parent().setFocus()
-            
+            if self.parent().inventory_window: self.parent().inventory_window.update_inventory(self.parent().player)
+            self.load_journal()
         clear_layout(self.button_layout)
+        self.char_button_list.clear()
         for k,v in self.parent().players.items():
             if not self.parent().can_select_player(v): continue 
             button = new_button(label = "", callback = lambda x,a=k,b=v: button_callback(a,b), foreground='white')
-            pix = v.get_sprite()
+            self.char_button_list.append( [ button, v ] )
+            pix = v.get_sprite_with_hud()
             button.setIcon(QIcon(pix))
             button.setIconSize(pix.size())
             self.button_layout / button
+    def update_char_button_images(self):
+        if not self.char_button_list: return 
+        for L in self.char_button_list:
+            button = L[0]
+            ply = L[1]
+            pix = ply.get_sprite_with_hud()
+            button.setIcon(QIcon(pix))
+            button.setIconSize(pix.size())
     def assemble_parts(self):
         set_properties_layout(self.layout)
         self.layout / self.button_layout 
@@ -304,14 +413,17 @@ class JournalWindow(Dialog):
                 return "I'm on southeast part of this region, where should I go ? ..."
         return ""
     def update(self):
+        self.load_journal()
         self.update_position()
         self.update_character_buttons()
     def update_position(self):
         set_relative_horizontal_position(self, self.parent(), side = "right")
     def load_journal(self, slot=1):
         """Load journal contents from the current slot's journal file."""
+        if not self.parent(): return
+        current_char_name = self.parent().player.name 
         saves_dir = "./saves"
-        journal_file = os.path.join(saves_dir, f"journal_{slot}.txt")
+        journal_file = os.path.join(saves_dir, f"journal_{slot}_{current_char_name}.txt")
         try:
             with open(journal_file, "r", encoding="utf-8") as f:
                 self.text_edit.setPlainText(f.read())
@@ -329,9 +441,10 @@ class JournalWindow(Dialog):
     def save_journal(self):
         """Save journal contents to the current slot's journal file."""
         if not self.parent(): return
+        current_char_name = self.parent().player.name 
         slot = self.parent().current_slot if hasattr(self.parent(), 'current_slot') else 1
         saves_dir = "./saves"
-        journal_file = os.path.join(saves_dir, f"journal_{slot}.txt")
+        journal_file = os.path.join(saves_dir, f"journal_{slot}_{current_char_name}.txt")
         try:
             os.makedirs(saves_dir, exist_ok=True)
             with open(journal_file, "w", encoding="utf-8") as f:
@@ -403,6 +516,7 @@ class MessagePopup(Dialog):
         self / ( self.layout/self.label )
         self.base_height = 31 # Height per message
         self.max_messages = 15 # Limit to prevent oversized pop-up
+        set_relative_vertical_position(self, self.parent(), 'down', 10)
         self.hide()
     def set_message(self, messages):
         """Display a list of messages, newest at the top."""
@@ -766,7 +880,39 @@ class InventoryWindow(Dialog):
             new_idx = len(self.list_widget)//2
         self.list_widget.setCurrentRow(new_idx)
         self.update_selected_item_label_content() # self.list_widget_objects[new_idx] )
-    
+class BehaviourController(Dialog):
+    def __init__(self, parent=None):
+        Dialog.__init__(self, parent)
+        set_properties_non_modal_popup(self, "Behaviour Controller")
+        self.setFixedWidth(500)
+        self.build_parts()
+        self.assemble_parts()
+        self.update()
+    def build_parts(self):
+        self.layout = VLayout() # vertical 
+        self.activity_slider = new_horizontal_slider("Activity Level",minimum=1, maximum=100) # porcentagem
+        self.tolerance_slider = new_horizontal_slider("Distance Tolerance",minimum=1, maximum=10) # valor 
+    def assemble_parts(self):
+        set_properties_layout(self.layout)
+        self.layout / self.activity_slider / self.tolerance_slider
+        self / self.layout 
+        get_slider_list(self.activity_slider)[0].valueChanged.connect( self.on_change_activity )
+        get_slider_list(self.tolerance_slider)[0].valueChanged.connect( self.on_change_tolerance )
+    def on_change_tolerance(self, value):
+        player = self.parent().player
+        if not player: return 
+        player.tolerance = get_slider_list(self.tolerance_slider)[0].value()
+        self.update()
+    def on_change_activity(self, value):
+        player = self.parent().player
+        if not player: return 
+        player.activity = get_slider_list(self.activity_slider)[0].value()/100.0
+        self.update()
+    def update(self):
+        get_label_list(self.activity_slider)[0].setText( f"Activity Level : { self.parent().player.activity }" )
+        get_label_list(self.tolerance_slider)[0].setText( f"Distance Tolerance : { self.parent().player.tolerance }" )
+        get_slider_list(self.activity_slider)[0].setValue( int(self.parent().player.activity*100) ) 
+        get_slider_list(self.tolerance_slider)[0].setValue( max(1,int(self.parent().player.tolerance)) )
 # menu components
 def common_menu_parts(menu, item, instance, game_instance, previous_menu = None):
     """ return True means that the menu should close, return False means that the caller should return, None if caller should process other statements. """
@@ -968,9 +1114,10 @@ def debugging_menu(menu, item, instance, game_instance):
                 print("Test Animation")
                 x = game_instance.player.x
                 y = game_instance.player.y
-                positions = game_instance.map.find_path(x, y, x, y-3) 
-                print(positions)
+                
+                positions = game_instance.map.find_path(x, y, x-3, y) 
                 game_instance.draw_animation_on_grid(sprite_key="player", positions = positions)
+                
                 instance.close()
                 return 
             case "Display Players Info >":

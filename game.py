@@ -186,26 +186,29 @@ class Game_VIEWPORT:
             rx, ry = self.rotate_vector_for_camera(dx, dy)
             screen_x = anchor_screen_x + (rx) * self.tile_size
             screen_y = anchor_screen_y + (ry) * self.tile_size
-
             if self.is_ingrid(x, y) and self.is_inview(screen_x, screen_y):
                 tile = self.map.get_tile(x, y)
                 if tile:
                     if ent_x == x and ent_y == y:
-                        tile.add_layer(self.sprite_key)
-                    tile.draw(self.scene, screen_x, screen_y)
-                    if ent_x == x and ent_y == y:
-                        tile.remove_layer(self.sprite_key)
+                        tile.draw( self.scene, screen_x, screen_y, extra_pixmap = Tile.get_rotated_sprite(key = self.animation_sprite_key, rotation=self.animation_sprite_rotation), game_instance = self )
+                    else:
+                        tile.draw( self.scene, screen_x, screen_y, game_instance = self)
         self.scene.setSceneRect(0, 0, self.view_width * self.tile_size, self.view_height * self.tile_size)
         self.animation_index += 1
+    def _get_diff(self, v2, v1): #  v2 - v1
+        return (v2[0]-v1[0], v2[1]-v1[1])
     def draw_animation_on_grid(self, sprite_key, positions):
         if not positions: return
         self.flag_is_animating = True  # <<< BLOCK INPUT
         self.animation_index = 0
         self.animation_positions = positions
-        self.sprite_key = sprite_key
+        self.animation_sprite_rotation = 0
+        if len(positions)>1:
+            self.animation_sprite_rotation = self.player._signed_angle( self._get_diff(positions[1], positions[0]), self.player.get_forward_direction() )
+        self.animation_sprite_key = sprite_key
         self.animation_timer = QTimer()
         self.animation_timer.timeout.connect(self.draw_next_frame)
-        self.animation_timer.start(50)  # 1000ms = 1s per frame
+        self.animation_timer.start(15)  # 1000ms = 1s per frame
     def draw_grid(self):
         self.scene.clear()
         tiles_to_draw = self.get_tiles_to_draw()
@@ -219,7 +222,7 @@ class Game_VIEWPORT:
             screen_y = anchor_screen_y + (ry) * self.tile_size
             if self.is_ingrid(x,y) and self.is_inview(screen_x, screen_y):
                 tile = self.map.get_tile(x, y)
-                if tile: tile.draw(self.scene, screen_x, screen_y)
+                if tile: tile.draw(self.scene, screen_x, screen_y, game_instance = self)
         self.scene.setSceneRect(0, 0, self.view_width * self.tile_size, self.view_height * self.tile_size)
         self.dirty_tiles.clear() 
     def draw_hud(self):
@@ -260,6 +263,34 @@ class Game_VIEWPORT:
         pos_label.setPos(self.view_width*self.tile_size- pos_label_width - 10, 10)
         pos_label.setZValue(10) 
         self.scene.addItem(pos_label)
+
+        # Inventory [ QGraphicsRectItem ] { pyqt5 }
+        # 1. QGraphicsRectItem() ; Creates a default rectangular graphics item.
+        # 2. QGraphicsRectItem(rect: QRectF) ; Creates the item with the specified rectangle.
+        # 3. QGraphicsRectItem(x, y, w, h) ; Alternative constructor with coordinates.
+        # 4. setRect(x, y, w, h) ; Sets the rectangle's geometry using coordinates.
+        # 5. setRect(QRectF) ; Sets the rectangle geometry using a QRectF.
+        # 6. rect() ; Returns the current QRectF of the item.
+        # 7. setPen(QPen) ; Sets the pen used to draw the rectangle’s outline.
+        # 8. setBrush(QBrush) ; Sets the brush used to fill the rectangle.
+        # 9. pen() ; Returns the current QPen.
+        #10. brush() ; Returns the current QBrush.
+        #11. paint(painter, option, widget) ; Custom painting routine (can be overridden).
+        #12. boundingRect() ; Returns the outer bounds of the item for painting & collision.
+        #13. contains(point) ; Returns True if the item contains the given point.
+        #14. shape() ; Returns the precise shape of the item as a QPainterPath.
+        #15. setPos(x, y) ; Sets the position of the item in the scene.
+        #16. pos() ; Returns the position of the item.
+        #17. setRotation(angle) ; Rotates the item around its transform origin point.
+        #18. rotation() ; Returns the rotation angle.
+        #19. setTransform(transform, combine=False) ; Applies a QTransform to the item.
+        #20. setFlags(flags) ; Sets item interaction flags (e.g. selectable, movable).
+        #21. setZValue(z) ; Sets the z-order stacking value.
+        #22. zValue() ; Returns the current z-order value.
+        #23. setParentItem(item) ; Sets another QGraphicsItem as this item’s parent.
+        #24. parentItem() ; Returns the parent item.
+        #25. collidesWithItem(item) ; Checks collision with another item.
+        #26. collidesWithPath(path) ; Checks collision with a QPainterPath.
 
         # HP Bar (Red)
         hp_ratio = self.player.hp / self.player.max_hp
@@ -359,6 +390,8 @@ class Game_PLAYERS:
         self.player = new_player
         self.current_player = name 
         self.player.party = False
+        if self.behaviour_controller_window: self.behaviour_controller_window.update()
+        if self.journal_window: self.journal_window.load_journal()
         return True 
     def set_player_name(self,key,new_name):
         player = self.players.get(key,None)
@@ -786,6 +819,7 @@ class Game_GUI:
         self.setWindowTitle("PyQt Rogue Like")
         self.setFixedSize(self.view_width * self.tile_size, self.view_height * self.tile_size)
         # --
+        self.behaviour_controller_window = None 
         self.inventory_window = None  # Initialize later on demand
         # Initialize message window
         self.message_popup = MessagePopup(self)  # Set Game as parent
@@ -959,6 +993,7 @@ class Game_ITERATION:
             self.Event_NewDay()
         if self.turn % 5 == 0: # refresh some variables 
             self.last_encounter_description = ""
+            if self.journal_window: self.journal_window.update_char_button_images()
         if self.turn % 100 == 0:
             self.Event_Every_100_Turns()
     def Event_Every_100_Turns(self):
@@ -1035,9 +1070,29 @@ class Game_ITERATION:
                 self.remove_player(event.target.name)
                 return 
             self.map.remove_character(event.target)
+
+class DraggableView(QGraphicsView):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._drag_pos = None
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self._drag_pos = event.globalPos() - self.window().frameGeometry().topLeft()
+            event.accept()
+        else:
+            super().mousePressEvent(event)
+    def mouseMoveEvent(self, event):
+        if self._drag_pos is not None and event.buttons() & Qt.LeftButton:
+            self.window().move(event.globalPos() - self._drag_pos)
+            event.accept()
+        else:
+            super().mouseMoveEvent(event)
+    def mouseReleaseEvent(self, event):
+        self._drag_pos = None
+        super().mouseReleaseEvent(event)
             
 # Main Window Class 
-class Game(QGraphicsView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_PLAYERS, Game_MAPTRANSITION, Game_DATA, Game_GUI, Game_ITERATION):
+class Game(DraggableView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_PLAYERS, Game_MAPTRANSITION, Game_DATA, Game_GUI, Game_ITERATION):
     __serialize_only__ = [
         "version",
         "rotation",
@@ -1051,7 +1106,7 @@ class Game(QGraphicsView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_P
         "certificates"
     ]
     def __init__(self):
-        QGraphicsView.__init__(self)
+        DraggableView.__init__(self)
         self.setFocusPolicy(Qt.StrongFocus) 
         #print(Game.__mro__)
         Serializable.__init__(self)
@@ -1209,6 +1264,14 @@ class Game(QGraphicsView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_P
                 else:
                     self.inventory_window.update_inventory(self.player)
                 return True     
+            case Qt.Key_Z:
+                if not self.behaviour_controller_window:
+                    self.behaviour_controller_window = BehaviourController(self)
+                if self.behaviour_controller_window.isVisible():
+                    self.behaviour_controller_window.hide()
+                else:
+                    self.behaviour_controller_window.show()
+                    self.behaviour_controller_window.update()
         match key: # music 
             case Qt.Key_M:  # Toggle music
                 self.toggle_music()
