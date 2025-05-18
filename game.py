@@ -931,7 +931,7 @@ class Game_ITERATION:
             largest_dt = dt6
             culprit = txt6
         
-        print(f"{culprit} : {100.0*largest_dt/t:.1f} %")
+        # print(f"{culprit} : {100.0*largest_dt/t:.1f} %")
         
         return ( self.player.hp < prev_hp )
     def game_iteration(self):
@@ -1004,6 +1004,15 @@ class Game_ITERATION:
         self.player.update_available_skills()
     def Event_NewDay(self):
         print(f"Day {self.current_day}")
+        if d() < 1.0/3.0: # spawn raiders 1/3 of time
+            for i in range(int(d(1,5))):
+                x,y = self.map.get_random_walkable_tile()
+                if not x or not y: continue 
+                enemy = self.map.generate_enemy_by_chance_by_list_at(x, y, RAIDERS_TABLE)
+                if enemy:
+                    print("Raider Generated")
+                    self.map.enemies.append(enemy)
+                    self.map.place_character(enemy)
         self.player.days_survived += 1
         if self.current_day == 5:
             self.journal_window.append_text("(Skill - 5 days) I'm in full shape now, I'm feeling agile, use Ctrl to dodge and move two tiles backward ...") 

@@ -15,6 +15,38 @@ from PyQt5.QtWidgets import QWidget, QListWidget, QVBoxLayout, QPushButton, QHBo
 from PyQt5.QtCore import Qt, QEvent
 from PyQt5.QtGui import QTextCursor, QColor, QIcon
 
+# Inventory [ QWidget ]
+# 1. QWidget(parent=None) ; Initializes a widget, optionally with a parent.
+# 2. .show() ; Displays the widget on the screen.
+# 3. .hide() ; Hides the widget from the screen.
+# 4. .resize(width, height) ; Sets the widget size.
+# 5. .move(x, y) ; Moves the widget to (x, y) coordinates.
+# 6. .setWindowTitle(str) ; Sets the window title.
+# 7. .setGeometry(x, y, w, h) ; Moves and resizes widget in one call.
+# 8. .setFixedSize(w, h) ; Sets a fixed size for the widget.
+# 9. .close() ; Closes the widget.
+#10. .isVisible() ; Returns True if widget is visible.
+#11. .setStyleSheet(str) ; Applies CSS-like styling.
+#12. .update() ; Triggers a repaint of the widget.
+#13. .repaint() ; Immediately repaints the widget.
+#14. .setEnabled(bool) ; Enables/disables the widget.
+#15. .setLayout(QLayout) ; Sets a layout manager for child widgets.
+#16. .setParent(QWidget) ; Sets the parent widget.
+#17. .setToolTip(str) ; Sets a tooltip shown on hover.
+#18. .setFocus() ; Gives keyboard focus to this widget.
+#19. .hasFocus() ; Returns True if the widget has focus.
+#20. .grab() ; Captures the widget's content as a QPixmap.
+#21. .event(QEvent) ; Base event handler (can be overridden).
+#22. .mousePressEvent(event) ; Handles mouse press (custom override).
+#23. .keyPressEvent(event) ; Handles key press (custom override).
+#24. .paintEvent(event) ; Handles painting the widget (custom override).
+#25. .minimumSizeHint() ; Suggests a minimum size.
+#26. .sizeHint() ; Suggests a preferred size.
+#27. .setWindowFlags(Qt.WindowFlags) ; Sets window behavior (e.g., frameless).
+#28. .setAttribute(Qt.WidgetAttribute, on=True) ; Sets widget attributes.
+#29. .pos() ; Returns widget position.
+#30. .size() ; Returns widget size.
+
 # -- helpers 
 def item_text_color(game_item):
     if isinstance(game_item, Weapon):
@@ -1139,7 +1171,7 @@ def debugging_menu(menu, item, instance, game_instance):
                 instance.close()
                 return 
             case "Generate Enemies >":
-                instance.set_list("Generate Enemies >", ["Zombie","Bear","Rogue","Mercenary","Player","clear",".."])
+                instance.set_list("Generate Enemies >", ["Raider","Zombie","Bear","Rogue","Mercenary","Player","clear",".."])
                 return 
             case "Generate Dungeon Entrance":
                 if game_instance.map.add_dungeon_entrance_at(player.x, player.y):
@@ -1186,7 +1218,19 @@ def debugging_menu(menu, item, instance, game_instance):
         dx, dy = player.get_forward_direction()
         dx = 2*dx 
         dy = 2*dy
-        match item:                        
+        match item:
+            case "Raider":
+                # __init__(self, name='', hp=30, x=50, y=50, b_generate_items=False, sprite='enemy')
+                for i in range(3):
+                    x,y = game_instance.map.get_random_walkable_tile()
+                    if not x or not y: continue 
+                    enemy = game_instance.map.generate_enemy_by_chance_by_list_at(x, y, RAIDERS_TABLE)
+                    if enemy:
+                        game_instance.map.enemies.append(enemy)
+                        game_instance.map.place_character(enemy)
+                game_instance.draw() 
+                instance.close() 
+                return 
             case "clear":
                 for char in game_instance.map.enemies: game_instance.map.remove_character(char)
                 game_instance.map.enemies.clear()
@@ -1253,7 +1297,7 @@ def debugging_menu(menu, item, instance, game_instance):
                 game_instance.draw()    
                 instance.close()
             case "Tower":
-                game_instance.map.set_tile(player.x, player.y, GuardTower())
+                game_instance.map.set_tile(player.x, player.y, GuardTower(x=player.x, y=player.y))
                 game_instance.draw()    
                 instance.close()     
 
