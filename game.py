@@ -1148,6 +1148,7 @@ class Game(DraggableView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_P
             self.alt_pressed = False
     def key_press_move_app_window(self, key):
         """ return True means that the keyPressEvent should return imediatly """
+        if True: return False # disable for now 
         if key == Qt.Key_Alt and not self.alt_pressed: self.alt_pressed = True
         if self.alt_pressed:
             if key == Qt.Key_Left:

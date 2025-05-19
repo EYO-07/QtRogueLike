@@ -916,7 +916,7 @@ class BehaviourController(Dialog):
     def __init__(self, parent=None):
         Dialog.__init__(self, parent)
         set_properties_non_modal_popup(self, "Behaviour Controller")
-        self.setFixedWidth(500)
+        self.resize(400,100)
         self.build_parts()
         self.assemble_parts()
         self.update()
@@ -1044,10 +1044,12 @@ def build_menu(menu, item, instance, game_instance):
     if common_menu_parts(menu, item, instance, game_instance): 
         instance.close()
         return 
+    x = game_instance.player.x 
+    y = game_instance.player.y    
     match item:
         case "Guard Tower":
             game_instance.certificates.remove("Guard Tower") 
-            game_instance.map.set_tile(game_instance.player.x, game_instance.player.y, GuardTower())
+            game_instance.map.set_tile(x, y, GuardTower(x=x,y=y))
             game_instance.map.update_buildings_list()
             game_instance.map.place_character(game_instance.player)
             game_instance.draw() 
@@ -1055,7 +1057,7 @@ def build_menu(menu, item, instance, game_instance):
             return 
         case "Lumber Mill":
             game_instance.certificates.remove("Lumber Mill") 
-            game_instance.map.set_tile(game_instance.player.x, game_instance.player.y, LumberMill(wood=0))
+            game_instance.map.set_tile(x, y, LumberMill(x=x,y=y,wood=0))
             game_instance.map.update_buildings_list()
             game_instance.map.place_character(game_instance.player)
             game_instance.draw() 
@@ -1063,7 +1065,7 @@ def build_menu(menu, item, instance, game_instance):
             return 
         case "Farm":
             game_instance.certificates.remove("Farm") 
-            game_instance.map.set_tile(game_instance.player.x, game_instance.player.y, Mill(food=0))
+            game_instance.map.set_tile(x, y, Mill(x=x,y=y,food=0))
             game_instance.map.update_buildings_list()
             game_instance.map.place_character(game_instance.player)
             game_instance.draw()    
@@ -1226,6 +1228,7 @@ def debugging_menu(menu, item, instance, game_instance):
                     if not x or not y: continue 
                     enemy = game_instance.map.generate_enemy_by_chance_by_list_at(x, y, RAIDERS_TABLE)
                     if enemy:
+                        print(enemy)
                         game_instance.map.enemies.append(enemy)
                         game_instance.map.place_character(enemy)
                 game_instance.draw() 

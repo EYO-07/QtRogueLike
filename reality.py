@@ -453,7 +453,7 @@ class Fireweapon(Weapon, SpecialSkillWeapon): # interface class
     __serialize_only__ = Weapon.__serialize_only__ + ["ammo", "range", "projectile_sprite","ammo_type"]
     def __init__(self, 
             name="Crossbow", 
-            damage=7,
+            damage=5,
             description="", 
             weight=1, 
             stamina_consumption=1, 
@@ -482,7 +482,7 @@ class Fireweapon(Weapon, SpecialSkillWeapon): # interface class
         if not target or not positions:
             return False
         game.draw_animation_on_grid(sprite_key = self.projectile_sprite, positions = positions)
-        game.events.append( AttackEvent(char, target, d(self.damage/3.0, 1.5*self.damage)) )
+        game.events.append( AttackEvent(char, target, d(self.damage/1.5, 2.0*self.damage)) )
         return True 
     def use_special_F(self, char, game):
         # print("Fireweapon.use_special_F() || ...")
@@ -856,7 +856,7 @@ class BehaviourCharacter(Entity): # interface : artificially controlled characte
         if isinstance(primary, Fireweapon):            
             target, path = primary.find_target(self, game_instance)
             if primary.perform_attack(self, target, path, game_instance):
-                #print("behaviour_update() || Attack Performed || ", target, path )
+                primary.do_ammo_consumption() # maybe add full stats update, but for simplicity
                 return True 
         if self.pursue_target(entities, game_instance, default_target): return True 
         self.random_walk(game_instance) 
@@ -1248,6 +1248,7 @@ class Raider(Enemy): # interface class, is an enemy that will try to find the ne
     def __init__(self, name="", hp=30, x=50, y=50, b_generate_items = False, sprite = "enemy"):
         Enemy.__init__(self, name=name, hp=hp, x=x, y=y, b_generate_items = b_generate_items)
         self.sprite = sprite 
+        self.base_damage = 5
     def pursue_target(self, entities, game_instance, default_target = None):
         """ return True if a behaviour is selected, return False if no behaviour was select so the entity is free to perform another task """
         enemy, distance = self.get_closest_visible(entities, game_instance, default_target)
@@ -1307,6 +1308,16 @@ class Raider(Enemy): # interface class, is an enemy that will try to find the ne
         if random.random() < 0.3:
             self.add_item(Food(name="bread", nutrition=random.randint(50, 100)))
 
+class RangedRaider(Raider):
+    __serialize_only__ = Raider.__serialize_only__
+    def __init__(self, name="", hp=30, x=50, y=50, b_generate_items = False, sprite = "enemy"):
+        Raider.__init__(self, name=name, hp=hp, x=x, y=y, b_generate_items = b_generate_items, sprite = sprite)
+    def generate_initial_items(self):
+        # __init__(self, name='Crossbow', damage=7, description='', weight=1, stamina_consumption=1, durability_factor=0.995, ammo=0, range=12, projectile_sprite='bolt', ammo_type='bolt')
+        self.equip_item(Fireweapon(name = "Crossbow", damage = 5, ammo=70, range=7, projectile_sprite='bolt', ammo_type='bolt'), "primary_hand")
+        if random.random() < 0.3:
+            self.add_item(Food(name="bread", nutrition=random.randint(50, 100)))
+
 class Zombie(Enemy):
     __serialize_only__ = Enemy.__serialize_only__
     def __init__(self, name="", hp=40, x=50, y=50, b_generate_items = False):
@@ -1331,6 +1342,7 @@ class Rogue(Enemy):
         self.sprite = "rogue"
         self.activity = 0.2 
         self.tolerance = 7 
+        self.base_damage = 5
     def generate_initial_items(self):
         self.equip_item(Sword("Long_Sword", damage=10), "primary_hand")
         if random.random() < 0.3:
@@ -1345,6 +1357,7 @@ class Mercenary(Rogue):
         self.sprite = "mercenary"
         self.activity = 0.1 
         self.tolerance = 10 
+        self.base_damage = 5
     def generate_initial_items(self):
         self.equip_item(Mace("mace", damage=10), "primary_hand")
         if random.random() < 0.3:
@@ -1720,6 +1733,7 @@ class Castle(TileBuilding):
         self.menu_list = []    
     def production(self):
         if self.b_enemy: return 
+        if self.villagers == 0: self.villagers = 0.1
         self.villagers = min( 1.005*self.villagers, self.villagers_max )
         self.food += d(0,self.villagers/PROD_INV_FACTOR)
     def action(self):
@@ -1919,15 +1933,24 @@ class GuardTower(TileBuilding):
             if "Recruit Swordman" in current_item:
                 if self.food >= 500:
                     if self.new_swordman(game_instance):
-                        self.villagers -= 5
+                        self.villagers -= 2
                         self.food -= 500 
+                else:
+                    game_instance.add_message("Can't afford to purchase Swordman ...")
+                menu_instance.close()
+            if "Recruit Crossbowman" in current_item:
+                if self.food >= 400 and self.wood >= 700:
+                    if self.new_crossbowman(game_instance):
+                        self.villagers -= 3
+                        self.food -= 400 
+                        self.wood -= 700 
                 else:
                     game_instance.add_message("Can't afford to purchase Swordman ...")
                 menu_instance.close()
             if "Recruit Mounted Knight" in current_item:
                 if self.food >= 700 and self.wood >= 1200:
                     if self.new_mounted_knight(game_instance):
-                        self.villagers -= 10 
+                        self.villagers -= 5 
                         self.food -= 700 
                         self.wood -= 1200 
                 else:
@@ -1949,13 +1972,14 @@ class GuardTower(TileBuilding):
             f"-> wood: {self.wood:.0f}",
             "Overview >",
             "Recruit Swordman (500 Food)",
+            "Recruit Crossbowman (400 Food, 700 Wood)",
             "Recruit Mounted Knight (700 Food 1200 Wood)",
             "Garrison >",
             "Resources >",
             "Exit"
         ]
     def new_swordman(self, game_instance):
-        if self.villagers <= 5:
+        if self.villagers <= 2:
             game_instance.add_message("There are no villagers to recruit ...")
             return False 
         dx, dy = game_instance.player.get_forward_direction()
@@ -1986,7 +2010,7 @@ class GuardTower(TileBuilding):
         game_instance.draw()
         return True
     def new_mounted_knight(self, game_instance): # not used yet 
-        if self.villagers <= 10:
+        if self.villagers <= 5:
             game_instance.add_message("There are no villagers to recruit ...")
             return False 
         dx, dy = game_instance.player.get_forward_direction()
@@ -2017,8 +2041,39 @@ class GuardTower(TileBuilding):
         game_instance.dirty_tiles.add((game_instance.player.x+dx, game_instance.player.y+dy))
         game_instance.draw()
         return True    
+    def new_crossbowman(self, game_instance):
+        if self.villagers <= 3:
+            game_instance.add_message("There are no villagers to recruit ...")
+            return False 
+        dx, dy = game_instance.player.get_forward_direction()
+        player = game_instance.player 
+        spawn_tile = game_instance.map.get_tile(player.x+dx, player.y + dy)
+        if not spawn_tile:
+            game_instance.add_message("Can't generate player at this position, please rotate the current character")
+            return False
+        if spawn_tile.current_char:
+            game_instance.add_message("Can't generate player at this position, please rotate the current character")
+            return False
+        npc_name = "Crossbowman_"+rn(7)
+        npc_obj = game_instance.add_player(
+            key = npc_name, 
+            name = npc_name, 
+            hp = 45,
+            x = game_instance.player.x+dx, 
+            y = game_instance.player.y+dy, 
+            b_generate_items = False, 
+            current_map = game_instance.current_map,
+            sprite = "crossbowman"
+        )
+        npc_obj.equip_item(Fireweapon(name = "Crossbow", damage = 5, ammo=70, range=7, projectile_sprite='bolt', ammo_type='bolt'), "primary_hand")
+        npc_obj.hunger = npc_obj.max_hunger
+        game_instance.place_players()
+        game_instance.dirty_tiles.add((game_instance.player.x+dx, game_instance.player.y+dy))
+        game_instance.draw()
+        return True
     def production(self):
         if self.b_enemy: return 
+        if self.villagers == 0: self.villagers = 0.1
         self.villagers = min( 1.005*self.villagers, self.villagers_max )
 
 # --- END 

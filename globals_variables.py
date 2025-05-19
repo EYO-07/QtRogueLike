@@ -87,7 +87,9 @@ SPRITE_NAMES_CHARACTERS = SPRITE_NAMES_PLAYABLES + [
     "mercenary",
     "swordman",
     "mounted_knight",
-    "evil_swordman"
+    "evil_swordman",
+    "crossbowman",
+    "evil_crossbowman"
 ]
 SPRITE_NAMES_FOODS = [
     "food", 
@@ -192,8 +194,10 @@ TILE_BUILDING_ENEMY_TABLE = [
 ]
 
 # __init__(self, name='', hp=30, x=50, y=50, b_generate_items=False, sprite='enemy')
+# RangedRaider
 
 RAIDERS_TABLE = [
+    {"enemy": "RangedRaider", "chance": 0.45, "b_generate_items": True, "sprite": "evil_crossbowman", "hp": 100},
     {"enemy": "Raider", "chance": 0.75, "b_generate_items": True, "sprite": "evil_swordman", "hp": 200}
 ]
 
