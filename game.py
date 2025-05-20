@@ -32,28 +32,6 @@ from PyQt5.QtGui import QColor, QTransform, QFont, QBrush
 # --
 class Game_SOUNDMANAGER:
     def __init__(self):
-        # Inventory [QMediaPlayer] {PyQt5.QtMultimedia}
-        # 1. play() ; Inicia a reprodução do conteúdo de mídia atual.
-        # 2. pause() ; Pausa a reprodução do conteúdo de mídia atual.
-        # 3. stop() ; Interrompe a reprodução do conteúdo de mídia atual.
-        # 4. setMedia(media, stream=None) ; Define o conteúdo de mídia a ser reproduzido.
-        # 5. setMuted(muted) ; Define o estado de mudo do áudio.
-        # 6. setPlaybackRate(rate) ; Define a taxa de reprodução do conteúdo de mídia.
-        # 7. setPlaylist(playlist) ; Define a lista de reprodução associada ao player.
-        # 8. setPosition(position) ; Define a posição atual de reprodução em milissegundos.
-        # 9. setVolume(volume) ; Define o volume do áudio (0 a 100).
-        # 10. setVideoOutput(output) ; Define o destino de saída de vídeo (QVideoWidget ou QGraphicsVideoItem).
-        # 11. audioAvailableChanged(available) ; Sinal emitido quando a disponibilidade de áudio muda.
-        # 12. audioRoleChanged(role) ; Sinal emitido quando o papel do áudio muda.
-        # 13. bufferStatusChanged(percentFilled) ; Sinal emitido quando o status do buffer muda.
-        # 14. currentMediaChanged(media) ; Sinal emitido quando o conteúdo de mídia atual muda.
-        # 15. mediaChanged(media) ; Sinal emitido quando o conteúdo de mídia muda.
-        # 16. mediaStatusChanged(status) ; Sinal emitido quando o status da mídia muda.
-        # 17. mutedChanged(muted) ; Sinal emitido quando o estado de mudo do áudio muda.
-        # 18. playbackRateChanged(rate) ; Sinal emitido quando a taxa de reprodução muda.
-        # 19. positionChanged(position) ; Sinal emitido quando a posição de reprodução muda.
-        # 20. stateChanged(state) ; Sinal emitido quando o estado do player muda.
-        # 21. volumeChanged(volume) ; Sinal emitido quando o volume do áudio muda.
         self.music_player = None
         self.is_music_muted = False
     def get_random_music_filename(self,directory="music", pattern=""):
@@ -81,9 +59,9 @@ class Game_SOUNDMANAGER:
             )
             # Set looping
             # Fallback for older PyQt5
-            self.music_player.mediaStatusChanged.connect(
-                lambda status: self.music_player.play() if status == QMediaPlayer.EndOfMedia and not self.is_music_muted else None
-            )
+            # self.music_player.mediaStatusChanged.connect(
+                # lambda status: self.music_player.play() if status == QMediaPlayer.EndOfMedia and not self.is_music_muted else None
+            # )
         else:
             self.add_message(f"Music file {music_path} not found")
             print(f"Music file {music_path} not found")
@@ -92,7 +70,10 @@ class Game_SOUNDMANAGER:
         return self.load_music( self.get_random_music_filename() )
     def handle_media_status(self, status):
         """Handle media status changes to start playback when loaded."""
-        if status == QMediaPlayer.LoadedMedia and not self.is_music_muted:
+        if status == QMediaPlayer.EndOfMedia and not self.is_music_muted:
+            self.load_random_music()
+            print("Random Music Selected")
+        elif status == QMediaPlayer.LoadedMedia and not self.is_music_muted:
             self.music_player.play()
             print("Music started: Media loaded")
         elif status == QMediaPlayer.InvalidMedia:
@@ -390,6 +371,7 @@ class Game_PLAYERS:
         self.player = new_player
         self.current_player = name 
         self.player.party = False
+        self.update_inv_window()
         if self.behaviour_controller_window: self.behaviour_controller_window.update()
         if self.journal_window: self.journal_window.load_journal()
         return True 
@@ -851,6 +833,10 @@ class Game_GUI:
             if self.inventory_window.isVisible():
                 self.inventory_window.update_inventory(self.player)
                 self.setFocus()
+    def update_behav_window(self):
+        if self.behaviour_controller_window:
+            if self.behaviour_controller_window.isVisible():
+                self.behaviour_controller_window.update_character_buttons()
     def take_note_on_diary(self):
         if not self.journal_window:
             self.journal_window = JournalWindow(self) 

@@ -28,39 +28,6 @@ def is_enemy_of(char1, char2):
 # SANITY COMMENTS
 # 1. Entity.get_tile don't means that the Entity is properly placed at 
 
-# Inventory [ QPainter ] { pyqt5 }
-# 1. QPainter(device) ; Constructs a painter to begin drawing on a paint device (e.g., QPixmap, QWidget, QImage).
-# 2. begin(device) ; Begins painting on the given device (alternative to constructor).
-# 3. end() ; Ends painting and flushes changes.
-# 4. isActive() ; Returns True if the painter is currently active.
-# 5. setPen(QPen or QColor) ; Sets the pen for outlining shapes and text.
-# 6. setBrush(QBrush or QColor) ; Sets the brush for filling shapes.
-# 7. setFont(QFont) ; Sets the font used for drawing text.
-# 8. setRenderHint(hint, on=True) ; Enables rendering hints (e.g., Antialiasing, TextAntialiasing).
-# 9. drawLine(x1, y1, x2, y2) ; Draws a line between two points.
-#10. drawRect(x, y, w, h) ; Draws a rectangle.
-#11. drawEllipse(x, y, w, h) ; Draws an ellipse inside the given rectangle.
-#12. drawPolygon(QPolygon or list of QPoint) ; Draws a polygon.
-#13. drawPixmap(x, y, QPixmap) ; Draws a pixmap at a given position.
-#14. drawImage(x, y, QImage) ; Draws an image.
-#15. drawText(x, y, text) ; Draws text at the specified position.
-#16. drawPath(QPainterPath) ; Draws a complex path.
-#17. translate(dx, dy) ; Moves the coordinate system origin.
-#18. rotate(angle) ; Rotates the coordinate system.
-#19. scale(sx, sy) ; Scales the coordinate system.
-#20. shear(sh, sv) ; Applies a shear transformation.
-#21. setTransform(QTransform[, combine]) ; Applies or replaces the transformation matrix.
-#22. resetTransform() ; Resets transformations to identity.
-#23. save() ; Saves the current painter state (pen, brush, transform, etc.).
-#24. restore() ; Restores the previously saved state.
-#25. clipRect() ; Returns the current clip rectangle.
-#26. setClipRect(x, y, w, h[, operation]) ; Sets a clip rectangle to limit the drawing area.
-#27. setOpacity(opacity) ; Sets the global opacity (0.0–1.0).
-#28. fillRect(x, y, w, h, brush or color) ; Fills a rectangle with a brush or color.
-#29. eraseRect(x, y, w, h) ; Erases a rectangle area (sets it to background).
-#30. compositionMode() ; Returns the current composition mode.
-#31. setCompositionMode(mode) ; Sets how pixels are blended (e.g., SourceOver, Multiply).
-
 # Entity.paint_to() || { Entity.get_sprite() } || {}
 class Entity: # Interface : distance and painting on tile 
     """ Has a paint_to method which is used by the Tile.draw to paint the entity over the tile sprite. """
@@ -1018,27 +985,6 @@ class SkilledCharacter(Character):
     def update_available_skills(self):
         pass 
 
-# Inventory [ QPixmap ] { pyqt5 }
-# 1. QPixmap(filePath) ; Loads an image from a file into the pixmap.
-# 2. QPixmap() ; Creates an empty pixmap.
-# 3. QPixmap(width, height) ; Creates a pixmap with given dimensions.
-# 4. isNull() ; Returns True if the pixmap is null (i.e., uninitialized).
-# 5. load(filePath[, format[, flags]]) ; Loads an image from a file path with optional format and flags.
-# 6. save(filePath[, format[, quality]]) ; Saves the pixmap to a file.
-# 7. width() ; Returns the width of the pixmap.
-# 8. height() ; Returns the height of the pixmap.
-# 9. size() ; Returns the QSize of the pixmap.
-#10. scaled(width, height[, aspectRatioMode[, transformMode]]) ; Returns a scaled copy of the pixmap.
-#11. scaled(QSize[, aspectRatioMode[, transformMode]]) ; Returns a scaled copy with a QSize.
-#12. copy(x, y, width, height) ; Returns a copy of a rectangular area of the pixmap.
-#13. toImage() ; Converts the pixmap to a QImage.
-#14. fill(color) ; Fills the pixmap with the specified color.
-#15. fromImage(QImage) ; Static method to create a QPixmap from a QImage.
-#16. hasAlphaChannel() ; Returns True if the pixmap has an alpha channel.
-#17. setDevicePixelRatio(ratio) ; Sets the device pixel ratio for high-DPI support.
-#18. devicePixelRatio() ; Returns the current device pixel ratio.
-#19. cacheKey() ; Returns a cache key that uniquely identifies the pixmap.
-
 class Player(SkilledCharacter, RegenerativeCharacter): # player or playable npc 
     __serialize_only__ = SkilledCharacter.__serialize_only__+ RegenerativeCharacter.__serialize_only__ + [ 
         "hunger",
@@ -1199,7 +1145,30 @@ class Hero(Player): # playable character that can "carry" a party
         npc.party = True
         game_instance.map.remove_character(npc)
         game_instance.update_prior_next_selection()
+        game_instance.update_behav_window()
         game_instance.draw()
+    def release_party_member(self, key, game_instance):
+        x = self.x 
+        y = self.y 
+        if not key in self.party_members: return 
+        for dx,dy in CROSS_DIFF_MOVES_1x1:
+            if not game_instance.map.can_place_character_at(x+dx,y+dy): continue 
+            if dx == 0 and dy == 0: continue
+            value = game_instance.players.get(key, None)
+            if value is None: # Bug Fix - Character can't Release Party
+                self.party_members.remove(key)
+                continue 
+            if not value.party: 
+                self.party_members.remove(key)
+                continue         
+            value.x = x+dx 
+            value.y = y+dy 
+            value.party = False 
+            self.party_members.remove(key)
+            game_instance.map.place_character(value)
+            game_instance.draw()
+            break 
+        game_instance.update_behav_window() 
     def release_party(self, game_instance):
         x = self.x 
         y = self.y 
@@ -1222,6 +1191,7 @@ class Hero(Player): # playable character that can "carry" a party
                     break 
             for key in to_remove:
                 self.party_members.remove(key)
+        game_instance.update_behav_window() 
     def count_party(self):
         return len(self.party_members)
     
@@ -1461,6 +1431,28 @@ class Tile(Container):
         idx = self.get_layer_index(sprite_name)
         if idx is None: return 
         self.cosmetic_layer_sprite_keys.pop(idx)
+    def is_grass(self):
+        if self.default_sprite_key == "grass": return True 
+        idx = self.get_layer_index("grass")
+        if idx is None: return False 
+        return True 
+    def is_rock(self):
+        if self.default_sprite_key == "rock": return True 
+        idx = self.get_layer_index("rock")
+        if idx is None: return False 
+        return True 
+    def is_water(self):
+        if self.default_sprite_key == "water": return True 
+        if self.default_sprite_key == "shallow_water": return True 
+        idx1 = self.get_layer_index("water")
+        idx2 = self.get_layer_index("shallow_water")
+        if idx1 is None and idx2 is None: return False 
+        return True 
+    def is_forest(self):
+        if self.default_sprite_key == "tree": return True 
+        idx = self.get_layer_index("tree")
+        if idx is None: return False 
+        return True 
     
     @classmethod    
     def get_rotated_sprite(cls, key, rotation = 0):
@@ -1506,7 +1498,7 @@ class Stair(ActionTile): # not used yet
 # TileBuilding.retrieve_wood() || { Character.add_item() | TileBuilding.update_inv_window() } || {}
 # TileBuilding.store_resource() || { Character.remove_item() } || {}
 class TileBuilding(ActionTile): # interface class
-    __serialize_only__ = Tile.__serialize_only__ + ["villagers", "villagers_max", "food", "stone", "metal", "wood", "b_enemy"]
+    __serialize_only__ = Tile.__serialize_only__ + ["villagers", "villagers_max", "food", "stone", "metal", "wood", "b_enemy", "turn_counter"]
     def __init__(self, x=0,y=0,front_sprite = "Castle", walkable=True, sprite_key="grass", b_enemy = False):
         ActionTile.__init__(self, x = x, y = y, front_sprite = front_sprite, walkable=walkable, sprite_key=sprite_key )
         self.villagers = 5
@@ -1515,6 +1507,7 @@ class TileBuilding(ActionTile): # interface class
         self.wood = 0
         self.stone = 0
         self.metal = 0
+        self.turn_counter = 0 
         self.b_enemy = b_enemy
         if self.b_enemy: self.villagers = self.villagers_max 
     def bonus_resources(self):
@@ -1522,17 +1515,19 @@ class TileBuilding(ActionTile): # interface class
         self.wood = d(0,2000)
         self.stone = d(0,2000)
         self.metal = d(0,2000)
-    def production(self):
+    def production(self, multiplier = 1.0):
         if self.b_enemy: return 
-        self.villagers = min( 1.005*self.villagers, self.villagers_max )
-        self.food += d(0,self.villagers/PROD_INV_FACTOR)
-        self.wood += d(0,self.villagers/PROD_INV_FACTOR)
-        self.stone += d(0,self.villagers/PROD_INV_FACTOR)
-        self.metal += d(0,self.villagers/PROD_INV_FACTOR)
+        self.villagers = min( (1.0+0.005*multiplier)*self.villagers, self.villagers_max )
+        self.food += multiplier*d(0,self.villagers/PROD_INV_FACTOR)
+        self.wood += multiplier*d(0,self.villagers/PROD_INV_FACTOR)
+        self.stone += multiplier*d(0,self.villagers/PROD_INV_FACTOR)
+        self.metal += multiplier*d(0,self.villagers/PROD_INV_FACTOR)
     def update(self, game_instance = None):
-        self.production()
-        # -- vars
         if not game_instance: return 
+        mult = 1.0
+        if self.turn_counter > 500*game_instance.turn: mult = 10.0 # still better to stay in the map
+        self.turn_counter = game_instance.turn
+        self.production(multiplier = mult)
         ply_dist = game_instance.player.distance(self)
         # message when close to a village 
         if ply_dist < 20:
@@ -1563,7 +1558,6 @@ class TileBuilding(ActionTile): # interface class
                     self.bonus_resources()
         else:
             self.remove_layer("red_flag")
-            # game_instance.draw()
     def retrieve_food(self, game_instance, quantity = 500):
         if self.food >= quantity:
             self.food -= quantity
@@ -1634,12 +1628,13 @@ class TileBuilding(ActionTile): # interface class
                     game_instance.add_message("Can't generate player at this position, please rotate the current character")
                     menu_instance.close()
                     return True 
-                hero.x = player.x+dx
+                hero.x = player.x + dx
                 hero.y = player.y + dy
                 self.heroes.pop(current_item)
                 game_instance.players.update({current_item: hero})
                 print( hero.name, hero.party, hero.current_map )
                 game_instance.place_players()
+                game_instance.update_prior_next_selection() # -- fix -- Can't cycle hero that comes from garrison
                 if game_instance.journal_window: game_instance.journal_window.update() 
                 game_instance.draw()
                 return True
@@ -1721,6 +1716,11 @@ class TileBuilding(ActionTile): # interface class
          menu_instance.set_list( "Overview >" ,
             [f"Population : {self.villagers:.1f}/{self.villagers_max}",f"Mean Production : {self.villagers/PROD_INV_FACTOR/2.0:.1f}/turn"]+[f"Food : {self.food:.1f}" if self.food else None ]+[f"Wood : {self.wood:.1f}" if self.wood else None ]+[f"Stone : {self.stone:.1f}" if self.stone else None ]+[f"Metal : {self.metal:.1f}" if self.metal else None ]+[".."]
          )
+    def refresh_game_instance(self, x, y, game_instance):
+        game_instance.place_players()
+        game_instance.update_prior_next_selection()
+        game_instance.dirty_tiles.add((x, y))
+        game_instance.draw()
 
 # Castle.action() || { Castle.update_menu_list() | Castle.new_npc() | TileBuilding.menu_garrison() | TileBuilding.menu_resources() } || { Character.add_item(), TileBuilding.update_inv_window(), Character.remove_item() }
 class Castle(TileBuilding):
@@ -1731,11 +1731,11 @@ class Castle(TileBuilding):
         self.heroes = {}
         self.num_heroes = 0
         self.menu_list = []    
-    def production(self):
+    def production(self, multiplier = 1.0):
         if self.b_enemy: return 
         if self.villagers == 0: self.villagers = 0.1
-        self.villagers = min( 1.005*self.villagers, self.villagers_max )
-        self.food += d(0,self.villagers/PROD_INV_FACTOR)
+        self.villagers = min( (1.0+0.005*multiplier)*self.villagers, self.villagers_max )
+        self.food += multiplier*d(0,self.villagers/PROD_INV_FACTOR)
     def action(self):
         from gui import info 
         self.update_menu_list()
@@ -1750,8 +1750,9 @@ class Castle(TileBuilding):
             if "Weapon Repair" in current_item: 
                 if self.metal >= 100:
                     self.metal -= 100
-                    game_instance.player.add_item(WeaponRepairTool(name="Whetstone", uses=12))
+                    game_instance.player.add_item(WeaponRepairTool(name="Whetstone", uses=10))
                     game_instance.add_message("Whetstone Added to Inventory")
+                    game_instance.update_inv_window()
                     menu_instance.close()
                     return 
             if "Guard Tower" in current_item:
@@ -1813,9 +1814,11 @@ class Castle(TileBuilding):
         player = game_instance.player 
         spawn_tile = game_instance.map.get_tile(player.x+dx, player.y + dy)
         if not spawn_tile:
+            print("invalid tile")
             game_instance.add_message("Can't generate player at this position, please rotate the current character")
             return False
         if spawn_tile.current_char:
+            print("tile occupied by character")
             game_instance.add_message("Can't generate player at this position, please rotate the current character")
             return False
         new_name = QInputDialog.getText(game_instance, 'Input Dialog', 'Character Name :')
@@ -1832,9 +1835,7 @@ class Castle(TileBuilding):
             current_map = game_instance.current_map,
             sprite = random.choice(SPRITE_NAMES_PLAYABLES)
         )
-        game_instance.place_players()
-        game_instance.dirty_tiles.add((game_instance.player.x+dx, game_instance.player.y+dy))
-        game_instance.draw()
+        self.refresh_game_instance(game_instance.player.x+dx, game_instance.player.y+dy, game_instance)
         return True
     
     @classmethod
@@ -1875,10 +1876,10 @@ class Mill(TileBuilding):
             "Resources >",
             "Exit"
         ]
-    def production(self):
+    def production(self, multiplier = 1.0):
         if self.b_enemy: return 
-        self.villagers = min( 1.005*self.villagers, self.villagers_max )
-        self.food += d(0,2*self.villagers/PROD_INV_FACTOR)
+        self.villagers = min( (1.0+0.005*multiplier)*self.villagers, self.villagers_max )
+        self.food += multiplier*d(0,2*self.villagers/PROD_INV_FACTOR)
 
 # LumberMill.action() || { LumberMill.update_menu_list() | TileBuilding.menu_resources() } || { Character.add_item(), TileBuilding.update_inv_window(), Character.remove_item() }
 class LumberMill(TileBuilding):
@@ -1908,10 +1909,10 @@ class LumberMill(TileBuilding):
             "Resources >",
             "Exit"
         ]
-    def production(self):
+    def production(self, multiplier = 1.0):
         if self.b_enemy: return 
-        self.villagers = min( 1.005*self.villagers, self.villagers_max )
-        self.wood += d(0,2*self.villagers/PROD_INV_FACTOR)
+        self.villagers = min( (1.0+0.005*multiplier)*self.villagers, self.villagers_max )
+        self.wood += multiplier*d(0,2*self.villagers/PROD_INV_FACTOR)
 
 # GuardTower.action() || { GuardTower.update_menu_list() | GuardTower.new_swordman() | GuardTower.new_mounted_knight() | TileBuilding.menu_garrison() | TileBuilding.menu_resources() } || { Character.add_item(), TileBuilding.update_inv_window(), Character.remove_item() }
 class GuardTower(TileBuilding):
@@ -2005,9 +2006,7 @@ class GuardTower(TileBuilding):
         npc_obj.equip_item( Sword(name="Long_Sword", damage=7, durability_factor=0.9995), "primary_hand" )
         npc_obj.hunger = npc_obj.max_hunger
         npc_obj.can_use_thrust_skill = True 
-        game_instance.place_players()
-        game_instance.dirty_tiles.add((game_instance.player.x+dx, game_instance.player.y+dy))
-        game_instance.draw()
+        self.refresh_game_instance(game_instance.player.x+dx, game_instance.player.y+dy, game_instance)
         return True
     def new_mounted_knight(self, game_instance): # not used yet 
         if self.villagers <= 5:
@@ -2037,9 +2036,7 @@ class GuardTower(TileBuilding):
         npc_obj.hunger = npc_obj.max_hunger
         npc_obj.can_use_thrust_skill = True 
         npc_obj.can_use_knight_skill = True 
-        game_instance.place_players()
-        game_instance.dirty_tiles.add((game_instance.player.x+dx, game_instance.player.y+dy))
-        game_instance.draw()
+        self.refresh_game_instance(game_instance.player.x+dx, game_instance.player.y+dy, game_instance)
         return True    
     def new_crossbowman(self, game_instance):
         if self.villagers <= 3:
@@ -2067,13 +2064,11 @@ class GuardTower(TileBuilding):
         )
         npc_obj.equip_item(Fireweapon(name = "Crossbow", damage = 5, ammo=70, range=7, projectile_sprite='bolt', ammo_type='bolt'), "primary_hand")
         npc_obj.hunger = npc_obj.max_hunger
-        game_instance.place_players()
-        game_instance.dirty_tiles.add((game_instance.player.x+dx, game_instance.player.y+dy))
-        game_instance.draw()
+        self.refresh_game_instance(game_instance.player.x+dx, game_instance.player.y+dy, game_instance)
         return True
-    def production(self):
+    def production(self, multiplier = 1.0):
         if self.b_enemy: return 
         if self.villagers == 0: self.villagers = 0.1
-        self.villagers = min( 1.005*self.villagers, self.villagers_max )
+        self.villagers = min( (1.0+0.005*multiplier)*self.villagers, self.villagers_max )
 
 # --- END 
