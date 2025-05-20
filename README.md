@@ -39,7 +39,8 @@ Currently in development, but I will appreciate if someone help testing the game
 17. X : Skill Menu.
 18. B : Build Menu. You can buy certificates on Castle Menu.
 19. PageUp and PageDown : Cycle between available characters.
-20. Move the main window dragging it.
+20. Pressing 1 or 2 to select primary and secondary weapons. 
+21. Move the main window dragging it.
 
 This game was designed to be difficult and with no leveling system, the items, strategies and the skills will help defeat powerful foes. Choose your opponent carefully.
 Mainly developed using A.I. assistance (Grok, ChatGPT, Copilot) and a single human brain cell.
