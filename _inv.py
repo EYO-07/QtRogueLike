@@ -1,5 +1,28 @@
 # Inventories 
 
+""" Inventory [ pyqt5 ] { Python, General Methods and Variables }
+1. QApplication([]) ; Initializes the application environment (required for all PyQt5 apps).
+2. QWidget() ; Base class for all UI objects like windows, dialogs, and controls.
+3. QMainWindow() ; Main application window with menu bar, toolbars, status bar, etc.
+4. QLabel("Text") ; Widget to display text or images.
+5. QPushButton("Click Me") ; Clickable button widget.
+6. QVBoxLayout() ; Layout manager for vertical stacking of widgets.
+7. QHBoxLayout() ; Layout manager for horizontal stacking of widgets.
+8. QGridLayout() ; Layout manager for arranging widgets in a grid.
+9. .setLayout(layout) ; Assigns a layout manager to a widget.
+10. .show() ; Displays the widget on the screen.
+11. .exec_() ; Starts the application's event loop (usually called on QApplication or dialogs).
+12. .setText("New Text") ; Sets the text of a label or button.
+13. .text() ; Retrieves the current text of a widget (e.g., QLineEdit).
+14. .clicked.connect(function) ; Connects a button click to a Python function.
+15. QTimer.singleShot(ms, func) ; Calls a function once after a delay in milliseconds.
+16. .resize(w, h) ; Sets the width and height of a widget.
+17. .move(x, y) ; Positions the widget at x, y coordinates.
+18. QDialog() ; Modal or non-modal dialog window.
+19. QFileDialog.getOpenFileName() ; Opens a file picker dialog and returns the selected file path.
+20. QMessageBox.information(widget, title, message) ; Displays an informational popup dialog.
+"""
+
 """ Inventory [ QWidget ]
 1. QWidget(parent=None) ; Initializes a widget, optionally with a parent.
 2. .show() ; Displays the widget on the screen.
@@ -188,6 +211,18 @@
 19. positionChanged(position) ; Sinal emitido quando a posição de reprodução muda.
 20. stateChanged(state) ; Sinal emitido quando o estado do player muda.
 21. volumeChanged(volume) ; Sinal emitido quando o volume do áudio muda.
+
+# Inventory [QMediaPlayer] {Eventos de Estado de Mídia}
+# 1. mediaStatusChanged(QMediaPlayer.MediaStatus) ; Emite mudanças no status da mídia, como carregando ou finalizada.
+# 2. stateChanged(QMediaPlayer.State) ; Emite mudanças no estado do player (StoppedState, PlayingState, PausedState).
+# 3. QMediaPlayer.EndOfMedia ; Enum do status da mídia indicando que a reprodução chegou ao fim.
+# 4. QMediaPlayer.LoadingMedia ; Enum indicando que a mídia está sendo carregada.
+# 5. QMediaPlayer.LoadedMedia ; Enum indicando que a mídia foi carregada com sucesso.
+# 6. QMediaPlayer.BufferedMedia ; Enum indicando que a mídia foi completamente armazenada em buffer.
+# 7. QMediaPlayer.NoMedia ; Enum indicando que nenhuma mídia foi definida.
+# 8. QMediaPlayer.InvalidMedia ; Enum indicando erro ao carregar a mídia.
+# 9. QMediaPlayer.StalledMedia ; Enum indicando que o buffer de mídia foi interrompido (rede lenta, etc.).
+# 10. QMediaPlayer.UnknownMediaStatus ; Enum indicando que o status da mídia é indefinido.
 """
 
 # --- END

@@ -47,21 +47,19 @@ class Game_SOUNDMANAGER:
     def load_music(self, music_path):
         if not self.music_player:
             self.music_player = QMediaPlayer()
-        self.is_music_muted = False
-        if os.path.exists(music_path):
-            self.music_player.setMedia(QMediaContent(QUrl.fromLocalFile(music_path)))
             self.music_player.setVolume(10)  # 0-100
             # Connect media status to start playback when loaded
             self.music_player.mediaStatusChanged.connect(self.handle_media_status)
             # Handle errors
-            self.music_player.error.connect(
-                lambda error: self.add_message(f"Music error: {self.music_player.errorString()}")
-            )
+            self.music_player.error.connect( lambda error: self.add_message(f"Music error: {self.music_player.errorString()}") )
             # Set looping
             # Fallback for older PyQt5
             # self.music_player.mediaStatusChanged.connect(
                 # lambda status: self.music_player.play() if status == QMediaPlayer.EndOfMedia and not self.is_music_muted else None
             # )
+        self.is_music_muted = False
+        if os.path.exists(music_path):
+            self.music_player.setMedia(QMediaContent(QUrl.fromLocalFile(music_path)))
         else:
             self.add_message(f"Music file {music_path} not found")
             print(f"Music file {music_path} not found")
@@ -70,15 +68,24 @@ class Game_SOUNDMANAGER:
         return self.load_music( self.get_random_music_filename() )
     def handle_media_status(self, status):
         """Handle media status changes to start playback when loaded."""
-        if status == QMediaPlayer.EndOfMedia and not self.is_music_muted:
-            self.load_random_music()
-            print("Random Music Selected")
-        elif status == QMediaPlayer.LoadedMedia and not self.is_music_muted:
-            self.music_player.play()
-            print("Music started: Media loaded")
-        elif status == QMediaPlayer.InvalidMedia:
-            self.add_message("Music failed: Invalid media")
-            print("Music failed: Invalid media")
+        match status:
+            case QMediaPlayer.LoadingMedia:
+                # 1. Prevent Multiple Calls on loading 
+                return 
+            case QMediaPlayer.InvalidMedia:
+                self.add_message("Music failed: Invalid media")
+                print("Music failed: Invalid media")
+                return 
+            case QMediaPlayer.EndOfMedia:
+                if not self.is_music_muted:
+                    self.load_random_music()
+                    print("Random Music Selected")
+                    return 
+            case QMediaPlayer.LoadedMedia:
+                if not self.is_music_muted:
+                    self.music_player.play()
+                    print("Music started: Media loaded")
+                    return 
     def toggle_music(self):
         """Toggle music mute state."""
         self.is_music_muted = not self.is_music_muted
