@@ -1,5 +1,140 @@
 # Inventories 
 
+# -- basic python 
+
+""" Inventory [ Dictionary ] { Basic Python }
+1. my_dict = {} ; Creates an empty dictionary.
+2. my_dict = {'key': 'value'} ; Creates a dictionary with one or more key-value pairs.
+3. my_dict['key'] = value ; Adds or updates a key with a specified value.
+4. value = my_dict['key'] ; Retrieves the value for the given key (raises KeyError if missing).
+5. value = my_dict.get('key') ; Retrieves the value safely (returns None or default if key not found).
+6. my_dict.keys() ; Returns a view of all keys in the dictionary.
+7. my_dict.values() ; Returns a view of all values in the dictionary.
+8. my_dict.items() ; Returns a view of all key-value pairs (as tuples).
+9. 'key' in my_dict ; Checks if a key exists in the dictionary.
+10. my_dict.pop('key') ; Removes a key and returns its value (raises KeyError if missing).
+11. my_dict.pop('key', default) ; Removes a key and returns its value (returns default if missing).
+12. del my_dict['key'] ; Deletes a key-value pair (raises KeyError if key is absent).
+13. my_dict.update(other_dict) ; Updates the dictionary with key-value pairs from another dictionary.
+14. len(my_dict) ; Returns the number of key-value pairs in the dictionary.
+15. my_dict.clear() ; Removes all key-value pairs from the dictionary.
+16. dict.fromkeys(['a', 'b'], default) ; Creates a dictionary from keys with the same default value.
+17. my_dict.setdefault('key', default) ; Gets value for key, inserts default if key is missing.
+18. for key in my_dict: ; Iterates over keys in the dictionary.
+19. for key, value in my_dict.items(): ; Iterates over key-value pairs.
+20. type(my_dict) is dict ; Checks that the object is a dictionary.
+"""
+
+""" Inventory [ List ] { Basic Python }
+1. my_list = [] ; Creates an empty list.
+2. my_list = [1, 2, 3] ; Creates a list with initial elements.
+3. my_list.append(item) ; Adds an item to the end of the list.
+4. my_list.insert(index, item) ; Inserts an item at the specified index.
+5. my_list.extend([4, 5]) ; Appends all elements from another iterable to the list.
+6. item = my_list[index] ; Accesses the item at the given index (0-based).
+7. my_list[index] = new_value ; Updates the value at the given index.
+8. del my_list[index] ; Deletes the item at the given index.
+9. my_list.remove(value) ; Removes the first occurrence of a value (raises ValueError if not found).
+10. item = my_list.pop(index) ; Removes and returns the item at the index (last by default).
+11. len(my_list) ; Returns the number of items in the list.
+12. my_list.sort() ; Sorts the list in-place (ascending by default).
+13. my_list.sort(reverse=True) ; Sorts the list in descending order.
+14. sorted(my_list) ; Returns a new sorted list (original remains unchanged).
+15. my_list.reverse() ; Reverses the list in-place.
+16. reversed(my_list) ; Returns a reversed iterator.
+17. my_list.index(value) ; Returns the index of the first occurrence of a value.
+18. my_list.count(value) ; Returns the number of times a value appears in the list.
+19. for item in my_list: ; Iterates through each item in the list.
+20. [x for x in my_list if condition] ; List comprehension for filtering or transforming.
+"""
+
+""" Inventory [ Set ] { Basic Python }
+1. my_set = set() ; Creates an empty set.
+2. my_set = {1, 2, 3} ; Creates a set with initial unique elements.
+3. my_set.add(item) ; Adds an item to the set (duplicates are ignored).
+4. my_set.update([2, 3, 4]) ; Adds multiple items from another iterable.
+5. my_set.remove(item) ; Removes an item (raises KeyError if not found).
+6. my_set.discard(item) ; Removes an item if present (no error if missing).
+7. item = my_set.pop() ; Removes and returns an arbitrary item from the set.
+8. my_set.clear() ; Removes all elements from the set.
+9. len(my_set) ; Returns the number of elements in the set.
+10. item in my_set ; Checks if an item is in the set.
+11. my_set.union(other_set) ; Returns a new set with elements from both sets.
+12. my_set | other_set ; Shorthand for union.
+13. my_set.intersection(other_set) ; Returns a new set with common elements.
+14. my_set & other_set ; Shorthand for intersection.
+15. my_set.difference(other_set) ; Returns elements in my_set but not in other_set.
+16. my_set - other_set ; Shorthand for difference.
+17. my_set.symmetric_difference(other_set) ; Returns elements in either set, but not both.
+18. my_set ^ other_set ; Shorthand for symmetric difference.
+19. my_set.issubset(other_set) ; Checks if all elements of my_set are in other_set.
+20. my_set.issuperset(other_set) ; Checks if my_set contains all elements of other_set.
+""" 
+
+""" Inventory [ String ] { Basic Python }
+1. my_str = "Hello" ; Creates a string.
+2. len(my_str) ; Returns the number of characters in the string.
+3. my_str[i] ; Accesses the character at index i (0-based).
+4. my_str.lower() ; Returns a lowercase version of the string.
+5. my_str.upper() ; Returns an uppercase version of the string.
+6. my_str.capitalize() ; Capitalizes the first character.
+7. my_str.title() ; Capitalizes the first letter of each word.
+8. my_str.strip() ; Removes leading and trailing whitespace.
+9. my_str.lstrip() ; Removes leading whitespace.
+10. my_str.rstrip() ; Removes trailing whitespace.
+11. my_str.replace("old", "new") ; Replaces occurrences of a substring.
+12. my_str.split("sep") ; Splits the string into a list using a separator.
+13. "sep".join(list) ; Joins elements of a list into a string using a separator.
+14. my_str.find("sub") ; Returns the first index of substring, or -1 if not found.
+15. my_str.index("sub") ; Like find(), but raises ValueError if not found.
+16. my_str.count("sub") ; Returns the number of times a substring appears.
+17. my_str.startswith("prefix") ; Checks if string starts with a prefix.
+18. my_str.endswith("suffix") ; Checks if string ends with a suffix.
+19. my_str.isalpha() ; Returns True if all characters are letters.
+20. my_str.isdigit() ; Returns True if all characters are digits.
+"""
+
+""" Inventory [ Math ] { Python Built-in Library }
+1. math.sqrt(x) ; Returns the square root of x.
+2. math.pow(x, y) ; Returns x raised to the power of y (x^y) as a float.
+3. math.exp(x) ; Returns e raised to the power of x.
+4. math.log(x) ; Returns the natural logarithm of x (base e).
+5. math.log(x, base) ; Returns the logarithm of x to the specified base.
+6. math.log10(x) ; Returns the base-10 logarithm of x.
+7. math.log2(x) ; Returns the base-2 logarithm of x.
+8. math.floor(x) ; Returns the largest integer less than or equal to x.
+9. math.ceil(x) ; Returns the smallest integer greater than or equal to x.
+10. math.trunc(x) ; Truncates x to the nearest integer toward zero.
+11. math.fabs(x) ; Returns the absolute value of x as a float.
+12. math.factorial(x) ; Returns the factorial of x (x!).
+13. math.gcd(a, b) ; Returns the greatest common divisor of a and b.
+14. math.lcm(a, b) ; Returns the least common multiple of a and b (Python 3.9+).
+15. math.isclose(a, b, rel_tol=1e-09, abs_tol=0.0) ; Checks if a and b are close in value.
+16. math.sin(x) ; Returns the sine of x (x in radians).
+17. math.cos(x) ; Returns the cosine of x (x in radians).
+18. math.tan(x) ; Returns the tangent of x (x in radians).
+19. math.asin(x) ; Returns the arcsine of x in radians.
+20. math.acos(x) ; Returns the arccosine of x in radians.
+21. math.atan(x) ; Returns the arctangent of x in radians.
+22. math.atan2(y, x) ; Returns atan(y/x) in radians, accounting for quadrant.
+23. math.radians(x) ; Converts angle x from degrees to radians.
+24. math.degrees(x) ; Converts angle x from radians to degrees.
+25. math.hypot(x, y) ; Returns the Euclidean norm √(x² + y²).
+26. math.copysign(x, y) ; Returns x with the sign of y.
+27. math.fmod(x, y) ; Returns the remainder of x/y (same sign as x).
+28. math.remainder(x, y) ; Returns IEEE 754-style remainder of x with respect to y.
+29. math.frexp(x) ; Returns (m, e) such that x = m * 2**e and m is in [0.5, 1).
+30. math.ldexp(m, e) ; Returns m * 2**e (inverse of frexp).
+31. math.modf(x) ; Returns fractional and integer parts of x as a tuple.
+32. math.pi ; Mathematical constant π (3.14159...).
+33. math.e ; Mathematical constant e (2.71828...).
+34. math.tau ; Mathematical constant τ (2π).
+35. math.inf ; Floating-point positive infinity.
+36. math.nan ; Floating-point NaN (Not a Number).
+"""
+
+# -- pyqt5
+
 """ Inventory [ pyqt5 ] { Python, General Methods and Variables }
 1. QApplication([]) ; Initializes the application environment (required for all PyQt5 apps).
 2. QWidget() ; Base class for all UI objects like windows, dialogs, and controls.

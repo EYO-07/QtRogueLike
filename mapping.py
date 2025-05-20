@@ -861,18 +861,6 @@ class Map(Serializable, Map_SPECIAL, Map_MODELLING, Map_CHARACTERS, Map_TILES):
         new_coords = (new_x, new_y, new_z)
         # Add stair_down to deeper level with 50% probability (not on topmost level if up=True)
         if not up: self.add_stair_down_by_chance(excluded = { (new_x, new_y) }) # [testing]
-        # if not up and random.random() < 0.5:
-            # available_rooms = [(rx, ry, rw, rh) for rx, ry, rw, rh in self.rooms if (rx + rw // 2, ry + rh // 2) != (new_x, new_y)]
-            # if available_rooms:
-                # down_room = random.choice(available_rooms)
-                # down_x = down_room[0] + down_room[2] // 2
-                # down_y = down_room[1] + down_room[3] // 2
-                # target_map = (prev_x_map, prev_y_map, new_z - 1)
-                # self.grid[down_y][down_x] = Tile(down_x, down_y, walkable=True, sprite_key="stair_down")
-                # self.grid[down_y][down_x].stair = target_map
-                # self.grid[down_y][down_x].stair_x = down_x  # Point to stair_up on next level
-                # self.grid[down_y][down_x].stair_y = down_y
-                # print(f"Placed stair_down at ({down_x}, {down_y}) linking to {target_map}")
         print(f"generate_procedural_dungeon(): from {previous_map_coords} to ({prev_x_map}, {prev_y_map}, {new_z}), entry at ({new_x}, {new_y})")
         self.starting_x = new_x
         self.starting_y = new_y
@@ -892,7 +880,7 @@ class Map(Serializable, Map_SPECIAL, Map_MODELLING, Map_CHARACTERS, Map_TILES):
                     self.grid[j][i] = Tile(i,j,walkable=False, sprite_key="tree")
                 elif random.random() < 0.01:
                     if self.is_walkable(i,j): self.grid[j][i].add_item(Food(name ="Apple", nutrition=d(20,60)))
-        self.add_enemy_mill(quantity=3)
+        self.add_enemy_mill(quantity=4)
         self.add_enemy_tower(quantity=2)
     def generate_procedural_road(self):
         self.enemy_type = "road"
@@ -911,7 +899,7 @@ class Map(Serializable, Map_SPECIAL, Map_MODELLING, Map_CHARACTERS, Map_TILES):
             for j in range(self.height):
                 if random.random() < 0.1 and abs(j - road_x) > 2:
                     self.grid[j][i] = Tile(i,j,walkable=False, sprite_key="tree")
-        self.add_enemy_mill(quantity=3)
+        self.add_enemy_mill(quantity=4)
         self.add_enemy_tower(quantity=2)
     def generate_procedural_lake(self):
         self.enemy_type = "lake"
@@ -931,6 +919,6 @@ class Map(Serializable, Map_SPECIAL, Map_MODELLING, Map_CHARACTERS, Map_TILES):
                 elif random.random() < 0.0005:
                     self.grid[j][i].add_item(WeaponRepairTool("Whetstone", uses=10))
         self.add_dungeon_entrance()
-        self.add_enemy_tower(quantity=2)
+        self.add_enemy_tower(quantity=3)
                     
 # --- END

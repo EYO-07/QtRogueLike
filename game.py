@@ -1369,21 +1369,22 @@ class Game(DraggableView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_P
         elif key == Qt.Key_D:
             dx, dy = self.rotated_direction(1, 0)
         elif key == Qt.Key_H:
-            ptr_b_exit = [ False ]
-            def is_exit(last_result, it):
-                if last_result: 
-                    ptr_b_exit[0] = True 
-                    self.add_message(f"Rested {it} turns")
-                return ptr_b_exit[0] 
-            T1 = tic()
-            [ i for i in range(10) if not is_exit( self.game_iteration_not_draw(), i+1 ) ]
-            self.draw()
-            # for i in range(10): 
-                # if self.game_iteration(): 
-                    # self.add_message(f"Rested {i} turns")
-                    # break 
-            self.add_message(f"Rested 10 turns")
-            toc(T1, f"Key Press H || Enemies:{len(self.map.enemies)} | Buildings:{len(self.map.buildings)} |") 
+            # ptr_b_exit = [ False ]
+            # def is_exit(last_result, it):
+                # if last_result: 
+                    # ptr_b_exit[0] = True 
+                    # self.add_message(f"Rested {it} turns")
+                # return ptr_b_exit[0] 
+            # [ i for i in range(10) if not is_exit( self.game_iteration_not_draw(), i+1 ) ]    
+            # T1 = tic()
+            # toc(T1, f"Key Press H || Enemies:{len(self.map.enemies)} | Buildings:{len(self.map.buildings)} |") 
+            for i in range(10): 
+                if self.game_iteration_not_draw(): 
+                    self.add_message(f"Rested {i} turns, you've being interrupted !!!")
+                    self.draw() 
+                    return False 
+            self.add_message(f"Rested 10 turns")        
+            self.draw() 
             return False
         elif key == Qt.Key_Space:
             return True
