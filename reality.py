@@ -694,8 +694,9 @@ class DefensiveCharacter(OfensiveCharacter): # interface : characters that can p
         if isinstance(self.secondary_hand, Parriable):
             secondary_parry = self.secondary_hand.get_parry_chance(self, attacker, damage)
             if primary_parry:
-                primary_parry = primary_parry/2.0
+                primary_parry = primary_parry/3.0
                 secondary_parry = secondary_parry/2.5
+        if isinstance(self, Hero): print("Parry Chance :", primary_parry+secondary_parry)
         return primary_parry+secondary_parry
 
 # RegenerativeCharacter.regenerate() || { RegenerativeCharacter.regenerate_health() | RegenerativeCharacter.regenerate_stamina() } || {}
@@ -1893,9 +1894,23 @@ class LumberMill(TileBuilding):
         self.update_menu_list()
         def f(current_menu, current_item, menu_instance, game_instance):
             self.update_menu_list(menu_instance)
-            if current_item == "..": menu_instance.set_list()
-            if current_item == "Overview >": self.set_population_menu(menu_instance)
-            if current_item == "Exit": menu_instance.close()
+            if current_item == "..": 
+                menu_instance.set_list()
+                return 
+            if current_item == "Overview >": 
+                self.set_population_menu(menu_instance)
+                return 
+            if current_item == "Buy 100 Bolts for Crossbows (500 Wood)": 
+                if self.wood >= 500:
+                    self.wood -= 500
+                    game_instance.player.add_item( Ammo(name="bolt", uses=100) )
+                    game_instance.add_message("100 Bolts Added to Inventory")
+                    game_instance.update_inv_window()
+                    menu_instance.close()
+                    return 
+            if current_item == "Exit": 
+                menu_instance.close()
+                return 
             if self.menu_resources(current_menu, current_item, menu_instance, game_instance):
                 menu_instance.close()
                 return 
@@ -1907,6 +1922,7 @@ class LumberMill(TileBuilding):
             f"-> wood: {self.wood:.0f}",
             "Overview >",
             "Resources >",
+            "Buy 100 Bolts for Crossbows (500 Wood)",
             "Exit"
         ]
     def production(self, multiplier = 1.0):

@@ -1378,12 +1378,12 @@ class Game(DraggableView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_P
             # [ i for i in range(10) if not is_exit( self.game_iteration_not_draw(), i+1 ) ]    
             # T1 = tic()
             # toc(T1, f"Key Press H || Enemies:{len(self.map.enemies)} | Buildings:{len(self.map.buildings)} |") 
-            for i in range(10): 
+            for i in range(H_REST_TURNS): 
                 if self.game_iteration_not_draw(): 
                     self.add_message(f"Rested {i} turns, you've being interrupted !!!")
                     self.draw() 
                     return False 
-            self.add_message(f"Rested 10 turns")        
+            self.add_message(f"Rested {H_REST_TURNS} turns")        
             self.draw() 
             return False
         elif key == Qt.Key_Space:

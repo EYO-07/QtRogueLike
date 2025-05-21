@@ -19,6 +19,8 @@ def rn(num = 5):
 
 # Global Variables
 
+H_REST_TURNS = 15
+
 # map configuration 
 MAP_WIDTH = 70
 MAP_HEIGHT = 70 
