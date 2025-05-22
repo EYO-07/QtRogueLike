@@ -1228,7 +1228,7 @@ class Raider(Enemy): # interface class, is an enemy that will try to find the ne
         if isinstance(enemy, TileBuilding):
             if distance <= 3: return False 
             path = map.find_path(self.x, self.y, enemy.x, enemy.y)
-            if distance < 10 : print("pursue_target() || distance :", enemy, distance, game_instance.player.distance(self))
+            # if distance < 10 : print("pursue_target() || distance :", enemy, distance, game_instance.player.distance(self))
             if path:
                 next_x, next_y = path[0]
                 dx, dy = next_x - self.x, next_y - self.y

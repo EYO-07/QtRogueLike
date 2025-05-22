@@ -695,7 +695,7 @@ class Game_DATA:
         if not self.journal_window.isVisible():
             self.journal_window.show()
             self.journal_window.update_position()
-        self.journal_window.clear_text()
+        # self.journal_window.clear_text()
         self.journal_window.append_text("Day 0 - The world was affected by the plague, why? Maybe I should've prayed more instead of living with mercenaries and whores, God don't look to us now, and there is no church to pray anymore. Almost every one has transformed to walking deads, their flesh is putrid and their hunger insatiable, strange enough, before they lose their minds, they try desesperately to find food to satiate the hunger, so it's almost certain that I will find some with them, I'm starving. \n\nI should check myself, I'm almost losing my mind too. If I'm right, to move use A,W,S,D, Left, Right, to attack moves forward (only), to enter or use stairs press C, to open inventory press I, to open journal press J. I should take notes often, press N to write a quick note. \n\nI need to find food ...")
         self.setFocus()
         # Trigger music playback if not muted
