@@ -1653,7 +1653,19 @@ class TileBuilding(ActionTile): # interface class
         resources = { f"{counter[0]}. {info(e)[0]}" : e for e in game_instance.player.items if resource_counter(e, counter) }
         # -- 
         if current_item == "Resources >":
-            menu_instance.set_list("Resources >",[ f"-> food: {self.food:.0f}", f"-> wood: {self.wood:.0f}", "Resources+", "Resources++", "Food-", "Wood-", "Metal-", "Stone-", ".." ])
+            menu_instance.set_list("Resources >",[ 
+                f"-> food: {self.food:.0f}", 
+                f"-> wood: {self.wood:.0f}", 
+                f"-> metal: {self.metal:.0f}", 
+                f"-> stone: {self.stone:.0f}", 
+                "Resources+", 
+                "Resources++", 
+                "Food-", 
+                "Wood-", 
+                "Metal-", 
+                "Stone-", 
+                ".." 
+            ])
             return False 
         # -- 
         if current_menu == "Resources >":

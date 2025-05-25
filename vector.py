@@ -65,6 +65,11 @@ def round_vector(v: Vector, decimals: int = 3) -> Vector:
         raise ValueError("Input must be a valid vector")
     return type(v)(round(x, decimals) for x in v)
 
+def to_integer_vector(v: Vector):
+    if not is_vector(v):
+        raise ValueError("Input must be a valid vector")
+    return type(v)( int( math.floor(x) ) for x in v)
+
 def add(v1: Vector, v2: Vector) -> Vector:
     """Add two vectors element-wise."""
     if not shape_match(v1, v2):

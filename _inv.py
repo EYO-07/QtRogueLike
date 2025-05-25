@@ -158,6 +158,86 @@
 20. QMessageBox.information(widget, title, message) ; Displays an informational popup dialog.
 """
 
+""" Inventory [ QWidget ] { Setting Event Handles }
+1. mousePressEvent(self, event) ; Handles mouse button press events. Override to respond when the user presses a mouse button on the widget.
+2. mouseMoveEvent(self, event) ; Handles mouse move events. Override to track or respond to mouse movement while a button is held down.
+3. mouseReleaseEvent(self, event) ; Handles mouse button release events. Override to define behavior when the user releases a mouse button.
+4. keyPressEvent(self, event) ; Handles key press events. Override to respond to keyboard input when the widget has focus.
+5. keyReleaseEvent(self, event) ; Handles key release events. Override to detect when a key is released.
+6. enterEvent(self, event) ; Triggered when the mouse enters the widget's area. Useful for hover effects or tooltips.
+7. leaveEvent(self, event) ; Triggered when the mouse leaves the widget's area. Often used to end hover effects.
+8. focusInEvent(self, event) ; Called when the widget gains keyboard focus. Override to handle focus changes.
+9. focusOutEvent(self, event) ; Called when the widget loses keyboard focus. Useful for validating input or ending interactions.
+10. resizeEvent(self, event) ; Called when the widget is resized. Override to handle layout or redraw on size change.
+11. moveEvent(self, event) ; Called when the widget is moved. Can be used to track layout-dependent logic.
+12. closeEvent(self, event) ; Called when the widget is requested to close. Override to confirm or block closing.
+13. paintEvent(self, event) ; Handles all custom painting. Override to draw directly on the widget using QPainter.
+14. contextMenuEvent(self, event) ; Triggered on right-click. Override to show a custom context menu.
+15. wheelEvent(self, event) ; Handles mouse wheel input. Useful for scrolling or zoom functionality.
+16. event(self, event) ; Central event dispatcher. Can be overridden to intercept and handle all events generically.
+"""
+
+""" Inventory [ QEvent ]
+1. QEvent(type: QEvent.Type) ; Constructor to create an event of the given type.
+2. type() ; Returns the type of the event (e.g. QEvent.MouseButtonPress, QEvent.KeyPress).
+3. accept() ; Marks the event as accepted, preventing it from being propagated further if applicable.
+4. ignore() ; Marks the event as ignored, allowing it to be handled by the parent or default handler.
+5. isAccepted() ; Returns whether the event has been accepted.
+6. spontaneous() ; Returns True if the event originated outside the application (e.g. from the OS or user input).
+7. registerEventType([hint]) ; Static method to register a custom event type, optionally with a hint ID.
+8. QEvent.MouseButtonPress ; Event type for mouse button press.
+9. QEvent.MouseButtonRelease ; Event type for mouse button release.
+10. QEvent.MouseButtonDblClick ; Event type for mouse double-click.
+11. QEvent.MouseMove ; Event type for mouse movement.
+12. QEvent.KeyPress ; Event type for key press.
+13. QEvent.KeyRelease ; Event type for key release.
+14. QEvent.Enter ; Event type when the mouse enters a widget.
+15. QEvent.Leave ; Event type when the mouse leaves a widget.
+16. QEvent.FocusIn ; Event type for widget gaining keyboard focus.
+17. QEvent.FocusOut ; Event type for widget losing keyboard focus.
+18. QEvent.ContextMenu ; Event type for context menu trigger (usually right-click).
+19. QEvent.Wheel ; Event type for mouse wheel movement.
+20. QEvent.Resize ; Event type for widget resize.
+21. QEvent.Move ; Event type for widget move.
+22. QEvent.Close ; Event type for widget close request.
+23. QEvent.Paint ; Event type for widget redraw.
+24. QEvent.Timer ; Event type for QTimer timeout.
+25. QEvent.User ; Base value for user-defined events (start from here when defining custom types).
+""" 
+
+""" Inventory [ QWidget.mousePressEvent ] { Detecting which mouse button was pressed }
+1. event.button() == Qt.LeftButton ; Checks if the left mouse button was pressed.
+2. event.button() == Qt.RightButton ; Checks if the right mouse button was pressed.
+3. event.button() == Qt.MiddleButton ; Checks if the middle mouse button (wheel click) was pressed.
+4. event.button() == Qt.BackButton ; Checks if the back mouse button (usually a side button) was pressed.
+5. event.button() == Qt.ForwardButton ; Checks if the forward mouse button (usually a side button) was pressed.
+6. event.button() == Qt.NoButton ; Indicates no button was pressed (rare in press events).
+7. event.buttons() & Qt.LeftButton ; Checks if the left button is part of the current button state (can detect multiple buttons).
+8. event.buttons() & Qt.RightButton ; Checks if the right button is part of the current button state.
+9. event.pos() ; Returns the position of the mouse cursor relative to the widget.
+10. event.globalPos() ; Returns the global position of the mouse cursor on the screen.
+11. event.type() == QEvent.MouseButtonPress ; Confirms the event is a mouse button press (used in generic event handling).
+"""
+
+""" Inventory [ Qt Events Preferentially Handled with .connect ] { Signal-Slot Pattern }
+1. clicked ; Emitted by QPushButton, QCheckBox, etc. when the widget is clicked. Example: button.clicked.connect(handler)
+2. toggled(bool) ; Emitted when the check state of a toggle-able widget changes (e.g., QCheckBox, QRadioButton). Example: checkbox.toggled.connect(handler)
+3. stateChanged(int) ; Emitted by QCheckBox when its check state changes. Example: checkbox.stateChanged.connect(handler)
+4. currentIndexChanged(int / str) ; Emitted by QComboBox when the selection changes. Example: combo.currentIndexChanged.connect(handler)
+5. textChanged(str) ; Emitted by QLineEdit, QTextEdit, etc. when the text is edited. Example: lineedit.textChanged.connect(handler)
+6. returnPressed ; Emitted by QLineEdit when the Enter or Return key is pressed. Example: lineedit.returnPressed.connect(handler)
+7. valueChanged(int / float) ; Emitted by QSpinBox, QSlider, QDial, etc. when the value changes. Example: slider.valueChanged.connect(handler)
+8. itemClicked(QListWidgetItem*) ; Emitted by QListWidget when an item is clicked. Example: listwidget.itemClicked.connect(handler)
+9. itemDoubleClicked(QListWidgetItem*) ; Emitted by QListWidget when an item is double-clicked. Example: listwidget.itemDoubleClicked.connect(handler)
+10. itemSelectionChanged ; Emitted when the selection in QListWidget or QTreeWidget changes. Example: listwidget.itemSelectionChanged.connect(handler)
+11. editingFinished ; Emitted by QLineEdit when the user finishes editing (e.g. presses Enter or focus is lost). Example: lineedit.editingFinished.connect(handler)
+12. activated(int / str) ; Emitted by QComboBox when an item is selected (by user interaction). Example: combo.activated.connect(handler)
+13. accepted / rejected ; Emitted by QDialogButtonBox when the user accepts or rejects a dialog. Example: buttonBox.accepted.connect(on_accept)
+14. timeout ; Emitted by QTimer when its interval elapses. Example: timer.timeout.connect(handler)
+15. customContextMenuRequested(QPoint) ; Emitted when a widget with `setContextMenuPolicy(Qt.CustomContextMenu)` is right-clicked. Example: widget.customContextMenuRequested.connect(show_context_menu)
+16. hovered ; Emitted by QAction when the action is hovered over (requires UI elements like toolbars or menus). Example: action.hovered.connect(handler)
+"""
+
 """ Inventory [ QWidget ]
 1. QWidget(parent=None) ; Initializes a widget, optionally with a parent.
 2. .show() ; Displays the widget on the screen.

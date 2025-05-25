@@ -15,6 +15,7 @@ from gui import *
 from events import * 
 from globals_variables import *
 from mapping import * 
+import vector as vec 
 
 # built-in
 import os
@@ -347,6 +348,7 @@ class Game_VIEWPORT:
             return dy, -dx            
     def rotated_direction(self, dx, dy):
         return self.rotate_vector_for_movement(dx, dy)
+    
 class Game_PLAYERS:
     def __init__(self):
         self.turn = 0
@@ -835,11 +837,21 @@ class Game_GUI:
         # Update pop-up with active messages
         active_messages = [msg for msg, _ in self.messages]
         self.message_popup.set_message(active_messages)
+    def update_all_gui(self):
+        self.update_inv_window()
+        self.update_journal_window()
+        self.update_behav_window()
     def update_inv_window(self):
         if self.inventory_window: 
             if self.inventory_window.isVisible():
                 self.inventory_window.update_inventory(self.player)
                 self.setFocus()
+    def update_journal_window(self):
+        if self.journal_window:
+            self.journal_window.save_journal()
+            if self.journal_window.isVisible():
+                self.journal_window.load_journal(self.current_slot)
+                self.journal_window.update_position()
     def update_behav_window(self):
         if self.behaviour_controller_window:
             if self.behaviour_controller_window.isVisible():
@@ -1077,14 +1089,20 @@ class DraggableView(QGraphicsView):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._drag_pos = None
+        self.mouse_x = None 
+        self.mouse_y = None
     def mousePressEvent(self, event):
-        if event.button() == Qt.LeftButton:
+        local_pos = event.pos() # QPoint
+        self.mouse_x = local_pos.x()
+        self.mouse_y = local_pos.y()
+        # -- 
+        if event.button() == Qt.RightButton:
             self._drag_pos = event.globalPos() - self.window().frameGeometry().topLeft()
             event.accept()
         else:
             super().mousePressEvent(event)
     def mouseMoveEvent(self, event):
-        if self._drag_pos is not None and event.buttons() & Qt.LeftButton:
+        if self._drag_pos is not None and event.buttons() & Qt.RightButton:
             self.window().move(event.globalPos() - self._drag_pos)
             event.accept()
         else:
@@ -1092,7 +1110,14 @@ class DraggableView(QGraphicsView):
     def mouseReleaseEvent(self, event):
         self._drag_pos = None
         super().mouseReleaseEvent(event)
+        # print("mouse :", self.mouse_x//TILE_SIZE, self.mouse_y//TILE_SIZE)
             
+# ? ... 
+class WindowSettings(Serializable):
+    __serialize_only__ = []
+    def __init__(self):
+        pass 
+
 # Main Window Class 
 class Game(DraggableView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_PLAYERS, Game_MAPTRANSITION, Game_DATA, Game_GUI, Game_ITERATION):
     __serialize_only__ = [
@@ -1122,6 +1147,25 @@ class Game(DraggableView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_P
         self.alt_pressed = False
         self.version = "1.0.0"
         self.load_current_game()
+    def mouseDoubleClickEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            x, y = self.mouse_map_pos()
+            _tile = self.map.get_tile(x, y)
+            if _tile: 
+                _char = _tile.current_char 
+                if _char and not _char is self.player:
+                    key = _char.name
+                    if key in self.players and self.can_select_player(_char):
+                        self.set_player(key) # ?
+                        self.draw()
+                        self.update_all_gui()
+                        return  
+        super().mouseDoubleClickEvent(event)  # optional: propagate the event if needed    
+    # def event(self, event): # double click override 
+        # if event == QEvent.MouseButtonDblClick:
+            # x, y = self.mouse_map_pos()
+            # print(x,y)
+        # return super().event(event)
     def closeEvent(self, event):
         """Save the game state when the window is closed."""
         try:
@@ -1300,6 +1344,28 @@ class Game(DraggableView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_P
                 self.start_new_game()
                 return True 
         return False 
+    def player_move_diff(self, dx, dy):
+        """ return True if the key press should trigger game_iteration """
+        b_isForwarding = vec.compare((dx,dy), self.player.get_forward_direction(), 0.01)
+        target_x, target_y = self.player.x + dx, self.player.y + dy
+        if not self.is_ingrid(target_x, target_y): # if target_x <0 or target_x > self.grid_width-1 or target_y<0 or target_y> self.grid_height-1:
+            self.horizontal_map_transition(target_x, target_y)
+            return False 
+        tile = self.map.get_tile(target_x, target_y)
+        if not tile: return False 
+        if tile.walkable:
+            target = tile.current_char
+            if target:
+                if b_isForwarding and is_enemy_of(self.player, target): #not isinstance(tile.current_char, Player):
+                    self.events.append(AttackEvent(self.player, target, self.player.do_damage()))
+            else:
+                old_x, old_y = self.player.x, self.player.y
+                if self.player.move(dx, dy, self.map):
+                    self.events.append(MoveEvent(self.player, old_x, old_y))
+                    self.dirty_tiles.add((old_x, old_y))
+                    self.dirty_tiles.add((self.player.x, self.player.y))
+            return True
+        return False 
     def key_press_movement(self, key):
         """ return True if the key press should trigger game_iteration """
         dx, dy = 0, 0
@@ -1388,25 +1454,79 @@ class Game(DraggableView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_P
             return False
         elif key == Qt.Key_Space:
             return True
+        
         # -- $ dx, dy | process movement 
         if dx or dy:
-            target_x, target_y = self.player.x + dx, self.player.y + dy
-            tile = self.map.get_tile(target_x, target_y)
-            if target_x <0 or target_x > self.grid_width-1 or target_y<0 or target_y> self.grid_height-1:
-                self.horizontal_map_transition(target_x, target_y)
-                return False
-            if tile and tile.walkable:
-                if tile.current_char:
-                    if b_isForwarding and not isinstance(tile.current_char, Player):
-                        self.events.append(AttackEvent(self.player, tile.current_char, self.player.do_damage()))
-                else:
-                    old_x, old_y = self.player.x, self.player.y
-                    if self.player.move(dx, dy, self.map):
-                        self.events.append(MoveEvent(self.player, old_x, old_y))
-                        self.dirty_tiles.add((old_x, old_y))
-                        self.dirty_tiles.add((self.player.x, self.player.y))
-                return True        
+            if self.player_move_diff(dx,dy)==True: return True 
+            # target_x, target_y = self.player.x + dx, self.player.y + dy
+            # tile = self.map.get_tile(target_x, target_y)
+            # if target_x <0 or target_x > self.grid_width-1 or target_y<0 or target_y> self.grid_height-1:
+                # self.horizontal_map_transition(target_x, target_y)
+                # return False
+            # if tile and tile.walkable:
+                # if tile.current_char:
+                    # if b_isForwarding and not isinstance(tile.current_char, Player):
+                        # self.events.append(AttackEvent(self.player, tile.current_char, self.player.do_damage()))
+                # else:
+                    # old_x, old_y = self.player.x, self.player.y
+                    # if self.player.move(dx, dy, self.map):
+                        # self.events.append(MoveEvent(self.player, old_x, old_y))
+                        # self.dirty_tiles.add((old_x, old_y))
+                        # self.dirty_tiles.add((self.player.x, self.player.y))
+                # return True        
         return False 
+    def mouse_map_pos(self):
+        _diff = self.get_mouse_move_diff()
+        dx, dy = self.rotated_direction( *_diff )
+        x = self.player.x + dx 
+        y = self.player.y + dy 
+        return x, y 
+    def mouse_press_interaction(self):
+        """ return True if a action is selected in the conditional net, else if need further processing. """
+        _diff = self.get_mouse_move_diff()
+        dx, dy = self.rotated_direction( *_diff )
+        _mag = vec.magnitude( (dx, dy) )
+        if dx is None or dy is None: return False 
+        x = self.player.x + dx 
+        y = self.player.y + dy 
+        _tile = self.map.get_tile(x, y)
+        if not _tile: return False 
+        _char = _tile.current_char 
+        if _mag > 1: return False 
+        # -- other playable character 
+        if isinstance(_char, Player) and _mag > 0:
+            SB = SelectionBox( [
+                f"[ {_char.name} ]",
+                "Add to Party",
+                "items+",
+                "items-",
+                "Exit"
+            ], action = player_menu, parent = self, game_instance = self, npc = _char )
+            SB.show()
+            return True 
+        # -- tile building 
+        if isinstance(_tile, TileBuilding) and _mag == 0:
+            if _tile.b_enemy: return False 
+            SB = SelectionBox( _tile.menu_list, action = _tile.action(), parent = self, game_instance = self )
+            _tile.update_menu_list(SB)
+            SB.show()
+            return True 
+        return False  
+    def mouse_press_movement(self):
+        if self.flag_is_animating: return False 
+        _diff = self.get_mouse_move_diff()
+        dx, dy = self.rotated_direction( *_diff )
+        if vec.magnitude((dx,dy)) == 1: 
+            if self.player_move_diff(dx,dy): return True 
+        elif vec.compare( _diff, (-1,1), 0.01 ): # left rotation
+            self.rotation = (self.rotation - 90) % 360
+            self.player.rotation = self.rotation 
+            return True
+        elif vec.compare( _diff, (1,1), 0.01 ): # right rotation 
+            self.rotation = (self.rotation + 90) % 360
+            self.player.rotation = self.rotation             
+            return True    
+        return False
     def key_press_skills(self, key):
         primary = self.player.primary_hand
         match key:
@@ -1468,5 +1588,17 @@ class Game(DraggableView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_P
         if self.key_press_movement(key): # put that function always on the end 
             self.game_iteration()
             return 
+    def get_mouse_move_diff(self):
+        _diff = vec.subtract( (self.mouse_x, self.mouse_y) , self.get_anchor() )
+        _diff = vec.scalar_multiply(1/TILE_SIZE, _diff)
+        _diff = vec.to_integer_vector(_diff)
+        return _diff 
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.LeftButton: 
+            if self.mouse_press_movement():
+                self.game_iteration()
+                return 
+        if self.mouse_press_interaction(): return 
+        return super().mouseReleaseEvent(event)
 
 # --- END 

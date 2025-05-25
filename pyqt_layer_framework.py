@@ -126,4 +126,24 @@ class Widget(QWidget):
         container.setLayout(layout)
         return container
 
+class DraggableWidget(Widget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._drag_pos = None
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self._drag_pos = event.globalPos() - self.window().frameGeometry().topLeft()
+            event.accept()
+        else:
+            super().mousePressEvent(event)
+    def mouseMoveEvent(self, event):
+        if self._drag_pos is not None and event.buttons() & Qt.LeftButton:
+            self.window().move(event.globalPos() - self._drag_pos)
+            event.accept()
+        else:
+            super().mouseMoveEvent(event)
+    def mouseReleaseEvent(self, event):
+        self._drag_pos = None
+        super().mouseReleaseEvent(event)
+
 # -- END

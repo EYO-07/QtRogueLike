@@ -250,6 +250,7 @@ def set_properties_layout(layout):
 # -> JournalWindow() || ... .build_parts() || ... .update_character_buttons() 
 class JournalWindow(Dialog):
     def __init__(self, parent=None):
+        self.key_name = "journal_window" # used for dictionary of windows 
         Dialog.__init__(self, parent)
         set_properties_non_modal_popup(self, "Journal")
         self.setFixedSize(POPUP_WIDTH, POPUP_HEIGHT)  # Similar size to InventoryWindow 
@@ -430,6 +431,7 @@ class JournalWindow(Dialog):
             super().keyPressEvent(event)
 class MessagePopup(Dialog):
     def __init__(self, parent=None):
+        self.key_name = "message_window" # used for dictionary of windows 
         Dialog.__init__(self, parent)
         # window settings
         set_properties_non_modal_popup(self, "Messages")
@@ -479,6 +481,8 @@ class SelectionBox(Widget):
         self.list_widget = new_list_widget(get_filtered_event_from=self)
         self / (self.layout/self.list_widget)
         # -- 
+        self.list_widget.itemDoubleClicked.connect(self.do_enter_action)
+        # -- 
         self.set_list()
         self.setFocus()
         self.list_widget.setFocus()
@@ -504,34 +508,41 @@ class SelectionBox(Widget):
         self.list_widget.resize(max_width+100, total_height-15)
         self.resize(max_width+100, total_height-10)
     def eventFilter(self, obj, event):
-        if obj == self.list_widget and event.type() == QEvent.KeyPress:
-            key = event.key() 
-            if key in (Qt.Key_Return, Qt.Key_Enter):
-                current_item = self.list_widget.currentItem()
-                if current_item:
-                    self.do_enter_action(current_item)
-                    return True
-            if key == Qt.Key_Escape:
-                self.close()
-                return True
-            if key == Qt.Key_Up:
-                if self.list_widget.currentRow() == 0:
-                    return True
-                else:
-                    return super().eventFilter(obj, event)
-            if key == Qt.Key_Down:
-                if self.list_widget.currentRow() == len(self.list_widget)-1:
-                    return True
-                else:
-                    return super().eventFilter(obj, event)
-            if key in (Qt.Key_Left, Qt.Key_Right):
-                return True 
+        if obj == self.list_widget:
+            match event.type():
+                case QEvent.KeyPress:
+                    key = event.key() 
+                    if key in (Qt.Key_Return, Qt.Key_Enter):
+                        current_item = self.list_widget.currentItem()
+                        if current_item:
+                            self.do_enter_action(current_item)
+                            return True
+                    if key == Qt.Key_Escape:
+                        self.close()
+                        return True
+                    if key == Qt.Key_Up:
+                        if self.list_widget.currentRow() == 0:
+                            return True
+                        else:
+                            return super().eventFilter(obj, event)
+                    if key == Qt.Key_Down:
+                        if self.list_widget.currentRow() == self.list_widget.count()-1:
+                            return True
+                        else:
+                            return super().eventFilter(obj, event)
+                    if key in (Qt.Key_Left, Qt.Key_Right):
+                        return True 
+            return False
         return super().eventFilter(obj, event)
     def do_enter_action(self, item=None):
-        if not item: item = self.list_widget.currentItem()
+        if item is None: item = self.list_widget.currentItem()
+        if item is None: 
+            print("Fail to Catch the Current Item") 
+            return 
         self.action(self.current_key, item.text(),self, **self.kw)
 class InventoryWindow(Dialog):
     def __init__(self, parent=None):
+        self.key_name = "inventory_window" # used for dictionary of windows 
         Dialog.__init__(self, parent)        
         set_properties_non_modal_popup(self, "Inventory")
         self.setFixedSize(POPUP_WIDTH, POPUP_HEIGHT)
@@ -808,6 +819,7 @@ class InventoryWindow(Dialog):
         self.update_selected_item_label_content() # self.list_widget_objects[new_idx] )
 class BehaviourController(Dialog):
     def __init__(self, parent=None):
+        self.key_name = "behaviour_window" # used for dictionary of windows 
         Dialog.__init__(self, parent)
         set_properties_non_modal_popup(self, "Behaviour Controller")
         self.resize(400,100)
@@ -967,7 +979,7 @@ def main_menu(menu, item, instance, game_instance):
             instance.close()
     elif menu == "Select Player Character >":
         if item != "[ Character Settings > Character Selection ]":
-            game_instance.set_player(item) # will not load the actual position of the new character, that must be changed !!! 
+            game_instance.set_player(item) # ?
             game_instance.draw()
             instance.close()
 def build_menu(menu, item, instance, game_instance):
@@ -1060,10 +1072,12 @@ def player_menu(menu,item, instance, game_instance, npc):
             return 
     if menu == "items+":
         player.give( player_items[item] , npc)
+        game_instance.update_inv_window()
         instance.close()
         return 
     if menu == "items-":
         npc.give( npc_items[item] , player)
+        game_instance.update_inv_window()
         instance.close()
         return 
 def debugging_menu(menu, item, instance, game_instance):
