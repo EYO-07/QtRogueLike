@@ -382,7 +382,9 @@ class Game_PLAYERS:
         self.player.party = False
         self.update_inv_window()
         if self.behaviour_controller_window: self.behaviour_controller_window.update()
-        if self.journal_window: self.journal_window.load_journal()
+        if self.journal_window: 
+            self.journal_window.load_journal()
+            self.journal_window.update_char_button_images()
         return True 
     def set_player_name(self,key,new_name):
         player = self.players.get(key,None)
@@ -810,6 +812,7 @@ class Game_GUI:
         self.setWindowTitle("PyQt Rogue Like")
         self.setFixedSize(self.view_width * self.tile_size, self.view_height * self.tile_size)
         # --
+        self.party_window = None 
         self.behaviour_controller_window = None 
         self.inventory_window = None  # Initialize later on demand
         # Initialize message window
@@ -841,6 +844,11 @@ class Game_GUI:
         self.update_inv_window()
         self.update_journal_window()
         self.update_behav_window()
+        self.update_party_window()
+    def update_party_window(self):
+        if self.party_window:
+            if self.party_window.isVisible():
+                self.party_window.update()
     def update_inv_window(self):
         if self.inventory_window: 
             if self.inventory_window.isVisible():
@@ -855,7 +863,7 @@ class Game_GUI:
     def update_behav_window(self):
         if self.behaviour_controller_window:
             if self.behaviour_controller_window.isVisible():
-                self.behaviour_controller_window.update_character_buttons()
+                self.behaviour_controller_window.update()
     def take_note_on_diary(self):
         if not self.journal_window:
             self.journal_window = JournalWindow(self) 
@@ -1311,7 +1319,7 @@ class Game(DraggableView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_P
                 else:
                     self.inventory_window.update_inventory(self.player)
                 return True     
-            case Qt.Key_Z:
+            case Qt.Key_Z: # behaviour window
                 if not self.behaviour_controller_window:
                     self.behaviour_controller_window = BehaviourController(self)
                 if self.behaviour_controller_window.isVisible():
@@ -1319,6 +1327,14 @@ class Game(DraggableView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_P
                 else:
                     self.behaviour_controller_window.show()
                     self.behaviour_controller_window.update()
+            case Qt.Key_P: # party window
+                if not self.party_window:
+                    self.party_window = PartyWindow(self)
+                if self.party_window.isVisible():
+                    self.party_window.hide()
+                else:
+                    self.party_window.show()
+                    self.party_window.update()
         match key: # music 
             case Qt.Key_M:  # Toggle music
                 self.toggle_music()

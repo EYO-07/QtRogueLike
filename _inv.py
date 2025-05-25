@@ -327,6 +327,51 @@
 20. .pressed.connect(func) ; Connect a function to the button pressed-down event
 21. .released.connect(func) ; Connect a function to the button released event
 22. .toggled.connect(func) ; Connect a function to the toggled signal (checkable buttons)
+
+Inventory [ QPushButton Stylesheet Properties ] { PyQt5 GUI Design }
+1. QPushButton { property: value; } ; Base selector to style all QPushButton widgets
+2. QPushButton:hover { property: value; } ; Styles applied when the mouse hovers over the button
+3. QPushButton:pressed { property: value; } ; Styles applied when the button is clicked/pressed
+4. QPushButton:checked { property: value; } ; Styles for buttons with checkable=True when selected
+5. QPushButton:disabled { property: value; } ; Styles applied when the button is disabled
+6. background-color: #RRGGBB; ; Sets the background color of the button
+7. color: #RRGGBB; ; Sets the text color of the button
+8. font: bold 14px "Arial"; ; Defines font weight, size, and family
+9. border: 1px solid black; ; Creates a border around the button
+10. border-radius: 5px; ; Rounds the corners of the button
+11. padding: 5px 10px; ; Controls space inside the button (top/bottom, left/right)
+12. margin: 5px; ; Controls space outside the button relative to other widgets
+13. min-width / min-height: Npx; ; Sets the minimum dimensions of the button
+14. max-width / max-height: Npx; ; Sets the maximum dimensions of the button
+15. qproperty-icon: url(:/icons/icon.png); ; Sets the icon from a resource path
+16. qproperty-iconSize: 32px 32px; ; Defines the size of the icon shown on the button
+17. text-align: left/right/center; ; Aligns text inside the button
+18. QPushButton:focus { outline: none; } ; Removes or customizes focus border
+19. QPushButton[customProperty="value"] { ... } ; Applies style based on dynamic property
+20. transition: all 0.3s ease; ; [Not supported in Qt stylesheets] — Qt does not support CSS transitions
+"""
+
+""" Inventory [ QTabWidget ] { Tabbed Interface with Associated Widgets }
+1. QTabWidget(parent=None) ; Creates a tab widget container
+2. addTab(widget, label) ; Adds a new tab with the given content widget and tab label
+3. insertTab(index, widget, label) ; Inserts a tab at the given index
+4. removeTab(index) ; Removes the tab at the specified index
+5. count() ; Returns the number of tabs
+6. currentIndex() ; Returns the index of the currently selected tab
+7. setCurrentIndex(index) ; Sets the active tab by index
+8. widget(index) ; Returns the content widget at the specified tab index
+9. setTabText(index, label) ; Changes the label of the tab at the given index
+10. setTabIcon(index, QIcon) ; Sets an icon on the tab
+11. setTabsClosable(bool) ; Enables a close button on each tab
+12. tabCloseRequested(index) ; Signal emitted when a tab's close button is clicked
+13. setMovable(bool) ; Allows tabs to be reordered by the user
+14. tabBar() ; Returns the underlying QTabBar for further customization
+15. setTabEnabled(index, bool) ; Enables or disables a specific tab
+16. setTabToolTip(index, text) ; Sets a tooltip for the tab at the given index
+17. currentChanged(index) ; Signal emitted when the current tab changes
+18. setDocumentMode(bool) ; Sets document-style tabs (flat look)
+19. setElideMode(Qt.ElideRight) ; Controls text eliding when tab text is too long
+20. setTabPosition(QTabWidget.North/South/East/West) ; Sets where tabs appear (top, bottom, etc.)
 """
 
 """ Inventory [ QHBoxLayout ] { Horizontal layout manager in PyQt5 }

@@ -11,7 +11,7 @@ import os
 from datetime import datetime
 
 # third-party
-from PyQt5.QtWidgets import QWidget, QListWidget, QVBoxLayout, QPushButton, QHBoxLayout, QMenu, QDialog, QLabel, QTextEdit, QSizePolicy, QInputDialog, QTabBar, QSlider, QLayoutItem
+from PyQt5.QtWidgets import QWidget, QListWidget, QVBoxLayout, QPushButton, QHBoxLayout, QMenu, QDialog, QLabel, QTextEdit, QSizePolicy, QInputDialog, QTabBar, QTabWidget, QSlider, QLayoutItem
 from PyQt5.QtCore import Qt, QEvent
 from PyQt5.QtGui import QTextCursor, QColor, QIcon
 
@@ -47,7 +47,7 @@ def new_text(foreground = "white", layout = None):
     if layout is None: return text_edit
     layout.addWidget(text_edit)
     return text_edit
-def new_button(label, callback, foreground = "white", layout = None):
+def new_button(label, callback = None, foreground = "white", layout = None):
     color_css = color_to_css(foreground)
     button = QPushButton(label)
     button.setStyleSheet(f"""
@@ -62,7 +62,7 @@ def new_button(label, callback, foreground = "white", layout = None):
             background-color: rgba(255, 255, 255, 20);
         }}
     """)
-    button.clicked.connect(callback)
+    if not callback is None: button.clicked.connect(callback)
     if layout is None: return button 
     layout.addWidget(button)
     return button
@@ -105,6 +105,33 @@ def new_list_widget(callback = None, get_filtered_event_from = None):
     if callback: list_widget.itemDoubleClicked.connect(callback)
     if get_filtered_event_from: list_widget.installEventFilter(get_filtered_event_from) # now the list_widget will use the keyPressEvent function 
     return list_widget
+
+def new_tab_widget(wdg_dict):
+    tab_ = QTabWidget()
+    # Styling (matches your dark semi-transparent style)
+    tab_.setStyleSheet("""
+        QTabBar::tab {
+            background-color: rgba(0, 0, 0, 150);
+            color: white;
+            padding: 5px 10px;
+            border: 1px solid rgba(255, 255, 255, 30);
+            border-radius: 3px;
+            margin: 2px;
+            font-size: 10px;
+        }
+        QTabBar::tab:selected {
+            background-color: rgba(255, 255, 255, 30);
+            color: cyan;
+        }
+        QTabBar::tab:hover {
+            background-color: rgba(255, 255, 255, 20);
+        }
+    """)
+    for k,v in wdg_dict.items():    
+        tab_.addTab(v, k)    
+    # tab_widget.setFocusPolicy(Qt.StrongFocus)
+    return tab_
+
 def new_tab_bar(label="tab 1", callback = None):
     tab_ = QTabBar()
     tab_.addTab(label)
@@ -259,35 +286,58 @@ class JournalWindow(Dialog):
         # -- 
         self.hide()  # Hidden by default
         self.update_position()
+        # self.update_behavior_controllers()
         if self.parent(): self.parent().setFocus()
     def build_parts(self):
         self.layout = VLayout() # vertical 
         self.button_layout = HLayout()
         self.char_button_list = []
-        self.update_character_buttons()
+        # --
+        # self.activity_slider = new_horizontal_slider("Activity Level",minimum=1, maximum=100) # porcentagem
+        # self.tolerance_slider = new_horizontal_slider("Distance Tolerance",minimum=1, maximum=10) # valor 
         self.text_edit = new_text(foreground = "yellow")
+        # self.behaviour_controller_layout = VLayout()
+        # self.tab_widgets = new_tab_widget({
+            # "Journal" : self.text_edit,
+            # "Behavior" : self.activity_slider # self.behaviour_controller_layout / self.activity_slider / self.tolerance_slider
+        # })
+        # --
+        self.update_character_buttons()
         self.save_button = new_button("Save", self.save_journal)
         self.log_button = new_button("Log Entry", self.log_diary_entry)
+    # def update_behavior_controllers(self):
+        # get_label_list(self.activity_slider)[0].setText( f"Activity Level : { self.parent().player.activity }" )
+        # get_label_list(self.tolerance_slider)[0].setText( f"Distance Tolerance : { self.parent().player.tolerance }" )
+        # get_slider_list(self.activity_slider)[0].setValue( int(self.parent().player.activity*100) ) 
+        # get_slider_list(self.tolerance_slider)[0].setValue( max(1,int(self.parent().player.tolerance)) )
     def update_character_buttons(self):        
         def button_callback(k,v):
             print(k,v)
             self.save_journal()
-            if not self.parent().can_select_player(v): return 
-            self.parent().set_player(k) 
-            self.parent().draw() 
-            self.parent().setFocus()
-            if self.parent().inventory_window: self.parent().inventory_window.update_inventory(self.parent().player)
+            parent = self.parent()
+            if not parent.can_select_player(v): return 
+            parent.set_player(k) 
+            parent.draw() 
+            parent.setFocus()
+            parent.update_inv_window()
+            parent.update_party_window()
             self.load_journal()
+            self.update_char_button_images()
         clear_layout(self.button_layout)
         self.char_button_list.clear()
         for k,v in self.parent().players.items():
             if not self.parent().can_select_player(v): continue 
-            button = new_button(label = "", callback = lambda x,a=k,b=v: button_callback(a,b), foreground='white')
+            button = new_button(label = "", callback = lambda x,a=k,b=v: button_callback(a,b) ,foreground='white')
+            if v is self.parent().player: 
+                button.setStyleSheet("border: 1px solid lightgray")
+            else:
+                button.setStyleSheet("border: 1px solid black")
             self.char_button_list.append( [ button, v ] )
             pix = v.get_sprite_with_hud()
             button.setIcon(QIcon(pix))
             button.setIconSize(pix.size())
             self.button_layout / button
+        # self.update_behavior_controllers()
     def update_char_button_images(self):
         if not self.char_button_list: return 
         for L in self.char_button_list:
@@ -296,10 +346,29 @@ class JournalWindow(Dialog):
             pix = ply.get_sprite_with_hud()
             button.setIcon(QIcon(pix))
             button.setIconSize(pix.size())
+            if ply is self.parent().player: 
+                button.setStyleSheet("border: 1px solid lightgray")
+            else:
+                button.setStyleSheet("border: 1px solid black")
+        # self.update_behavior_controllers()
+    
+    # def on_change_tolerance(self, value):
+        # player = self.parent().player
+        # if not player: return 
+        # player.tolerance = get_slider_list(self.tolerance_slider)[0].value()
+        # self.update()
+    # def on_change_activity(self, value):
+        # player = self.parent().player
+        # if not player: return 
+        # player.activity = get_slider_list(self.activity_slider)[0].value()/100.0
+        # self.update()
+    
     def assemble_parts(self):
         set_properties_layout(self.layout)
         self.layout / self.button_layout 
         self/( self.layout/self.text_edit/( HLayout()/self.save_button/self.log_button ) )
+        # get_slider_list(self.activity_slider)[0].valueChanged.connect( self.on_change_activity )
+        # get_slider_list(self.tolerance_slider)[0].valueChanged.connect( self.on_change_tolerance )
     def whereAmI(self):
         player = self.parent().player
         if not player: return ""
@@ -823,10 +892,86 @@ class BehaviourController(Dialog):
         Dialog.__init__(self, parent)
         set_properties_non_modal_popup(self, "Behaviour Controller")
         self.resize(400,100)
+        # self.char_button_list = []
+        self.build_parts()
+        self.assemble_parts()
+        self.update()
+    # def update_character_buttons(self): 
+        # def button_callback(k,v):
+            # print(k,v)
+            # should release the character from party 
+            # game_instance = self.parent()
+            # player = game_instance.player
+            # if not isinstance(player, Hero): return 
+            # player.release_party_member(k, game_instance)
+            # game_instance.update_prior_next_selection()
+            # game_instance.draw() 
+            # game_instance.setFocus()
+        # clear_layout(self.button_layout)
+        # self.char_button_list.clear()
+        # game_instance = self.parent()
+        # player = self.parent().player
+        # if not isinstance(player, Hero): return 
+        # for k in player.party_members:
+            # v = game_instance.players.get(k, None)
+            # if not v: continue 
+            # button = new_button(label = "", callback = lambda x,a=k,b=v: button_callback(a,b), foreground='white')
+            # self.char_button_list.append( [ button, v ] )
+            # pix = v.get_sprite_with_hud()
+            # button.setIcon(QIcon(pix))
+            # button.setIconSize(pix.size())
+            # self.button_layout / button
+    # def update_char_button_images(self): 
+        # if not self.char_button_list: return 
+        # for L in self.char_button_list:
+            # button = L[0]
+            # ply = L[1]
+            # pix = ply.get_sprite_with_hud()
+            # button.setIcon(QIcon(pix))
+            # button.setIconSize(pix.size())
+    def build_parts(self):
+        self.layout = VLayout() # vertical 
+        # self.button_layout = HLayout() 
+        self.activity_slider = new_horizontal_slider("Activity Level",minimum=1, maximum=100) # porcentagem
+        self.tolerance_slider = new_horizontal_slider("Distance Tolerance",minimum=1, maximum=10) # valor 
+    def assemble_parts(self):
+        set_properties_layout(self.layout)
+        self.layout / self.activity_slider / self.tolerance_slider # / self.button_layout 
+        self / self.layout 
+        get_slider_list(self.activity_slider)[0].valueChanged.connect( self.on_change_activity )
+        get_slider_list(self.tolerance_slider)[0].valueChanged.connect( self.on_change_tolerance )
+    def on_change_tolerance(self, value):
+        player = self.parent().player
+        if not player: return 
+        player.tolerance = get_slider_list(self.tolerance_slider)[0].value()
+        self.update()
+    def on_change_activity(self, value):
+        player = self.parent().player
+        if not player: return 
+        player.activity = get_slider_list(self.activity_slider)[0].value()/100.0
+        self.update()
+    def update(self):
+        # self.update_character_buttons()
+        get_label_list(self.activity_slider)[0].setText( f"Activity Level : { self.parent().player.activity }" )
+        get_label_list(self.tolerance_slider)[0].setText( f"Distance Tolerance : { self.parent().player.tolerance }" )
+        get_slider_list(self.activity_slider)[0].setValue( int(self.parent().player.activity*100) ) 
+        get_slider_list(self.tolerance_slider)[0].setValue( max(1,int(self.parent().player.tolerance)) )
+
+class PartyWindow(Dialog):
+    def __init__(self, parent = None):
+        self.key_name = "party_window" # used for dictionary of windows 
+        Dialog.__init__(self, parent)
+        set_properties_non_modal_popup(self, "Party")
+        self.setFixedWidth(POPUP_WIDTH)
         self.char_button_list = []
         self.build_parts()
         self.assemble_parts()
         self.update()
+    def build_parts(self):
+        self.button_layout = HLayout() 
+    def assemble_parts(self):
+        set_properties_layout(self.button_layout)
+        self / self.button_layout 
     def update_character_buttons(self): 
         def button_callback(k,v):
             print(k,v)
@@ -860,33 +1005,9 @@ class BehaviourController(Dialog):
             pix = ply.get_sprite_with_hud()
             button.setIcon(QIcon(pix))
             button.setIconSize(pix.size())
-    def build_parts(self):
-        self.layout = VLayout() # vertical 
-        self.button_layout = HLayout() 
-        self.activity_slider = new_horizontal_slider("Activity Level",minimum=1, maximum=100) # porcentagem
-        self.tolerance_slider = new_horizontal_slider("Distance Tolerance",minimum=1, maximum=10) # valor 
-    def assemble_parts(self):
-        set_properties_layout(self.layout)
-        self.layout / self.activity_slider / self.tolerance_slider / self.button_layout 
-        self / self.layout 
-        get_slider_list(self.activity_slider)[0].valueChanged.connect( self.on_change_activity )
-        get_slider_list(self.tolerance_slider)[0].valueChanged.connect( self.on_change_tolerance )
-    def on_change_tolerance(self, value):
-        player = self.parent().player
-        if not player: return 
-        player.tolerance = get_slider_list(self.tolerance_slider)[0].value()
-        self.update()
-    def on_change_activity(self, value):
-        player = self.parent().player
-        if not player: return 
-        player.activity = get_slider_list(self.activity_slider)[0].value()/100.0
-        self.update()
     def update(self):
         self.update_character_buttons()
-        get_label_list(self.activity_slider)[0].setText( f"Activity Level : { self.parent().player.activity }" )
-        get_label_list(self.tolerance_slider)[0].setText( f"Distance Tolerance : { self.parent().player.tolerance }" )
-        get_slider_list(self.activity_slider)[0].setValue( int(self.parent().player.activity*100) ) 
-        get_slider_list(self.tolerance_slider)[0].setValue( max(1,int(self.parent().player.tolerance)) )
+        
 # menu components
 def common_menu_parts(menu, item, instance, game_instance, previous_menu = None):
     """ return True means that the menu should close, return False means that the caller should return, None if caller should process other statements. """

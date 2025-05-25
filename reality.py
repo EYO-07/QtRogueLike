@@ -1140,13 +1140,13 @@ class Hero(Player): # playable character that can "carry" a party
         if npc.party == True: return 
         if isinstance(npc, Hero):
             if len(npc.party_members) > 0: return 
-        if len(self.party_members) >= 4: return 
+        if len(self.party_members) >= 7: return 
         # -- 
         self.party_members.add(key)
         npc.party = True
         game_instance.map.remove_character(npc)
         game_instance.update_prior_next_selection()
-        game_instance.update_behav_window()
+        game_instance.update_all_gui()
         game_instance.draw()
     def release_party_member(self, key, game_instance):
         x = self.x 
@@ -1169,7 +1169,7 @@ class Hero(Player): # playable character that can "carry" a party
             game_instance.map.place_character(value)
             game_instance.draw()
             break 
-        game_instance.update_behav_window() 
+        game_instance.update_all_gui() 
     def release_party(self, game_instance):
         x = self.x 
         y = self.y 
@@ -1192,7 +1192,7 @@ class Hero(Player): # playable character that can "carry" a party
                     break 
             for key in to_remove:
                 self.party_members.remove(key)
-        game_instance.update_behav_window() 
+        game_instance.update_all_gui() 
     def count_party(self):
         return len(self.party_members)
     
