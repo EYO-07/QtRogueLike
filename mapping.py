@@ -818,6 +818,8 @@ class Map(Serializable, Map_SPECIAL, Map_MODELLING, Map_CHARACTERS, Map_TILES):
         self.add_patches()
         self.add_trees()
         self.add_rocks()
+        self.add_enemy_mill(quantity=2)
+        self.add_enemy_lumber_mill(quantity=2)
     def generate_procedural_forest(self):
         self.enemy_type = "deep_forest"
         self.grid_init_uniform("grass",True)

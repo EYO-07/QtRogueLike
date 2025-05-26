@@ -1018,7 +1018,7 @@ class Game_ITERATION:
     def Event_NewDay(self):
         print(f"Day {self.current_day}")
         if d() < 1.0/3.0: # spawn raiders 1/3 of time
-            for i in range(int(d(1,5))):
+            for i in range(int(d(0, min( self.current_day,50 ) ))):
                 x,y = self.map.get_random_walkable_tile()
                 if not x or not y: continue 
                 enemy = self.map.generate_enemy_by_chance_by_list_at(x, y, RAIDERS_TABLE)
@@ -1244,12 +1244,13 @@ class Game(DraggableView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_P
         return False 
     def key_press_choose_weapon_menu(self, key):
         """ return True means that the keyPressEvent should return imediatly """
+        #list_of_weapons = [ [wp, f"{wp.name} {wp.damage:.1f} [dmg]"] for wp in self.player.items if isinstance(wp, Weapon) ]
+        list_of_weapons = [ [wp, wp.info() ] for wp in self.player.items if isinstance(wp, Weapon) ]
         if key == Qt.Key_1:
-            list_of_weapons = [ [wp, f"{wp.name} {wp.damage:.1f} [dmg]"] for wp in self.player.items if isinstance(wp, Weapon) ]
-            if self.player.primary_hand and hasattr(self.player.primary_hand, "damage"):
+            if self.player.primary_hand and hasattr(self.player.primary_hand, "info"):
                 SB = SelectionBox( 
                     parent=self, 
-                    item_list = ["[ Weapon Selection ]", f"-> primary: {self.player.primary_hand.name} {self.player.primary_hand.damage:.1f} [dmg]"]+[ i[1] for i in list_of_weapons ]+["Exit"], 
+                    item_list = ["[ Weapon Selection ]", f"-> primary: {self.player.primary_hand.info()}" ]+[ i[1] for i in list_of_weapons ]+["Exit"], 
                     action = primary_menu, 
                     game_instance = self, 
                     list_of_weapons = list_of_weapons,
@@ -1260,11 +1261,10 @@ class Game(DraggableView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_P
             SB.show()
             return True 
         elif key == Qt.Key_2: # TODO : should include shields too 
-            list_of_weapons = [ [wp, f"{wp.name} {wp.damage:.1f} [dmg]"] for wp in self.player.items if isinstance(wp, Weapon) ]
-            if self.player.secondary_hand and hasattr(self.player.secondary_hand, "damage"):
+            if self.player.secondary_hand and hasattr(self.player.secondary_hand, "info"):
                 SB = SelectionBox( 
                     parent=self, 
-                    item_list = ["[ Weapon Selection ]", f"-> secondary: {self.player.secondary_hand.name} {self.player.secondary_hand.damage:.1f} [dmg]"]+[ i[1] for i in list_of_weapons ]+["Exit"], 
+                    item_list = ["[ Weapon Selection ]", f"-> secondary: {self.player.secondary_hand.info()}" ]+[ i[1] for i in list_of_weapons ]+["Exit"], 
                     action = primary_menu, 
                     game_instance = self, 
                     list_of_weapons = list_of_weapons,
