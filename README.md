@@ -17,7 +17,8 @@ Currently in development, but I will appreciate if someone help testing the game
 6. Random Enemy Buildings in Overworld (Generate Certain Amount of Enemies when the player is close, Has Random Amount of Resources).
 7. Can Control Multiple Characters and Create Parties (Press C in front of a Character to Add to Party, Press P or X to Release the Party).
 8. Raiding Enemies Spawn (Will Search for Nearest Building).
-9. You can add any track you want on music folder, the game will randomly select and play whenever you change from one map to another.
+9. The raiders's spawn quantity will progressively increase on day count capped to 50.
+10. You can add any track you want on music folder, the game will randomly select and play whenever you change from one map to another.
 
 ## Gameplay
 
