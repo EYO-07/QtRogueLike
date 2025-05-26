@@ -432,6 +432,10 @@ class Game_PLAYERS:
         self.update_prior_next_selection()
     def update_prior_next_selection(self):
         if self.journal_window: self.journal_window.update()
+        if self.player is None:
+            print("Bad Timing to Call .update_prior_next_selection() the current player is None")
+            self.prior_next_players = []
+            return 
         def ply_filter(value):
             if value is None: return False 
             if not isinstance(value, Player): return False 
@@ -525,7 +529,8 @@ class Game_MAPTRANSITION:
             filename, 
             coords=self.current_map, 
             previous_coords = prev_coords, 
-            going_up = up
+            going_up = up,
+            b_generate = True
         )
         self.maps[self.current_map] = self.map # update the cached maps 
         self.map.fill_enemies()

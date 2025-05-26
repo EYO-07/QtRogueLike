@@ -4,6 +4,7 @@
 from events import * 
 from serialization import * 
 from globals_variables import *
+from conditional_network import *
 
 # built-in
 import random
@@ -18,12 +19,32 @@ from PyQt5.QtGui import QPixmap, QPainter, QTransform, QColor
 from PyQt5.QtWidgets import QGraphicsPixmapItem, QInputDialog
 import noise  # Use python-perlin-noise instead of pynoise
 
+# Artificial Behavior Function 
 def is_enemy_of(char1, char2):
     if isinstance(char1, Player) and isinstance(char2, Player): return False 
     if isinstance(char1, Enemy) and isinstance(char2, Enemy): return False 
     if isinstance(char1, Player) and isinstance(char2, Enemy): return True 
     if isinstance(char1, Enemy) and isinstance(char2, Player): return True 
     return False 
+
+def random_walk(char = None, game_instance = None):
+    if char is None: return False 
+    if game_instance is None: return False 
+    if d() >= char.activity: return False 
+    for i in range(5): # 5 attempts
+        dx, dy = random.choice(ADJACENT_DIFF_MOVES)
+        target_x, target_y = char.x + dx, char.y + dy
+        tile = game_instance.map.get_tile(target_x, target_y)
+        if not tile: continue 
+        if tile.can_place_character(): return char.move(dx, dy, game_instance.map)
+    return False 
+    
+def pursue(char = None, target = None, game_instance = None): pass 
+def pursue_destination(char = None, target = None, game_instance = None): pass 
+def pursue_attack_target(char = None, target = None, game_instance = None): pass 
+def pursue_ranged_attack_target(char = None, target = None, game_instance = None): pass 
+def pursue_heal_target(char = None, target = None, game_instance = None): pass 
+def pursue_building(char = None, target = None, game_instance = None): pass 
 
 # SANITY COMMENTS
 # 1. Entity.get_tile don't means that the Entity is properly placed at 

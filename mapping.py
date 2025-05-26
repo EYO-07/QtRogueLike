@@ -733,7 +733,7 @@ class Map(Serializable, Map_SPECIAL, Map_MODELLING, Map_CHARACTERS, Map_TILES):
             coords=(0, 0, 0), 
             width=MAP_WIDTH, 
             height=MAP_HEIGHT, 
-            b_generate = True, 
+            b_generate = False, 
             previous_coords = (0,0,0), 
             prev_x = MAP_WIDTH//2, 
             prev_y = MAP_HEIGHT//2, 
@@ -771,7 +771,10 @@ class Map(Serializable, Map_SPECIAL, Map_MODELLING, Map_CHARACTERS, Map_TILES):
         self.starting_y = None
         self.rooms = None # could be tuple (x,y,w,h) of rectangular room of could be a Room instance 
         self.buildings = []
-        if b_generate: self.generate()
+        if b_generate: 
+            self.generate()
+        else:
+            self.grid_init_uniform()
     def from_dict(self, dictionary):
         if not super().from_dict(dictionary):
             return False
@@ -785,6 +788,7 @@ class Map(Serializable, Map_SPECIAL, Map_MODELLING, Map_CHARACTERS, Map_TILES):
     def update_buildings_list(self):
         self.buildings = [ self.grid[y][x] for y in range(self.height) for x in range(self.width) if isinstance(self.grid[y][x], TileBuilding) ]
     def generate(self):
+        print("Map :", self.filename)
         if self.filename == "procedural_dungeon":
             # Default to descending from (0, 0, 0) if no previous coords provided
             return self.generate_procedural_dungeon(self.previous_coords, self.prev_x, self.prev_y, self.going_up)
