@@ -507,6 +507,14 @@ class Map_CHARACTERS:
             print(f"Warning: Only placed {placed} of {num_enemies} enemies due to limited valid tiles")
         print(f"Added {len(self.enemies)} enemies for map {self.coords}")
         return self.enemies 
+    def has_adjacent_walkable_can_place_character(self, tile, x, y):
+        if not tile: return False 
+        if not self.has_adjacent_walkable(tile, x, y): return False 
+        return (tile.walkable and not tile.current_char)     
+    def all_adjacent_walkable_can_place_character(self, tile, x, y):
+        if not tile: return False 
+        if not self.is_adjacent_walkable(tile, x, y): return False 
+        return (tile.walkable and not tile.current_char) 
     def update_enemies(self, game_instance):
         for enemy in self.enemies:
             enemy.behaviour_update(game_instance)            
@@ -683,7 +691,13 @@ class Map_TILES:
         tile = self.get_tile(x,y)
         if not tile: return False 
         return tile.walkable 
-    def is_adjacent_walkable(self,tile, x,y):
+    def has_adjacent_walkable(self, tile, x, y):
+        for dx,dy in CROSS_DIFF_MOVES:
+            tile_2 = self.get_tile(x+dx,y+dy)
+            if tile_2:
+                if tile_2.walkable: return True 
+        return False 
+    def is_adjacent_walkable(self,tile, x, y):
         for dx,dy in CROSS_DIFF_MOVES:
             tile_2 = self.get_tile(x+dx,y+dy)
             if tile_2:

@@ -728,6 +728,7 @@ class BehaviourCharacter(Entity): # interface : artificially controlled characte
         Entity.__init__(self)
         self.activity = 0.05
         self.tolerance = 4
+        self.current_target = None # never serialize this, can lead to infinite saving. 
     def get_closest_visible(self, entities, game_instance, default_target = None):
         entity = None 
         distance = None 

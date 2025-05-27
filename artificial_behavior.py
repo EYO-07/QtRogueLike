@@ -17,7 +17,7 @@ import random
 
 # Let T be a toplevel function and F, G members for the conditional network class. The DSL Logic should be of the form:
 # T() || % F() || additional things | return whatever 
-# F() || % G() || return True ... which means that whoever calls him should return True to the toplevel caller.
+# F() || % G() || return True ... which means that whoever calls him should return True (possibly doing additional things) to the toplevel caller.
 
 class Function_Family:
     def __init__(self, function = None):
@@ -25,7 +25,6 @@ class Function_Family:
     def __call__(self, *args, **kwargs):
         if not self.function: return None
         return self.function(*args, **kwargs)
-        
 class Conditional_Network(Function_Family):
     def __init__(self, function = None):
         Function_Family.__init__(self, function = function)
@@ -63,7 +62,6 @@ class Conditional_Network(Function_Family):
     def __repr__(self):
         name = getattr(self.function, '__name__', repr(self.function))
         return f"<Conditional_Network({name})>"
-        
 True_F = Conditional_Network(lambda *args, **kwargs: True)
 False_F = Conditional_Network(lambda *args, **kwargs: False)
 
@@ -130,6 +128,69 @@ def is_enemy_of(char1, char2):
     if isinstance(char1, Player) and isinstance(char2, Enemy): return True 
     if isinstance(char1, Enemy) and isinstance(char2, Player): return True 
     return False 
+def get_closest_visible(origin = None, default_target = None, entities = None, game_instance = None):
+    if not origin: return None, None 
+    if not game_instance: return None, None 
+    if default_target is None and entities is None: return None, None 
+    entity = None 
+    distance = None 
+    if default_target:
+        entity = default_target
+        distance = origin.distance(entity)
+    if len(entities) == 0: 
+        return entity, distance 
+    if type(entities) == list: 
+        if not default_target:
+            entity = entities[0]
+            distance = origin.distance(entity)
+        if len(entities) == 1: 
+            return entity, distance 
+        from reality import TileBuilding    
+        for v in entities:
+            if not v: continue # possibly unnecessary 
+            if isinstance(v, TileBuilding): # if is a TileBuilding
+                new_distance = origin.distance(v)
+                if new_distance < distance:
+                    entity = v
+                    distance = new_distance 
+            else:
+                if not v.current_tile: continue 
+                tile = game_instance.map.get_tile(v.x,v.y)
+                if not tile: continue
+                if not tile.current_char is v: continue 
+                new_distance = origin.distance(v)
+                if new_distance < distance:
+                    entity = v
+                    distance = new_distance 
+    elif type(entities) == dict:
+        for k,v in entities.items():
+            if not k or not v: continue # possibly unnecessary 
+            if not origin.can_see_character(v, game_instance.map): continue 
+            if not v.current_tile: continue 
+            tile = game_instance.map.get_tile(v.x,v.y)
+            if not tile: continue
+            if not tile.current_char is v: continue 
+            new_distance = origin.distance(v)
+            if distance is None:
+                entity = v
+                distance = new_distance
+            elif new_distance < distance:
+                entity = v
+                distance = new_distance 
+    if entity and distance:
+        if isinstance(origin, Player):
+            return entity, distance
+        else:
+            from reality import TileBuilding
+            if isinstance(entity, TileBuilding): # for building pursue it's not necessary to see 
+                return entity, distance 
+            if self.can_see_character(entity, game_instance.map):
+                return entity, distance
+            else:
+                return None, None 
+    else:
+        return None, None 
+    
 # -- AB : Artificial Behavior Function Family  
 def AB_random_walk(char = None, game_instance = None):
     if char is None: return False 
@@ -151,14 +212,37 @@ def AB_ranged_attack(char = None, game_instance = None):
         primary.do_ammo_consumption() # maybe add full stats update, but for simplicity
         return True 
     return False 
+def AB_ready_melee_current_target(char = None, game_instance = None):
+    target = char.current_target 
+    if not target: 
+        char.current_target = None 
+        return False 
+    from reality import Damageable 
+    if not isinstance(target, Damageable): 
+        char.current_target = None 
+        return False 
+    if target.hp <= 0: 
+        char.current_target = None 
+        return False 
+    if char.distance(target) > 1: # ? 
+        return False 
+    return True 
+
+# 1. AB_melee_attack() || % AB_ready_melee_current_target() || Attack 
+# 2. AB_melee_attack() || % AB_ready_melee_current_target() | & Search Adjacent 
 def AB_melee_attack(char = None, game_instance = None):
-    from reality import Damageable, Player
     if char is None: return False 
     if game_instance is None: return False 
     map = game_instance.map 
     if not map: return False 
-    # --
-    target = None
+    # 1. AB_melee_attack() || % AB_ready_melee_current_target() || Attack 
+    if AB_ready_melee_current_target(char = char, game_instance = game_instance):
+        damage = char.do_damage()
+        game_instance.events.append( AttackEvent(char, target, damage) )
+        return True 
+    # 2. AB_melee_attack() || % AB_ready_melee_current_target() | & Search Adjacent 
+    from reality import Damageable 
+    target = None 
     for dx, dy in random.sample(CROSS_DIFF_MOVES_1x1):
         x = char.x + dx 
         y = char.y + dy
@@ -172,6 +256,7 @@ def AB_melee_attack(char = None, game_instance = None):
     damage = char.do_damage()
     game_instance.events.append( AttackEvent(char, target, damage) )
     return True
+    
 def AB_healing(char = None, game_instance = None):
     from reality import Damageable, Player
     if char is None: return False 
@@ -196,6 +281,7 @@ def AB_healing(char = None, game_instance = None):
     cure = 0.1*target.max_hp 
     target.hp = min( target.max_hp, target.hp + cure )
     return True 
+
 def AB_pillage(char = None, game_instance = None):
     from reality import TileBuilding
     if char is None: return False 
@@ -221,7 +307,15 @@ def AB_pillage(char = None, game_instance = None):
         target.b_enemy = True 
         target.villagers = 10
     return True 
-    
+
+""" Laboratoy
+1. AB_ranged_attack should be called first, even for enemies without ranged weapons, so they use it when equipped.
+2. AB_melee_attack, AB_healing, AB_pillage should be called when the target is adjacent. 
+
+ranged attack | check current target | pursue target | adjacent action 
+
+"""
+
 def AB_pursue(char = None, target = None, game_instance = None): pass 
 def AB_pursue_destination(char = None, target = None, game_instance = None): pass 
 def AB_pursue_attack_target(char = None, target = None, game_instance = None): pass 

@@ -1097,6 +1097,29 @@ class Game_ITERATION:
                 self.remove_player(event.target.name)
                 return 
             self.map.remove_character(event.target)
+    def Event_OnLeftMouseClickView(self, x, y):
+        if x is None: return 
+        if y is None: return 
+        view_tile_x, view_tile_y = vec.to_integer_vector( vec.scalar_multiply(1.0/TILE_SIZE, (x,y)) )
+        if view_tile_x is None or view_tile_y is None: return 
+        view_diff = self.get_mouse_move_diff()
+        if not view_diff: return 
+        map_diff = self.rotated_direction( *view_diff )
+        if not map_diff: return 
+        player = self.player
+        if not player: return
+        map_tile_x = player.x + map_diff[0] 
+        map_tile_y = player.y + map_diff[1] 
+        # 1. x, y ; mouse coordinates in pixels relative to top-left corner of viewport 
+        # 2. view_tile_ ; coordinates in tile size units relative to top-left corner of viewport 
+        # 3. map_tile_ ; coordinate of respective tile in map grid  
+        # 4. view_diff ; integer difference vector from player anchor point relative to viewport
+        # 5. map_diff ; integer difference vector from player anchor point relative to map grid 
+        map = self.map 
+        if not map: return 
+        tile = map.get_tile(map_tile_x, map_tile_y) 
+        char = map.get_char(map_tile_x, map_tile_y) 
+        # Distancia Inclinada é Maior que Distancia Não Inclinada 
 
 class DraggableView(QGraphicsView):
     def __init__(self, parent=None):
@@ -1172,13 +1195,13 @@ class Game(DraggableView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_P
                         self.set_player(key) # ?
                         self.draw()
                         self.update_all_gui()
-                        return  
+                        return 
+                if self.player and self.player.distance(_tile) < 1 and _tile.items:
+                    self.events.append(PickupEvent(self.player, _tile))
+                    self.dirty_tiles.add((self.player.x, self.player.y))  # Redraw tile
+                    self.game_iteration()
+                    self.update_inv_window()
         super().mouseDoubleClickEvent(event)  # optional: propagate the event if needed    
-    # def event(self, event): # double click override 
-        # if event == QEvent.MouseButtonDblClick:
-            # x, y = self.mouse_map_pos()
-            # print(x,y)
-        # return super().event(event)
     def closeEvent(self, event):
         """Save the game state when the window is closed."""
         try:
@@ -1616,6 +1639,7 @@ class Game(DraggableView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_P
         return _diff 
     def mouseReleaseEvent(self, event):
         if event.button() == Qt.LeftButton: 
+            self.Event_OnLeftMouseClickView(self.mouse_x, self.mouse_y)
             if self.mouse_press_movement():
                 self.game_iteration()
                 return 
