@@ -14,6 +14,7 @@ import random
 # 4.A member function is called from a toplevel function or another member function.
 # 5. A member function return True if the choice for the structure has been made, so all the other functions that calls him recursively should return True until the toplevel function that can perform aditional tasks but should return True (or whatever is designed to return).
 # 6. A member function return False if the only the function should return, but the network should still process to find the desired choice. 
+# 7. Forker Function is a special member function which the True means a path choice in decision tree, and aren't used to tell the toplevel function to return. Ordinary member functions should be used as simple if, fork functions should be used in if-else or if-elif-else structure. 
 
 # Let T be a toplevel function and F, G members for the conditional network class. The DSL Logic should be of the form:
 # T() || % F() || additional things | return whatever 
@@ -178,10 +179,10 @@ def get_closest_visible(origin = None, default_target = None, entities = None, g
                 entity = v
                 distance = new_distance 
     if entity and distance:
+        from reality import TileBuilding, Player 
         if isinstance(origin, Player):
             return entity, distance
         else:
-            from reality import TileBuilding
             if isinstance(entity, TileBuilding): # for building pursue it's not necessary to see 
                 return entity, distance 
             if self.can_see_character(entity, game_instance.map):
@@ -358,6 +359,109 @@ def AB_pursue_current_target(char = None, game_instance = None):
     if not tile.can_place_character(): return False 
     char.move(dx, dy, map)
     return True 
+def AB_find_melee_target(char = None, game_instance = None): # forker 
+    """ True means a valid current_target at end of processing, False means that the function could not find a valid current_target. """
+    if char is None: return False 
+    if game_instance is None: return False 
+    map = game_instance.map 
+    if not map: return False
+    player = game_instance.player 
+    if not player: return False 
+    from reality import Player, Enemy, Damageable
+    target = None 
+    distance = None 
+    target = char.current_target 
+    if target: distance = char.distance(target)
+    flag_find_new = False 
+    if target is None: flag_find_new = True 
+    if not isinstance(target, Damageable): flag_find_new = True 
+    if distance and distance > 5: flag_find_new = True 
+    if flag_find_new:
+        if isinstance(char, Player):
+            char.current_target, distance = get_closest_visible(origin=char, entities=map.enemies, game_instance=game_instance)
+        elif isinstance(char, Enemy):
+            char.current_target, distance = get_closest_visible(origin=char, default_target=player, entities=game_instance.players, game_instance=game_instance)
+    if char.current_target is None: return False 
+    if distance is None: return False 
+    return True 
+def AB_find_healing_target(char = None, game_instance = None): # forker 
+    """ True means a valid current_target at end of processing, False means that the function could not find a valid current_target. """
+    if char is None: return False 
+    if game_instance is None: return False 
+    map = game_instance.map 
+    if not map: return False
+    player = game_instance.player 
+    if not player: return False 
+    from reality import Player, Enemy, Damageable
+    target = None 
+    distance = None 
+    target = char.current_target 
+    if target: distance = char.distance(target)
+    flag_find_new = False 
+    if target is None: flag_find_new = True 
+    if not isinstance(target, Damageable): flag_find_new = True 
+    if distance and distance > 5: flag_find_new = True 
+    if flag_find_new:
+        if isinstance(char, Player):
+            char.current_target, distance = get_closest_visible(origin=char, entities=game_instance.players, game_instance=game_instance)
+        elif isinstance(char, Enemy):
+            char.current_target, distance = get_closest_visible(origin=char, entities=map.enemies, game_instance=game_instance)
+    if char.current_target is None: return False 
+    if distance is None: return False 
+    return True 
+def AB_find_building_target(char = None, game_instance = None): # forker 
+    """ True means a valid current_target at end of processing, False means that the function could not find a valid current_target. """
+    if char is None: return False 
+    if game_instance is None: return False 
+    map = game_instance.map 
+    if not map: return False 
+    from reality import Player, Enemy, TileBuilding
+    buildings = None 
+    if isinstance(char, Player):
+        buildings = [ i for i in map.buildings if i.b_enemy ]
+    elif isinstance(char, Enemy):
+        buildings = [ i for i in map.buildings if not i.b_enemy ]
+    if not buildings: return False 
+    if len(buildings)==0: return False 
+    if len(buildings)==1: 
+        char.current_target = buildings[0]
+        return True 
+    player = game_instance.player 
+    if not player: return False 
+    target = None 
+    distance = None 
+    target = char.current_target 
+    if target: distance = char.distance(target)
+    flag_find_new = False 
+    if target is None: flag_find_new = True 
+    if not isinstance(target, TileBuilding): flag_find_new = True 
+    if flag_find_new: char.current_target, distance = get_closest_visible(origin=char, entities=buildings, game_instance=game_instance)
+    if char.current_target is None: return False 
+    if distance is None: return False 
+    return True 
+def AB_find_random_tile_target(char = None, game_instance = None): # forker 
+    """ True means a valid current_target at end of processing, False means that the function could not find a valid current_target. """
+    if char is None: return False 
+    if game_instance is None: return False 
+    map = game_instance.map 
+    if not map: return False 
+    from reality import Player, Enemy, Tile
+    player = game_instance.player 
+    if not player: return False 
+    target = None 
+    distance = None 
+    target = char.current_target 
+    if target: distance = char.distance(target)
+    flag_find_new = False 
+    if target is None: flag_find_new = True 
+    if distance and distance < 1: flag_find_new = True 
+    if not isinstance(target, Tile): flag_find_new = True 
+    if flag_find_new: char.current_target = map.get_random_walkable_tile()
+    if char.current_target is None: return False 
+    distance = char.distance(char.current_target)
+    if not distance: return False 
+    if distance < 1: return False 
+    return True 
     
 """ Laboratoy
 1. AB_ranged_attack should be called first, even for enemies without ranged weapons, so they use it when equipped.
@@ -369,10 +473,5 @@ Default ~ ranged attack | check current target | { pursue target, melee attack }
 Healer ~ ranged attack | check current target | { pursue target, melee attack, heal }
 Raider ~ ranged attack | check current target | { pursue target, melee attack, pillage }
 """
-
-def AB_find_melee_target(char = None, game_instance = None): pass 
-def AB_find_healing_target(char = None, game_instance = None): pass 
-def AB_find_building_target(char = None, game_instance = None): pass 
-def AB_find_random_target(char = None, game_instance = None): pass 
 
 # -- END 
