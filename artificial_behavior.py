@@ -212,22 +212,56 @@ def AB_ranged_attack(char = None, game_instance = None):
         primary.do_ammo_consumption() # maybe add full stats update, but for simplicity
         return True 
     return False 
-def AB_ready_melee_current_target(char = None, game_instance = None):
+def AB_melee_current_target(char = None, game_instance = None):
     target = char.current_target 
     if not target: 
         char.current_target = None 
         return False 
     from reality import Damageable 
-    if not isinstance(target, Damageable): 
+    if not isinstance(target, Damageable): return False 
+    if target.hp <= 0: 
+        char.current_target = None 
+        return False 
+    if char.distance(target) > 1: return False 
+    damage = char.do_damage()
+    game_instance.events.append( AttackEvent(char, target, damage) )    
+    return True     
+def AB_heal_current_target(char = None, game_instance= None):
+    target = char.current_target 
+    if not target: 
+        char.current_target = None 
+        return False 
+    from reality import Damageable 
+    if not isinstance(target, Damageable): return False 
+    if target.hp > 0.8*target.max_hp:
         char.current_target = None 
         return False 
     if target.hp <= 0: 
         char.current_target = None 
         return False 
-    if char.distance(target) > 1: # ? 
+    if char.distance(target) > 1: return False 
+    cure = 0.1*target.max_hp 
+    target.hp = min( target.max_hp, target.hp + cure )    
+    return True
+def AB_pillage_current_target(char = None, game_instance = None):
+    target = char.current_target 
+    if not target: 
+        char.current_target = None 
         return False 
+    from reality import TileBuilding
+    if not isinstance(target, TileBuilding): return False 
+    if target.b_enemy: 
+        char.current_target = None 
+        return False
+    if char.distance(target) > 0: return False 
+    damage = char.do_damage()
+    target.villagers = max(0, target.villagers - damage)
+    if target.villagers <= 0:
+        target.clear_resources()
+        target.b_enemy = True 
+        target.villagers = 10
     return True 
-
+    
 # 1. AB_melee_attack() || % AB_ready_melee_current_target() || Attack 
 # 2. AB_melee_attack() || % AB_ready_melee_current_target() | & Search Adjacent 
 def AB_melee_attack(char = None, game_instance = None):
@@ -235,12 +269,7 @@ def AB_melee_attack(char = None, game_instance = None):
     if game_instance is None: return False 
     map = game_instance.map 
     if not map: return False 
-    # 1. AB_melee_attack() || % AB_ready_melee_current_target() || Attack 
-    if AB_ready_melee_current_target(char = char, game_instance = game_instance):
-        damage = char.do_damage()
-        game_instance.events.append( AttackEvent(char, target, damage) )
-        return True 
-    # 2. AB_melee_attack() || % AB_ready_melee_current_target() | & Search Adjacent 
+    if AB_melee_current_target(char = char, game_instance = game_instance): return True 
     from reality import Damageable 
     target = None 
     for dx, dy in random.sample(CROSS_DIFF_MOVES_1x1):
@@ -256,15 +285,14 @@ def AB_melee_attack(char = None, game_instance = None):
     damage = char.do_damage()
     game_instance.events.append( AttackEvent(char, target, damage) )
     return True
-    
 def AB_healing(char = None, game_instance = None):
     from reality import Damageable, Player
     if char is None: return False 
     if game_instance is None: return False 
     map = game_instance.map 
     if not map: return False 
-    # --
-    target = None
+    if AB_heal_current_target(char = char, game_instance = game_instance): return True 
+    target = None 
     for dx, dy in random.sample(CROSS_DIFF_MOVES_1x1):
         x = char.x + dx 
         y = char.y + dy
@@ -281,19 +309,18 @@ def AB_healing(char = None, game_instance = None):
     cure = 0.1*target.max_hp 
     target.hp = min( target.max_hp, target.hp + cure )
     return True 
-
 def AB_pillage(char = None, game_instance = None):
     from reality import TileBuilding
     if char is None: return False 
     if game_instance is None: return False 
     map = game_instance.map 
     if not map: return False 
-    # --
+    if AB_pillage_current_target(char = char, game_instance = game_instance): return True 
     target = None
     for dx, dy in random.sample(ADJACENT_DIFF_MOVES):
         x = char.x + dx 
-        y = char.y + dy
-        target = map.get_tile(x,y)
+        y = char.y + dy 
+        target = map.get_tile(x,y) 
         if not target: continue 
         if not isinstance(target, TileBuilding): 
             target = None 
@@ -302,25 +329,50 @@ def AB_pillage(char = None, game_instance = None):
     if not target: return False 
     damage = char.do_damage()
     target.villagers = max(0, target.villagers - damage)
-    if target.villagers == 0:
+    if target.villagers <= 0:
         target.clear_resources()
         target.b_enemy = True 
-        target.villagers = 10
+        target.villagers = 10 
     return True 
-
+def AB_pursue_current_target(char = None, game_instance = None): 
+    if char is None: return False 
+    if game_instance is None: return False 
+    target = char.current_target 
+    if target is None: return False 
+    map = game_instance.map 
+    if map is None: 
+        char.current_target = None 
+        return False 
+    if not hasattr(target, "x"): 
+        char.current_target = None 
+        return False 
+    if not hasattr(target, "y"): 
+        char.current_target = None 
+        return False 
+    path = map.find_path(char.x, char.y, target.x, target.y)
+    if not path: return False 
+    next_x, next_y = path[0] 
+    dx, dy = next_x - char.x, next_y - char.y 
+    tile = map.get_tile(next_x, next_y) 
+    if not tile: return False 
+    if not tile.can_place_character(): return False 
+    char.move(dx, dy, map)
+    return True 
+    
 """ Laboratoy
 1. AB_ranged_attack should be called first, even for enemies without ranged weapons, so they use it when equipped.
 2. AB_melee_attack, AB_healing, AB_pillage should be called when the target is adjacent. 
 
 ranged attack | check current target | pursue target | adjacent action 
 
+Default ~ ranged attack | check current target | { pursue target, melee attack }
+Healer ~ ranged attack | check current target | { pursue target, melee attack, heal }
+Raider ~ ranged attack | check current target | { pursue target, melee attack, pillage }
 """
 
-def AB_pursue(char = None, target = None, game_instance = None): pass 
-def AB_pursue_destination(char = None, target = None, game_instance = None): pass 
-def AB_pursue_attack_target(char = None, target = None, game_instance = None): pass 
+def AB_find_melee_target(char = None, game_instance = None): pass 
+def AB_find_healing_target(char = None, game_instance = None): pass 
+def AB_find_building_target(char = None, game_instance = None): pass 
+def AB_find_random_target(char = None, game_instance = None): pass 
 
-def AB_pursue_heal_target(char = None, target = None, game_instance = None): pass 
-def AB_pursue_building(char = None, target = None, game_instance = None): pass 
-
-# -- END        
+# -- END 
