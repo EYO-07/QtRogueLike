@@ -131,6 +131,7 @@ def is_enemy_of(char1, char2):
     if isinstance(char1, Enemy) and isinstance(char2, Player): return True 
     return False 
 def get_closest_visible(origin = None, default_target = None, entities = None, game_instance = None):
+    from reality import TileBuilding, Player, Enemy, Healer
     if not origin: return None, None 
     if not game_instance: return None, None 
     if default_target is None and entities is None: return None, None 
@@ -147,9 +148,9 @@ def get_closest_visible(origin = None, default_target = None, entities = None, g
             distance = origin.distance(entity)
         if len(entities) == 1: 
             return entity, distance 
-        from reality import TileBuilding    
         for v in entities:
             if not v: continue # possibly unnecessary 
+            if v is origin: continue 
             if isinstance(v, TileBuilding): # if is a TileBuilding
                 new_distance = origin.distance(v)
                 if new_distance < distance:
@@ -167,7 +168,9 @@ def get_closest_visible(origin = None, default_target = None, entities = None, g
     elif type(entities) == dict:
         for k,v in entities.items():
             if not k or not v: continue # possibly unnecessary 
-            if not origin.can_see_character(v, game_instance.map): continue 
+            if v is origin: continue 
+            if isinstance(origin, Enemy):
+                if not origin.can_see_character(v, game_instance.map): continue 
             if not v.current_tile: continue 
             tile = game_instance.map.get_tile(v.x,v.y)
             if not tile: continue
@@ -180,7 +183,6 @@ def get_closest_visible(origin = None, default_target = None, entities = None, g
                 entity = v
                 distance = new_distance 
     if entity and distance:
-        from reality import TileBuilding, Player 
         if isinstance(origin, Player):
             return entity, distance
         else:

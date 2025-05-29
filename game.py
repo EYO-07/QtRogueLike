@@ -330,6 +330,7 @@ class Game_PLAYERS:
         if self.journal_window: 
             self.journal_window.load_journal()
             self.journal_window.update_char_button_images()
+        self.player.rotation = self.rotation 
         return True 
     def set_player_name(self,key,new_name):
         player = self.players.get(key,None)
