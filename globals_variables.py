@@ -91,7 +91,9 @@ SPRITE_NAMES_CHARACTERS = SPRITE_NAMES_PLAYABLES + [
     "mounted_knight",
     "evil_swordman",
     "crossbowman",
-    "evil_crossbowman"
+    "evil_crossbowman",
+    "sorceress",
+    "sorceress_2"
 ]
 SPRITE_NAMES_FOODS = [
     "food", 

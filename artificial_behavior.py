@@ -235,13 +235,15 @@ def AB_heal_current_target(char = None, game_instance= None):
         return False 
     from reality import Damageable 
     if not isinstance(target, Damageable): return False 
-    if target.hp > 0.8*target.max_hp:
+    if target.hp > 0.9*target.max_hp:
         char.current_target_healing = None 
         return False 
     if target.hp <= 0: 
         char.current_target_healing = None 
         return False 
     if char.distance(target) > 1: return False 
+    if char.stamina <= 20: return False 
+    char.stamina -= 20 
     cure = 0.1*target.max_hp 
     target.hp = min( target.max_hp, target.hp + cure )    
     return True
@@ -306,8 +308,10 @@ def AB_healing(char = None, game_instance = None):
         if is_enemy_of(char, target): 
             target = None 
             continue 
-        if target.hp <= 0.8*target.max_hp: break 
+        if target.hp <= 0.9*target.max_hp: break 
     if not target: return False 
+    if char.stamina <= 20: return False 
+    char.stamina -= 20 
     cure = 0.1*target.max_hp 
     target.hp = min( target.max_hp, target.hp + cure )
     return True 
@@ -457,6 +461,7 @@ def AB_find_melee_target(char = None, game_instance = None): # forker
             char.current_target, distance = get_closest_visible(origin=char, default_target=player, entities=game_instance.players, game_instance=game_instance)
     if char.current_target is None: return False 
     if distance is None: return False 
+    if distance > char.tolerance: return False 
     return True 
 def AB_find_melee_target_grudge(char = None, game_instance = None): # forker 
     """ True means a valid current_target at end of processing, False means that the function could not find a valid current_target. """
@@ -482,6 +487,7 @@ def AB_find_melee_target_grudge(char = None, game_instance = None): # forker
             char.current_target, distance = get_closest_visible(origin=char, default_target=player, entities=game_instance.players, game_instance=game_instance)
     if char.current_target is None: return False 
     if distance is None: return False 
+    if distance > char.tolerance: return False 
     return True     
 def AB_find_healing_target(char = None, game_instance = None): # forker 
     """ True means a valid current_target at end of processing, False means that the function could not find a valid current_target. """
@@ -573,12 +579,14 @@ def AB_behavior_default(char = None, game_instance = None): # - [ok]
         if AB_melee_current_target(char=char, game_instance=game_instance): return True 
         if AB_pursue_current_target(char=char, game_instance=game_instance): return True 
     if AB_random_walk(char=char, game_instance=game_instance): return True 
+    return True 
 def AB_behavior_grudge(char = None, game_instance = None): # - [ok]
     if AB_ranged_attack(char=char, game_instance=game_instance): return True 
     if AB_find_melee_target_grudge(char=char, game_instance=game_instance): 
         if AB_melee_current_target(char=char, game_instance=game_instance): return True 
         if AB_pursue_current_target(char=char, game_instance=game_instance): return True 
     if AB_random_walk(char=char, game_instance=game_instance): return True 
+    return True 
 def AB_behavior_raider(char = None, game_instance = None): # - [testing] 
     if AB_ranged_attack(char=char, game_instance=game_instance): return True 
     if AB_find_melee_target(char=char, game_instance=game_instance): 
@@ -588,7 +596,8 @@ def AB_behavior_raider(char = None, game_instance = None): # - [testing]
         if AB_pillage_current_target(char=char, game_instance=game_instance): return True 
         if AB_pursue_current_target_building(char=char, game_instance=game_instance): return True 
     if AB_random_walk(char=char, game_instance=game_instance): return True 
-def AB_behavior_healer(char = None, game_instance = None): # - [testing] 
+    return True 
+def AB_behavior_healer(char = None, game_instance = None): # - [ok] 
     if AB_find_healing_target(char=char, game_instance=game_instance): 
         if AB_heal_current_target(char=char, game_instance=game_instance): return True 
         if AB_pursue_current_target_healing(char=char, game_instance=game_instance): return True 
@@ -597,5 +606,6 @@ def AB_behavior_healer(char = None, game_instance = None): # - [testing]
         if AB_melee_current_target(char=char, game_instance=game_instance): return True 
         if AB_pursue_current_target(char=char, game_instance=game_instance): return True 
     if AB_random_walk(char=char, game_instance=game_instance): return True 
+    return True 
 
 # -- END 

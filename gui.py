@@ -896,39 +896,6 @@ class BehaviourController(Dialog):
         self.build_parts()
         self.assemble_parts()
         self.update()
-    # def update_character_buttons(self): 
-        # def button_callback(k,v):
-            # print(k,v)
-            # should release the character from party 
-            # game_instance = self.parent()
-            # player = game_instance.player
-            # if not isinstance(player, Hero): return 
-            # player.release_party_member(k, game_instance)
-            # game_instance.update_prior_next_selection()
-            # game_instance.draw() 
-            # game_instance.setFocus()
-        # clear_layout(self.button_layout)
-        # self.char_button_list.clear()
-        # game_instance = self.parent()
-        # player = self.parent().player
-        # if not isinstance(player, Hero): return 
-        # for k in player.party_members:
-            # v = game_instance.players.get(k, None)
-            # if not v: continue 
-            # button = new_button(label = "", callback = lambda x,a=k,b=v: button_callback(a,b), foreground='white')
-            # self.char_button_list.append( [ button, v ] )
-            # pix = v.get_sprite_with_hud()
-            # button.setIcon(QIcon(pix))
-            # button.setIconSize(pix.size())
-            # self.button_layout / button
-    # def update_char_button_images(self): 
-        # if not self.char_button_list: return 
-        # for L in self.char_button_list:
-            # button = L[0]
-            # ply = L[1]
-            # pix = ply.get_sprite_with_hud()
-            # button.setIcon(QIcon(pix))
-            # button.setIconSize(pix.size())
     def build_parts(self):
         self.layout = VLayout() # vertical 
         # self.button_layout = HLayout() 
@@ -1238,7 +1205,7 @@ def debugging_menu(menu, item, instance, game_instance):
                 instance.close()
                 return 
             case "Generate Enemies >":
-                instance.set_list("Generate Enemies >", ["Raider","Zombie","Bear","Rogue","Mercenary","Player","clear",".."])
+                instance.set_list("Generate Enemies >", ["Healer","Raider","Zombie","Bear","Rogue","Mercenary","Player","clear",".."])
                 return 
             case "Generate Dungeon Entrance":
                 if game_instance.map.add_dungeon_entrance_at(player.x, player.y):
@@ -1286,6 +1253,13 @@ def debugging_menu(menu, item, instance, game_instance):
         dx = 2*dx 
         dy = 2*dy
         match item:
+            case "Healer":
+                npc_name = "Healer"+rn(7)
+                game_instance.add_player(key = npc_name, cls_constructor=Healer, name = npc_name, x = player.x+dx, y = player.y+dy)
+                game_instance.dirty_tiles.add((player.x+dx, player.y+dy)) 
+                game_instance.draw()
+                instance.close()
+                return 
             case "Raider":
                 # __init__(self, name='', hp=30, x=50, y=50, b_generate_items=False, sprite='enemy')
                 for i in range(3):

@@ -221,6 +221,7 @@ extract_function_signatures_from_list([
     folder+"pyqt_layer_framework.py",
     folder+"start.pyw",
     folder+"serialization.py",
-    folder+"performance.py"
+    folder+"performance.py",
+    folder+"artificial_behavior.py"
 ], "_sign.py")
 

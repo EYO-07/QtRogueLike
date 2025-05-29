@@ -308,8 +308,8 @@ class Game_PLAYERS:
         self.players = {} 
         self.prior_next_index = 0
         self.prior_next_players = []
-    def add_player(self, key, **kwargs): # add a player or ally in dictionary 
-        obj = Player(**kwargs)
+    def add_player(self, key, cls_constructor = Player,**kwargs): # add a player or ally in dictionary 
+        obj = cls_constructor(**kwargs)
         self.players.update({ key : obj })
         self.update_prior_next_selection()
         return obj 
@@ -1445,24 +1445,8 @@ class Game(DraggableView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_P
             return True
         
         # -- $ dx, dy | process movement 
-        if dx or dy:
+        if dx or dy: 
             if self.player_move_diff(dx,dy)==True: return True 
-            # target_x, target_y = self.player.x + dx, self.player.y + dy
-            # tile = self.map.get_tile(target_x, target_y)
-            # if target_x <0 or target_x > self.grid_width-1 or target_y<0 or target_y> self.grid_height-1:
-                # self.horizontal_map_transition(target_x, target_y)
-                # return False
-            # if tile and tile.walkable:
-                # if tile.current_char:
-                    # if b_isForwarding and not isinstance(tile.current_char, Player):
-                        # self.events.append(AttackEvent(self.player, tile.current_char, self.player.do_damage()))
-                # else:
-                    # old_x, old_y = self.player.x, self.player.y
-                    # if self.player.move(dx, dy, self.map):
-                        # self.events.append(MoveEvent(self.player, old_x, old_y))
-                        # self.dirty_tiles.add((old_x, old_y))
-                        # self.dirty_tiles.add((self.player.x, self.player.y))
-                # return True        
         return False 
     def mouse_map_pos(self):
         _diff = self.get_mouse_move_diff()
@@ -1531,6 +1515,15 @@ class Game(DraggableView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_P
                     primary.use_special_End(self.player, self)
                 return True
             case Qt.Key_F: # weapon special skill 
+                if isinstance(self.player, Healer):
+                    dx, dy = self.player.get_forward_direction()
+                    x = self.player.x + dx 
+                    y = self.player.y + dy
+                    target = self.map.get_char(x, y)
+                    if target:
+                        if self.player.heal_skill(target, self):
+                            self.game_iteration()
+                            return True 
                 if isinstance(primary, SpecialSkillWeapon):
                     self.add_message("Using Special Weapon Skill ...")
                     primary.use_special_F(self.player, self)

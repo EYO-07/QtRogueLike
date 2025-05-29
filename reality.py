@@ -1131,6 +1131,31 @@ class Player(SkilledCharacter, RegenerativeCharacter): # player or playable npc
         if game_instance and not (self is game_instance.player):
             self.paint_hp_hud_to(painter)
 
+class Healer(Player):
+    __serialize_only__ = Player.__serialize_only__
+    def __init__(self, name="", hp=PLAYER_MAX_HP, x=MAP_WIDTH//2, y=MAP_HEIGHT//2, b_generate_items = False, sprite = "player", current_map = (0,0,0)):
+        Player.__init__(self, name=name, hp=hp, x=x, y=y, b_generate_items = b_generate_items, sprite = sprite, current_map = current_map)
+        self.sprite = Tile.get_random_sprite("sorceress") 
+    def behaviour_update(self, game_instance):
+        if hasattr(self,"current_map"):
+            if self.current_map != game_instance.map.coords: return False
+            if self.current_map != game_instance.current_map: return False
+        if AB_behavior_healer(char = self, game_instance = game_instance):
+            self.regenerate_stamina()
+            self.regenerate_health()
+            return True 
+        return False 
+    def heal_skill(self, target, game_instance):
+        if self.stamina <= 20: 
+            if self is game_instance.player: game_instance.add_message(f"Not Enough Energy to Heal")
+            return False 
+        self.stamina -= 20 
+        cure = 0.1*target.max_hp 
+        if target.hp >= target.max_hp: return False 
+        target.hp = min( target.max_hp, target.hp + cure )
+        if self is game_instance.player: game_instance.add_message(f"Healed {cure} hp points of {target.name}")
+        return True 
+
 # Hero.add_to_party() || { Hero.remove_character() | Hero.place_character() } || {}
 # Hero.release_party() || { Hero.place_character() | Hero.draw() } || {}
 class Hero(Player): # playable character that can "carry" a party 
