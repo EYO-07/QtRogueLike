@@ -532,8 +532,11 @@ def AB_find_building_target(char = None, game_instance = None): # forker
     flag_find_new = False 
     if target is None: flag_find_new = True 
     if not isinstance(target, TileBuilding): flag_find_new = True 
-    if isinstance(char, Player) and not target.b_enemy: flag_find_new = True 
-    if isinstance(char, Enemy) and target.b_enemy: flag_find_new = True 
+    if not hasattr(target, "b_enemy"): 
+        flag_find_new = True
+    else:
+        if isinstance(char, Player) and not target.b_enemy: flag_find_new = True 
+        if isinstance(char, Enemy) and target.b_enemy: flag_find_new = True 
     if flag_find_new: 
         buildings = None 
         if isinstance(char, Player): buildings = [ i for i in map.buildings if i.b_enemy ] 

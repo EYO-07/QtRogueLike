@@ -732,108 +732,114 @@ class BehaviourCharacter(Entity): # interface : artificially controlled characte
         self.current_target_building = None # Building Target, never serialize this, can lead to infinite saving. 
         self.current_target_healing = None # Healing Target, never serialize this, can lead to infinite saving. 
         self.current_target_tile = None # Tile Destination Target, never serialize this, can lead to infinite saving. 
-    def get_closest_visible(self, entities, game_instance, default_target = None):
-        entity = None 
-        distance = None 
-        if default_target:
-            entity = default_target
-            distance = self.distance(entity)
-        if len(entities) == 0: 
-            return entity, distance 
-        if type(entities) == list: 
-            if not default_target:
-                entity = entities[0]
-                distance = self.distance(entity)
-            if len(entities) == 1: 
-                return entity, distance 
-            for v in entities:
-                if not v: continue # possibly unnecessary 
-                # if not self.can_see_character(v, game_instance.map): continue 
-                if isinstance(v, TileBuilding): # if is a TileBuilding
-                    new_distance = self.distance(v)
-                    # print("get_closest_visible() || distance :", new_distance)
-                    if new_distance < distance:
-                        entity = v
-                        distance = new_distance 
-                else:
-                    if not v.current_tile: continue 
-                    tile = game_instance.map.get_tile(v.x,v.y)
-                    if not tile: continue
-                    if not tile.current_char is v: continue 
-                    new_distance = self.distance(v)
-                    if new_distance < distance:
-                        entity = v
-                        distance = new_distance 
-        elif type(entities) == dict:
-            for k,v in entities.items():
-                if not k or not v: continue # possibly unnecessary 
-                if not self.can_see_character(v, game_instance.map): continue 
-                if not v.current_tile: continue 
-                tile = game_instance.map.get_tile(v.x,v.y)
-                if not tile: continue
-                if not tile.current_char is v: continue 
-                new_distance = self.distance(v)
-                if distance is None:
-                    entity = v
-                    distance = new_distance
-                elif new_distance < distance:
-                    entity = v
-                    distance = new_distance 
-        if entity and distance:
-            if isinstance(self, Player):
-                return entity, distance
-            else:
-                if isinstance(entity, TileBuilding): # for building pursue it's not necessary to see 
-                    # print("get_closest_visible() || distance :", entity, distance )
-                    return entity, distance 
-                if self.can_see_character(entity, game_instance.map):
-                    return entity, distance
-                else:
-                    return None, None 
-        else:
-            return None, None 
-    def pursue_target(self, entities, game_instance, default_target = None):
-        """ return True if a behaviour is selected, return False if no behaviour was select so the entity is free to perform another task """
-        enemy, distance = self.get_closest_visible(entities, game_instance, default_target)
-        map = game_instance.map 
-        if enemy and distance and distance <= self.tolerance:
-            path = map.find_path(self.x, self.y, enemy.x, enemy.y)
-            if path:
-                next_x, next_y = path[0]
-                dx, dy = next_x - self.x, next_y - self.y
-                tile = map.get_tile(next_x, next_y)
-                if tile:
-                    if tile.can_place_character():
-                        self.move(dx, dy, map)
-                        return True 
-                    elif tile.current_char is enemy and isinstance(enemy, Damageable):
-                        damage = self.do_damage()
-                        game_instance.events.append(AttackEvent(self, enemy, damage))
-                        if isinstance(self, Player):print(self, damage)
-                        return True 
-        return False 
-    def random_walk(self, game_instance):
-        if random.random() < self.activity:
-            dx, dy = random.choice(ADJACENT_DIFF_MOVES)
-            target_x, target_y = self.x + dx, self.y + dy
-            tile = game_instance.map.get_tile(target_x, target_y)
-            if tile:
-                if tile.walkable and not tile.current_char:
-                    self.move(dx, dy, game_instance.map)
-    def behaviour_update(self, entities, game_instance, default_target = None):
-        """ return True if a behaviour is selected, return False if no behaviour was select so the entity is free to perform another task """
+    def behaviour_update(self, game_instance): 
         if hasattr(self,"current_map"):
             if self.current_map != game_instance.map.coords: return False
-            if self.current_map != game_instance.current_map: return False
-        primary = self.primary_hand 
-        if isinstance(primary, Fireweapon):            
-            target, path = primary.find_target(self, game_instance)
-            if primary.perform_attack(self, target, path, game_instance):
-                primary.do_ammo_consumption() # maybe add full stats update, but for simplicity
-                return True 
-        if self.pursue_target(entities, game_instance, default_target): return True 
-        self.random_walk(game_instance) 
-        return True 
+            if self.current_map != game_instance.current_map: return False 
+        return AB_behavior_default(char=self, game_instance=game_instance)
+        
+    # def get_closest_visible(self, entities, game_instance, default_target = None):
+        # entity = None 
+        # distance = None 
+        # if default_target:
+            # entity = default_target
+            # distance = self.distance(entity)
+        # if len(entities) == 0: 
+            # return entity, distance 
+        # if type(entities) == list: 
+            # if not default_target:
+                # entity = entities[0]
+                # distance = self.distance(entity)
+            # if len(entities) == 1: 
+                # return entity, distance 
+            # for v in entities:
+                # if not v: continue # possibly unnecessary 
+                # if not self.can_see_character(v, game_instance.map): continue 
+                # if isinstance(v, TileBuilding): # if is a TileBuilding
+                    # new_distance = self.distance(v)
+                    # print("get_closest_visible() || distance :", new_distance)
+                    # if new_distance < distance:
+                        # entity = v
+                        # distance = new_distance 
+                # else:
+                    # if not v.current_tile: continue 
+                    # tile = game_instance.map.get_tile(v.x,v.y)
+                    # if not tile: continue
+                    # if not tile.current_char is v: continue 
+                    # new_distance = self.distance(v)
+                    # if new_distance < distance:
+                        # entity = v
+                        # distance = new_distance 
+        # elif type(entities) == dict:
+            # for k,v in entities.items():
+                # if not k or not v: continue # possibly unnecessary 
+                # if not self.can_see_character(v, game_instance.map): continue 
+                # if not v.current_tile: continue 
+                # tile = game_instance.map.get_tile(v.x,v.y)
+                # if not tile: continue
+                # if not tile.current_char is v: continue 
+                # new_distance = self.distance(v)
+                # if distance is None:
+                    # entity = v
+                    # distance = new_distance
+                # elif new_distance < distance:
+                    # entity = v
+                    # distance = new_distance 
+        # if entity and distance:
+            # if isinstance(self, Player):
+                # return entity, distance
+            # else:
+                # if isinstance(entity, TileBuilding): # for building pursue it's not necessary to see 
+                    # print("get_closest_visible() || distance :", entity, distance )
+                    # return entity, distance 
+                # if self.can_see_character(entity, game_instance.map):
+                    # return entity, distance
+                # else:
+                    # return None, None 
+        # else:
+            # return None, None 
+    # def pursue_target(self, entities, game_instance, default_target = None):
+        # """ return True if a behaviour is selected, return False if no behaviour was select so the entity is free to perform another task """
+        # enemy, distance = self.get_closest_visible(entities, game_instance, default_target)
+        # map = game_instance.map 
+        # if enemy and distance and distance <= self.tolerance:
+            # path = map.find_path(self.x, self.y, enemy.x, enemy.y)
+            # if path:
+                # next_x, next_y = path[0]
+                # dx, dy = next_x - self.x, next_y - self.y
+                # tile = map.get_tile(next_x, next_y)
+                # if tile:
+                    # if tile.can_place_character():
+                        # self.move(dx, dy, map)
+                        # return True 
+                    # elif tile.current_char is enemy and isinstance(enemy, Damageable):
+                        # damage = self.do_damage()
+                        # game_instance.events.append(AttackEvent(self, enemy, damage))
+                        # if isinstance(self, Player):print(self, damage)
+                        # return True 
+        # return False 
+    # def random_walk(self, game_instance):
+        # if random.random() < self.activity:
+            # dx, dy = random.choice(ADJACENT_DIFF_MOVES)
+            # target_x, target_y = self.x + dx, self.y + dy
+            # tile = game_instance.map.get_tile(target_x, target_y)
+            # if tile:
+                # if tile.walkable and not tile.current_char:
+                    # self.move(dx, dy, game_instance.map)
+    # def behaviour_update(self, entities, game_instance, default_target = None):
+        # """ return True if a behaviour is selected, return False if no behaviour was select so the entity is free to perform another task """
+        # if hasattr(self,"current_map"):
+            # if self.current_map != game_instance.map.coords: return False
+            # if self.current_map != game_instance.current_map: return False
+        # primary = self.primary_hand 
+        # if isinstance(primary, Fireweapon):            
+            # target, path = primary.find_target(self, game_instance)
+            # if primary.perform_attack(self, target, path, game_instance):
+                # primary.do_ammo_consumption() # maybe add full stats update, but for simplicity
+                # return True 
+        # if self.pursue_target(entities, game_instance, default_target): return True 
+        # self.random_walk(game_instance) 
+        # return True 
 
 class EquippedCharacter(Container): # interface : equip items
     __serialize_only__ = Container.__serialize_only__ + [ "primary_hand", "secondary_hand", "head", "neck", "torso", "waist", "legs", "foot" ]
@@ -1100,7 +1106,10 @@ class Player(SkilledCharacter, RegenerativeCharacter): # player or playable npc
                 return    
     def behaviour_update(self, game_instance): # on turn for npcs 
         """ return True if a behaviour is selected, return False if no behaviour was select so the entity is free to perform another task """
-        if super().behaviour_update(game_instance.map.enemies, game_instance):
+        if hasattr(self,"current_map"):
+            if self.current_map != game_instance.map.coords: return False
+            if self.current_map != game_instance.current_map: return False
+        if AB_behavior_default(char=self, game_instance=game_instance):
             self.regenerate_stamina()
             self.regenerate_health()
             return True 
@@ -1240,9 +1249,9 @@ class Enemy(Character, OfensiveCharacter):
         self.activity = 0.3 
         self.tolerance = 15 
         if b_generate_items: self.generate_initial_items()
-    def behaviour_update(self, game_instance):  # Add game parameter
-        """ return True if a behaviour is selected, return False if no behaviour was select so the entity is free to perform another task """
-        return super().behaviour_update(game_instance.players, game_instance, game_instance.player)
+    # def behaviour_update(self, game_instance):  # Add game parameter
+        # """ return True if a behaviour is selected, return False if no behaviour was select so the entity is free to perform another task """
+        # return super().behaviour_update(game_instance.players, game_instance, game_instance.player)
     
 class Raider(Enemy): # interface class, is an enemy that will try to find the nearest building if don't find any target 
     __serialize_only__ = Enemy.__serialize_only__
@@ -1294,16 +1303,17 @@ class Raider(Enemy): # interface class, is an enemy that will try to find the ne
         if hasattr(self,"current_map"):
             if self.current_map != game_instance.map.coords: return False
             if self.current_map != game_instance.current_map: return False
-        primary = self.primary_hand 
-        if isinstance(primary, Fireweapon):            
-            target, path = primary.find_target(self, game_instance)
-            if primary.perform_attack(self, target, path, game_instance): return True 
-        if self.pursue_target(game_instance.players, game_instance, game_instance.player): return True 
-        if len(game_instance.map.buildings)>0:
-            if self.pursue_target(game_instance.map.buildings, game_instance): 
-                return True 
-        self.random_walk(game_instance) 
-        return True 
+        return AB_behavior_raider(char=self, game_instance=game_instance)
+        # primary = self.primary_hand 
+        # if isinstance(primary, Fireweapon):            
+            # target, path = primary.find_target(self, game_instance)
+            # if primary.perform_attack(self, target, path, game_instance): return True 
+        # if self.pursue_target(game_instance.players, game_instance, game_instance.player): return True 
+        # if len(game_instance.map.buildings)>0:
+            # if self.pursue_target(game_instance.map.buildings, game_instance): 
+                # return True 
+        # self.random_walk(game_instance) 
+        # return True 
     def generate_initial_items(self):
         self.equip_item(Sword("Long_Sword", damage=10), "primary_hand")
         if random.random() < 0.3:
@@ -1385,7 +1395,12 @@ class Bear(Enemy):
         self.base_damage = 20
     def generate_initial_items(self):
         self.add_item(Food(name="meat", nutrition=250))
-    
+    def behaviour_update(self, game_instance):
+        if hasattr(self,"current_map"):
+            if self.current_map != game_instance.map.coords: return False
+            if self.current_map != game_instance.current_map: return False
+        return AB_behavior_grudge(char=self, game_instance=game_instance)
+        
 # Tile.draw() || { Tile.get_default_pixmap() | Entity.paint_to() } || { Entity.get_sprite() }
 class Tile(Container):
     SPRITES = {}  # Class-level sprite cache
@@ -1509,9 +1524,10 @@ class Tile(Container):
         # cls.SPRITES will store the sprites in memory 
         try: 
             qpx = QPixmap("./assets/"+key)
+            print(f"Loading Sprite {key}")
             cls.SPRITES[key] = qpx.scaled(size, size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
         except Exception as e:
-            print(f"Failed to load sprites: {e}")
+            print(f"Failed to load sprites: {e}, key {key}")
             cls.SPRITES[key] = QPixmap()
     
     @classmethod

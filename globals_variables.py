@@ -64,12 +64,9 @@ CROSS_DIFF_MOVES_1x1 = [
 
 # sprite names
 SPRITE_NAMES_WEAPONS = [
-    "club", # +
     "long_sword", 
     "bastard_sword",
     "mace",
-    "wand", # +
-    "staff", # +
     "crossbow",
     "bolt"
 ]
@@ -119,15 +116,17 @@ SPRITE_NAMES = SPRITE_NAMES_WEAPONS + SPRITE_NAMES_CHARACTERS + SPRITE_NAMES_FOO
     "sack",
     "HUD_arrow",
     "whetstone",
-    "house", # +
-    "castle", # +
-    "lumber_mill", #+
+    "house", 
+    "castle", 
+    "lumber_mill", 
     "quarry",
     "mill",
     "wood",
     "tower",
     "red_flag",
-    "metal"
+    "metal",
+    "stone",
+    "sorceress_tower"
 ]
 
 # loot
