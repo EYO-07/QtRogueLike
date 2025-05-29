@@ -222,29 +222,6 @@ class Game_VIEWPORT:
         bar_width = (hud_width - 20) // 3
         bar_height = 10
         padding = 5
-        
-        # Inventory [ QGraphicsTextItem ]
-        # 1. QGraphicsTextItem([str text], [QGraphicsItem parent]) ; Constructor, optionally sets text and parent item
-        # 2. setPlainText(str text) ; Sets the displayed text (plain, not rich text)
-        # 3. toPlainText() -> str ; Returns the current text
-        # 4. setDefaultTextColor(QColor color) ; Sets the color of the text
-        # 5. defaultTextColor() -> QColor ; Gets the current text color
-        # 6. setFont(QFont font) ; Sets the font used for rendering the text
-        # 7. font() -> QFont ; Returns the current font
-        # 8. setTextWidth(float width) ; Sets the width for wrapping the text
-        # 9. textWidth() -> float ; Gets the current text width (used for wrapping)
-        # 10. setHtml(str html) ; Sets the text as rich HTML-formatted content
-        # 11. toHtml() -> str ; Gets the current HTML content
-        # 12. setPos(float x, float y) ; Sets the position of the text item in the scene
-        # 13. pos() -> QPointF ; Gets the current position
-        # 14. setRotation(float angle) ; Rotates the text item
-        # 15. setZValue(float z) ; Sets the stacking order (z-index)
-        # 16. zValue() -> float ; Returns the z-order value
-        # 17. setScale(float factor) ; Uniformly scales the item
-        # 18. setTransform(QTransform transform) ; Applies a custom transformation (e.g., rotate, scale, shear)
-        # 19. setFlag(QGraphicsItem.GraphicsItemFlag, bool enabled=True) ; Sets item-specific behavior (e.g., movable, selectable)
-        # 20. boundingRect() -> QRectF ; Returns the bounding rectangle of the text item
-
         # position label 
         pos_label = QGraphicsTextItem(f"{self.player.x}, {self.map.height - self.player.y}")
         pos_label.setDefaultTextColor(QColor("yellow"))  # White text
@@ -252,53 +229,21 @@ class Game_VIEWPORT:
         pos_label.setPos(self.view_width*self.tile_size- pos_label_width - 10, 10)
         pos_label.setZValue(10) 
         self.scene.addItem(pos_label)
-
-        # Inventory [ QGraphicsRectItem ] { pyqt5 }
-        # 1. QGraphicsRectItem() ; Creates a default rectangular graphics item.
-        # 2. QGraphicsRectItem(rect: QRectF) ; Creates the item with the specified rectangle.
-        # 3. QGraphicsRectItem(x, y, w, h) ; Alternative constructor with coordinates.
-        # 4. setRect(x, y, w, h) ; Sets the rectangle's geometry using coordinates.
-        # 5. setRect(QRectF) ; Sets the rectangle geometry using a QRectF.
-        # 6. rect() ; Returns the current QRectF of the item.
-        # 7. setPen(QPen) ; Sets the pen used to draw the rectangle’s outline.
-        # 8. setBrush(QBrush) ; Sets the brush used to fill the rectangle.
-        # 9. pen() ; Returns the current QPen.
-        #10. brush() ; Returns the current QBrush.
-        #11. paint(painter, option, widget) ; Custom painting routine (can be overridden).
-        #12. boundingRect() ; Returns the outer bounds of the item for painting & collision.
-        #13. contains(point) ; Returns True if the item contains the given point.
-        #14. shape() ; Returns the precise shape of the item as a QPainterPath.
-        #15. setPos(x, y) ; Sets the position of the item in the scene.
-        #16. pos() ; Returns the position of the item.
-        #17. setRotation(angle) ; Rotates the item around its transform origin point.
-        #18. rotation() ; Returns the rotation angle.
-        #19. setTransform(transform, combine=False) ; Applies a QTransform to the item.
-        #20. setFlags(flags) ; Sets item interaction flags (e.g. selectable, movable).
-        #21. setZValue(z) ; Sets the z-order stacking value.
-        #22. zValue() ; Returns the current z-order value.
-        #23. setParentItem(item) ; Sets another QGraphicsItem as this item’s parent.
-        #24. parentItem() ; Returns the parent item.
-        #25. collidesWithItem(item) ; Checks collision with another item.
-        #26. collidesWithPath(path) ; Checks collision with a QPainterPath.
-
         # HP Bar (Red)
         hp_ratio = self.player.hp / self.player.max_hp
         hp_bar = QGraphicsRectItem(10, hud_y + padding, bar_width * hp_ratio, bar_height)
         hp_bar.setBrush(QColor(255,0,0,oppacity))
         if hp_ratio<0.8: self.scene.addItem(hp_bar)
-
         # Stamina Bar (Blue)
         stamina_ratio = self.player.stamina / self.player.max_stamina
         stamina_bar = QGraphicsRectItem(10 + bar_width + padding, hud_y + padding, bar_width * stamina_ratio, bar_height)
         stamina_bar.setBrush(QColor(0,0,255,oppacity))
         if stamina_ratio<0.8: self.scene.addItem(stamina_bar)
-
         # Hunger Bar (Yellow)
         hunger_ratio = self.player.hunger / self.player.max_hunger
         hunger_bar = QGraphicsRectItem(10 + 2 * (bar_width + padding), hud_y + padding, bar_width * hunger_ratio, bar_height)
         hunger_bar.setBrush(QColor(255,255,0,oppacity))
         if hunger_ratio<0.8: self.scene.addItem(hunger_bar)
-        
         # North Arrow
         arrow_size = 50  # Target size for scaling
         arrow_x = hud_width / 2  # Desired center x-coordinate (middle of HUD)

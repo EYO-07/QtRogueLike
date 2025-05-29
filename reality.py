@@ -728,7 +728,10 @@ class BehaviourCharacter(Entity): # interface : artificially controlled characte
         Entity.__init__(self)
         self.activity = 0.05
         self.tolerance = 4
-        self.current_target = None # never serialize this, can lead to infinite saving. 
+        self.current_target = None # Attacking Target, never serialize this, can lead to infinite saving. 
+        self.current_target_building = None # Building Target, never serialize this, can lead to infinite saving. 
+        self.current_target_healing = None # Healing Target, never serialize this, can lead to infinite saving. 
+        self.current_target_tile = None # Tile Destination Target, never serialize this, can lead to infinite saving. 
     def get_closest_visible(self, entities, game_instance, default_target = None):
         entity = None 
         distance = None 
@@ -1305,7 +1308,15 @@ class Zombie(Enemy):
             self.add_item(Food(name="bread", nutrition=random.randint(50, 100)))
         if random.random() < 0.7:
             self.add_item(Food(name="apple", nutrition=random.randint(5, 15)))
-
+    
+    # testing
+    # def behaviour_update(self, game_instance):
+        # """ return True if a behaviour is selected, return False if no behaviour was select so the entity is free to perform another task """
+        # if hasattr(self,"current_map"):
+            # if self.current_map != game_instance.map.coords: return False
+            # if self.current_map != game_instance.current_map: return False
+        # return AB_top_default(char=self, game_instance=game_instance)
+        
 class Rogue(Enemy):
     __serialize_only__ = Enemy.__serialize_only__
     def __init__(self, name="", hp=100 , x=50, y=50, b_generate_items = False):

@@ -2,6 +2,7 @@
 
 # project 
 from globals_variables import *
+from events import * 
 
 # built-in
 import math 
@@ -185,7 +186,7 @@ def get_closest_visible(origin = None, default_target = None, entities = None, g
         else:
             if isinstance(entity, TileBuilding): # for building pursue it's not necessary to see 
                 return entity, distance 
-            if self.can_see_character(entity, game_instance.map):
+            if origin.can_see_character(entity, game_instance.map):
                 return entity, distance
             else:
                 return None, None 
@@ -206,7 +207,7 @@ def AB_random_walk(char = None, game_instance = None):
     return False 
 def AB_ranged_attack(char = None, game_instance = None): 
     from reality import Fireweapon
-    primary = self.primary_hand 
+    primary = char.primary_hand 
     if not isinstance(primary, Fireweapon): return False 
     target, path = primary.find_target(char, game_instance)
     if primary.perform_attack(char, target, path, game_instance):
@@ -226,33 +227,33 @@ def AB_melee_current_target(char = None, game_instance = None):
     if char.distance(target) > 1: return False 
     damage = char.do_damage()
     game_instance.events.append( AttackEvent(char, target, damage) )    
-    return True     
+    return True 
 def AB_heal_current_target(char = None, game_instance= None):
-    target = char.current_target 
+    target = char.current_target_healing 
     if not target: 
-        char.current_target = None 
+        char.current_target_healing = None 
         return False 
     from reality import Damageable 
     if not isinstance(target, Damageable): return False 
     if target.hp > 0.8*target.max_hp:
-        char.current_target = None 
+        char.current_target_healing = None 
         return False 
     if target.hp <= 0: 
-        char.current_target = None 
+        char.current_target_healing = None 
         return False 
     if char.distance(target) > 1: return False 
     cure = 0.1*target.max_hp 
     target.hp = min( target.max_hp, target.hp + cure )    
     return True
 def AB_pillage_current_target(char = None, game_instance = None):
-    target = char.current_target 
+    target = char.current_target_building 
     if not target: 
-        char.current_target = None 
+        char.current_target_building = None 
         return False 
     from reality import TileBuilding
     if not isinstance(target, TileBuilding): return False 
     if target.b_enemy: 
-        char.current_target = None 
+        char.current_target_building = None 
         return False
     if char.distance(target) > 0: return False 
     damage = char.do_damage()
@@ -359,7 +360,105 @@ def AB_pursue_current_target(char = None, game_instance = None):
     if not tile.can_place_character(): return False 
     char.move(dx, dy, map)
     return True 
+def AB_pursue_current_target_building(char = None, game_instance = None):
+    if char is None: return False 
+    if game_instance is None: return False 
+    target = char.current_target_building 
+    if target is None: return False 
+    map = game_instance.map 
+    if map is None: 
+        char.current_target_building = None 
+        return False 
+    if not hasattr(target, "x"): 
+        char.current_target_building = None 
+        return False 
+    if not hasattr(target, "y"): 
+        char.current_target_building = None 
+        return False 
+    path = map.find_path(char.x, char.y, target.x, target.y)
+    if not path: return False 
+    next_x, next_y = path[0] 
+    dx, dy = next_x - char.x, next_y - char.y 
+    tile = map.get_tile(next_x, next_y) 
+    if not tile: return False 
+    if not tile.can_place_character(): return False 
+    char.move(dx, dy, map)
+    return True 
+def AB_pursue_current_target_healing(char = None, game_instance = None):
+    if char is None: return False 
+    if game_instance is None: return False 
+    target = char.current_target_healing 
+    if target is None: return False 
+    map = game_instance.map 
+    if map is None: 
+        char.current_target_healing = None 
+        return False 
+    if not hasattr(target, "x"): 
+        char.current_target_healing = None 
+        return False 
+    if not hasattr(target, "y"): 
+        char.current_target_healing = None 
+        return False 
+    path = map.find_path(char.x, char.y, target.x, target.y)
+    if not path: return False 
+    next_x, next_y = path[0] 
+    dx, dy = next_x - char.x, next_y - char.y 
+    tile = map.get_tile(next_x, next_y) 
+    if not tile: return False 
+    if not tile.can_place_character(): return False 
+    char.move(dx, dy, map)
+    return True 
+def AB_pursue_current_target_tile(char = None, game_instance = None): 
+    if char is None: return False 
+    if game_instance is None: return False 
+    target = char.current_target_tile 
+    if target is None: return False 
+    map = game_instance.map 
+    if map is None: 
+        char.current_target_tile = None 
+        return False 
+    if not hasattr(target, "x"): 
+        char.current_target_tile = None 
+        return False 
+    if not hasattr(target, "y"): 
+        char.current_target_tile = None 
+        return False 
+    path = map.find_path(char.x, char.y, target.x, target.y)
+    if not path: return False 
+    next_x, next_y = path[0] 
+    dx, dy = next_x - char.x, next_y - char.y 
+    tile = map.get_tile(next_x, next_y) 
+    if not tile: return False 
+    if not tile.can_place_character(): return False 
+    char.move(dx, dy, map)
+    return True 
 def AB_find_melee_target(char = None, game_instance = None): # forker 
+    """ True means a valid current_target at end of processing, False means that the function could not find a valid current_target. """
+    if char is None: return False 
+    if game_instance is None: return False 
+    map = game_instance.map 
+    if not map: return False
+    player = game_instance.player 
+    if not player: return False 
+    from reality import Player, Enemy, Damageable
+    target = None 
+    distance = None 
+    target = char.current_target 
+    if target: distance = char.distance(target)
+    flag_find_new = False 
+    if target is None: flag_find_new = True 
+    if not isinstance(target, Damageable): flag_find_new = True 
+    if isinstance(char, Enemy) and not char.can_see_character(target, map): flag_find_new = True 
+    if distance and distance > char.tolerance: flag_find_new = True 
+    if flag_find_new:
+        if isinstance(char, Player):
+            char.current_target, distance = get_closest_visible(origin=char, entities=map.enemies, game_instance=game_instance)
+        elif isinstance(char, Enemy):
+            char.current_target, distance = get_closest_visible(origin=char, default_target=player, entities=game_instance.players, game_instance=game_instance)
+    if char.current_target is None: return False 
+    if distance is None: return False 
+    return True 
+def AB_find_melee_target_grudge(char = None, game_instance = None): # forker 
     """ True means a valid current_target at end of processing, False means that the function could not find a valid current_target. """
     if char is None: return False 
     if game_instance is None: return False 
@@ -383,7 +482,7 @@ def AB_find_melee_target(char = None, game_instance = None): # forker
             char.current_target, distance = get_closest_visible(origin=char, default_target=player, entities=game_instance.players, game_instance=game_instance)
     if char.current_target is None: return False 
     if distance is None: return False 
-    return True 
+    return True     
 def AB_find_healing_target(char = None, game_instance = None): # forker 
     """ True means a valid current_target at end of processing, False means that the function could not find a valid current_target. """
     if char is None: return False 
@@ -395,7 +494,7 @@ def AB_find_healing_target(char = None, game_instance = None): # forker
     from reality import Player, Enemy, Damageable
     target = None 
     distance = None 
-    target = char.current_target 
+    target = char.current_target_healing 
     if target: distance = char.distance(target)
     flag_find_new = False 
     if target is None: flag_find_new = True 
@@ -403,10 +502,10 @@ def AB_find_healing_target(char = None, game_instance = None): # forker
     if distance and distance > 5: flag_find_new = True 
     if flag_find_new:
         if isinstance(char, Player):
-            char.current_target, distance = get_closest_visible(origin=char, entities=game_instance.players, game_instance=game_instance)
+            char.current_target_healing, distance = get_closest_visible(origin=char, entities=game_instance.players, game_instance=game_instance)
         elif isinstance(char, Enemy):
-            char.current_target, distance = get_closest_visible(origin=char, entities=map.enemies, game_instance=game_instance)
-    if char.current_target is None: return False 
+            char.current_target_healing, distance = get_closest_visible(origin=char, entities=map.enemies, game_instance=game_instance)
+    if char.current_target_healing is None: return False 
     if distance is None: return False 
     return True 
 def AB_find_building_target(char = None, game_instance = None): # forker 
@@ -416,30 +515,31 @@ def AB_find_building_target(char = None, game_instance = None): # forker
     map = game_instance.map 
     if not map: return False 
     from reality import Player, Enemy, TileBuilding
-    buildings = None 
-    if isinstance(char, Player):
-        buildings = [ i for i in map.buildings if i.b_enemy ]
-    elif isinstance(char, Enemy):
-        buildings = [ i for i in map.buildings if not i.b_enemy ]
-    if not buildings: return False 
-    if len(buildings)==0: return False 
-    if len(buildings)==1: 
-        char.current_target = buildings[0]
-        return True 
     player = game_instance.player 
     if not player: return False 
     target = None 
     distance = None 
-    target = char.current_target 
+    target = char.current_target_building 
     if target: distance = char.distance(target)
     flag_find_new = False 
     if target is None: flag_find_new = True 
     if not isinstance(target, TileBuilding): flag_find_new = True 
-    if flag_find_new: char.current_target, distance = get_closest_visible(origin=char, entities=buildings, game_instance=game_instance)
-    if char.current_target is None: return False 
+    if isinstance(char, Player) and not target.b_enemy: flag_find_new = True 
+    if isinstance(char, Enemy) and target.b_enemy: flag_find_new = True 
+    if flag_find_new: 
+        buildings = None 
+        if isinstance(char, Player): buildings = [ i for i in map.buildings if i.b_enemy ] 
+        if isinstance(char, Enemy): buildings = [ i for i in map.buildings if not i.b_enemy ] 
+        if not buildings: return False 
+        if len(buildings)==0: return False 
+        if len(buildings)==1: 
+            char.current_target_building = buildings[0] 
+            return True 
+        char.current_target_building, distance = get_closest_visible(origin=char, entities=buildings, game_instance=game_instance)
+    if char.current_target_building is None: return False 
     if distance is None: return False 
     return True 
-def AB_find_random_tile_target(char = None, game_instance = None): # forker 
+def AB_find_random_tile_target(char = None, game_instance = None): # forker -- bad performance 
     """ True means a valid current_target at end of processing, False means that the function could not find a valid current_target. """
     if char is None: return False 
     if game_instance is None: return False 
@@ -450,28 +550,52 @@ def AB_find_random_tile_target(char = None, game_instance = None): # forker
     if not player: return False 
     target = None 
     distance = None 
-    target = char.current_target 
+    target = char.current_target_tile 
     if target: distance = char.distance(target)
     flag_find_new = False 
     if target is None: flag_find_new = True 
     if distance and distance < 1: flag_find_new = True 
     if not isinstance(target, Tile): flag_find_new = True 
-    if flag_find_new: char.current_target = map.get_random_walkable_tile()
-    if char.current_target is None: return False 
-    distance = char.distance(char.current_target)
+    if flag_find_new: char.current_target_tile = map.get_tile( *map.get_random_walkable_tile() )
+    if char.current_target_tile is None: return False 
+    distance = char.distance(char.current_target_tile)
     if not distance: return False 
     if distance < 1: return False 
     return True 
+
+# 1. AB_find_melee_target ; Imediatly cease the pursue if can't see the target
+# 2. AB_find_melee_target_grudge ; Keep pursuing even if can't see the target until the character is far away 
     
-""" Laboratoy
-1. AB_ranged_attack should be called first, even for enemies without ranged weapons, so they use it when equipped.
-2. AB_melee_attack, AB_healing, AB_pillage should be called when the target is adjacent. 
-
-ranged attack | check current target | pursue target | adjacent action 
-
-Default ~ ranged attack | check current target | { pursue target, melee attack }
-Healer ~ ranged attack | check current target | { pursue target, melee attack, heal }
-Raider ~ ranged attack | check current target | { pursue target, melee attack, pillage }
-"""
+# --     
+def AB_behavior_default(char = None, game_instance = None): # - [ok]
+    if AB_ranged_attack(char=char, game_instance=game_instance): return True 
+    if AB_find_melee_target(char=char, game_instance=game_instance): 
+        if AB_melee_current_target(char=char, game_instance=game_instance): return True 
+        if AB_pursue_current_target(char=char, game_instance=game_instance): return True 
+    if AB_random_walk(char=char, game_instance=game_instance): return True 
+def AB_behavior_grudge(char = None, game_instance = None): # - [ok]
+    if AB_ranged_attack(char=char, game_instance=game_instance): return True 
+    if AB_find_melee_target_grudge(char=char, game_instance=game_instance): 
+        if AB_melee_current_target(char=char, game_instance=game_instance): return True 
+        if AB_pursue_current_target(char=char, game_instance=game_instance): return True 
+    if AB_random_walk(char=char, game_instance=game_instance): return True 
+def AB_behavior_raider(char = None, game_instance = None): # - [testing] 
+    if AB_ranged_attack(char=char, game_instance=game_instance): return True 
+    if AB_find_melee_target(char=char, game_instance=game_instance): 
+        if AB_melee_current_target(char=char, game_instance=game_instance): return True 
+        if AB_pursue_current_target(char=char, game_instance=game_instance): return True 
+    if AB_find_building_target(char=char, game_instance=game_instance): 
+        if AB_pillage_current_target(char=char, game_instance=game_instance): return True 
+        if AB_pursue_current_target_building(char=char, game_instance=game_instance): return True 
+    if AB_random_walk(char=char, game_instance=game_instance): return True 
+def AB_behavior_healer(char = None, game_instance = None): # - [testing] 
+    if AB_find_healing_target(char=char, game_instance=game_instance): 
+        if AB_heal_current_target(char=char, game_instance=game_instance): return True 
+        if AB_pursue_current_target_healing(char=char, game_instance=game_instance): return True 
+    if AB_ranged_attack(char=char, game_instance=game_instance): return True 
+    if AB_find_melee_target(char=char, game_instance=game_instance): 
+        if AB_melee_current_target(char=char, game_instance=game_instance): return True 
+        if AB_pursue_current_target(char=char, game_instance=game_instance): return True 
+    if AB_random_walk(char=char, game_instance=game_instance): return True 
 
 # -- END 
