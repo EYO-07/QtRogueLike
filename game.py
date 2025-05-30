@@ -271,6 +271,19 @@ class Game_VIEWPORT:
             self.scene.addItem(arrow_item)
         else:
             print("Warning: Arrow sprite not found")
+        # primary hand item 
+        if self.player: 
+            primary = self.player.primary_hand
+            secondary = self.player.secondary_hand
+            wp_img_scale = int(math.floor( TILE_SIZE/1.5 ))
+            if primary:
+                pr_graphics_pixmap = QGraphicsPixmapItem(primary.get_sprite().scaled(wp_img_scale, wp_img_scale, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+                pr_graphics_pixmap.setPos( (self.view_width-1)*TILE_SIZE, (self.view_height-1)*TILE_SIZE )
+                self.scene.addItem(pr_graphics_pixmap)
+            if secondary:
+                sc_graphics_pixmap = QGraphicsPixmapItem( secondary.get_sprite().scaled(wp_img_scale, wp_img_scale, Qt.KeepAspectRatio, Qt.SmoothTransformation) )
+                sc_graphics_pixmap.setPos( TILE_SIZE-wp_img_scale, (self.view_height-1)*TILE_SIZE )
+                self.scene.addItem(sc_graphics_pixmap)
     def rotate_vector_for_camera(self, dx, dy):
         """ Rotation for drawing (camera)"""
         if self.rotation == 0:
@@ -970,6 +983,7 @@ class Game_ITERATION:
         print(f"Day {self.current_day}")
         if d() < 1.0/3.0: # spawn raiders 1/3 of time
             for i in range(int(d(0, min( self.current_day,50 ) ))):
+                if len(self.map.enemies)>120: break 
                 x,y = self.map.get_random_walkable_tile()
                 if not x or not y: continue 
                 enemy = self.map.generate_enemy_by_chance_by_list_at(x, y, RAIDERS_TABLE)
@@ -977,7 +991,12 @@ class Game_ITERATION:
                     print("Raider Generated")
                     self.map.enemies.append(enemy)
                     self.map.place_character(enemy)
-        self.player.days_survived += 1
+        #self.player.days_survived += 1
+        for k,v in self.players.items():
+            if not v: continue 
+            if not v.is_placed_on_map(self.map): continue 
+            if not self.can_select_player(v): continue 
+            v.days_survived += 1
         if self.current_day == 5:
             self.journal_window.append_text("(Skill - 5 days) I'm in full shape now, I'm feeling agile, use Ctrl to dodge and move two tiles backward ...") 
         if self.current_day == 20:

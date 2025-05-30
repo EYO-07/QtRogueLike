@@ -607,12 +607,18 @@ class WeaponRepairTool(Usable):
         Usable.__init__(self, name = name, description = description, weight = weight, sprite=name.lower(), uses = uses)
         self.repairing_factor = repairing_factor
         if not description: self.description = f"It's a repair tool, press R to repair the currently primary hand weapon."
-    def use(self, char):
-        if char.primary_hand:
-            primary = char.primary_hand
+    def use(self, char):        
+        primary = char.primary_hand 
+        secondary = char.secondary_hand 
+        if primary:
             if primary.damage < 0.9*primary.max_damage:
                 super().use(char)
                 primary.damage = min( self.repairing_factor*primary.damage, primary.max_damage)
+                return True
+        if secondary: 
+            if secondary.damage < 0.9*secondary.max_damage:
+                super().use(char)
+                secondary.damage = min( self.repairing_factor*secondary.damage, secondary.max_damage)
                 return True
         return False
     
@@ -738,109 +744,6 @@ class BehaviourCharacter(Entity): # interface : artificially controlled characte
             if self.current_map != game_instance.current_map: return False 
         return AB_behavior_default(char=self, game_instance=game_instance)
         
-    # def get_closest_visible(self, entities, game_instance, default_target = None):
-        # entity = None 
-        # distance = None 
-        # if default_target:
-            # entity = default_target
-            # distance = self.distance(entity)
-        # if len(entities) == 0: 
-            # return entity, distance 
-        # if type(entities) == list: 
-            # if not default_target:
-                # entity = entities[0]
-                # distance = self.distance(entity)
-            # if len(entities) == 1: 
-                # return entity, distance 
-            # for v in entities:
-                # if not v: continue # possibly unnecessary 
-                # if not self.can_see_character(v, game_instance.map): continue 
-                # if isinstance(v, TileBuilding): # if is a TileBuilding
-                    # new_distance = self.distance(v)
-                    # print("get_closest_visible() || distance :", new_distance)
-                    # if new_distance < distance:
-                        # entity = v
-                        # distance = new_distance 
-                # else:
-                    # if not v.current_tile: continue 
-                    # tile = game_instance.map.get_tile(v.x,v.y)
-                    # if not tile: continue
-                    # if not tile.current_char is v: continue 
-                    # new_distance = self.distance(v)
-                    # if new_distance < distance:
-                        # entity = v
-                        # distance = new_distance 
-        # elif type(entities) == dict:
-            # for k,v in entities.items():
-                # if not k or not v: continue # possibly unnecessary 
-                # if not self.can_see_character(v, game_instance.map): continue 
-                # if not v.current_tile: continue 
-                # tile = game_instance.map.get_tile(v.x,v.y)
-                # if not tile: continue
-                # if not tile.current_char is v: continue 
-                # new_distance = self.distance(v)
-                # if distance is None:
-                    # entity = v
-                    # distance = new_distance
-                # elif new_distance < distance:
-                    # entity = v
-                    # distance = new_distance 
-        # if entity and distance:
-            # if isinstance(self, Player):
-                # return entity, distance
-            # else:
-                # if isinstance(entity, TileBuilding): # for building pursue it's not necessary to see 
-                    # print("get_closest_visible() || distance :", entity, distance )
-                    # return entity, distance 
-                # if self.can_see_character(entity, game_instance.map):
-                    # return entity, distance
-                # else:
-                    # return None, None 
-        # else:
-            # return None, None 
-    # def pursue_target(self, entities, game_instance, default_target = None):
-        # """ return True if a behaviour is selected, return False if no behaviour was select so the entity is free to perform another task """
-        # enemy, distance = self.get_closest_visible(entities, game_instance, default_target)
-        # map = game_instance.map 
-        # if enemy and distance and distance <= self.tolerance:
-            # path = map.find_path(self.x, self.y, enemy.x, enemy.y)
-            # if path:
-                # next_x, next_y = path[0]
-                # dx, dy = next_x - self.x, next_y - self.y
-                # tile = map.get_tile(next_x, next_y)
-                # if tile:
-                    # if tile.can_place_character():
-                        # self.move(dx, dy, map)
-                        # return True 
-                    # elif tile.current_char is enemy and isinstance(enemy, Damageable):
-                        # damage = self.do_damage()
-                        # game_instance.events.append(AttackEvent(self, enemy, damage))
-                        # if isinstance(self, Player):print(self, damage)
-                        # return True 
-        # return False 
-    # def random_walk(self, game_instance):
-        # if random.random() < self.activity:
-            # dx, dy = random.choice(ADJACENT_DIFF_MOVES)
-            # target_x, target_y = self.x + dx, self.y + dy
-            # tile = game_instance.map.get_tile(target_x, target_y)
-            # if tile:
-                # if tile.walkable and not tile.current_char:
-                    # self.move(dx, dy, game_instance.map)
-    # def behaviour_update(self, entities, game_instance, default_target = None):
-        # """ return True if a behaviour is selected, return False if no behaviour was select so the entity is free to perform another task """
-        # if hasattr(self,"current_map"):
-            # if self.current_map != game_instance.map.coords: return False
-            # if self.current_map != game_instance.current_map: return False
-        # primary = self.primary_hand 
-        # if isinstance(primary, Fireweapon):            
-            # target, path = primary.find_target(self, game_instance)
-            # if primary.perform_attack(self, target, path, game_instance):
-                # primary.do_ammo_consumption() # maybe add full stats update, but for simplicity
-                # return True 
-        # if self.pursue_target(entities, game_instance, default_target): return True 
-        # self.random_walk(game_instance) 
-        # return True 
-
 class EquippedCharacter(Container): # interface : equip items
     __serialize_only__ = Container.__serialize_only__ + [ "primary_hand", "secondary_hand", "head", "neck", "torso", "waist", "legs", "foot" ]
     def __init__(self):
@@ -1249,9 +1152,6 @@ class Enemy(Character, OfensiveCharacter):
         self.activity = 0.3 
         self.tolerance = 15 
         if b_generate_items: self.generate_initial_items()
-    # def behaviour_update(self, game_instance):  # Add game parameter
-        # """ return True if a behaviour is selected, return False if no behaviour was select so the entity is free to perform another task """
-        # return super().behaviour_update(game_instance.players, game_instance, game_instance.player)
     
 class Raider(Enemy): # interface class, is an enemy that will try to find the nearest building if don't find any target 
     __serialize_only__ = Enemy.__serialize_only__
@@ -1343,15 +1243,7 @@ class Zombie(Enemy):
             self.add_item(Food(name="bread", nutrition=random.randint(50, 100)))
         if random.random() < 0.7:
             self.add_item(Food(name="apple", nutrition=random.randint(5, 15)))
-    
-    # testing
-    # def behaviour_update(self, game_instance):
-        # """ return True if a behaviour is selected, return False if no behaviour was select so the entity is free to perform another task """
-        # if hasattr(self,"current_map"):
-            # if self.current_map != game_instance.map.coords: return False
-            # if self.current_map != game_instance.current_map: return False
-        # return AB_top_default(char=self, game_instance=game_instance)
-        
+            
 class Rogue(Enemy):
     __serialize_only__ = Enemy.__serialize_only__
     def __init__(self, name="", hp=100 , x=50, y=50, b_generate_items = False):
@@ -1793,6 +1685,15 @@ class TileBuilding(ActionTile): # interface class
         game_instance.update_prior_next_selection()
         game_instance.dirty_tiles.add((x, y))
         game_instance.draw()
+    def add_char_to_garrison(self, char):
+        # meant to be used on building creation.
+        if not hasattr( self,"heroes" ): return False # not meant to be used without that attribute 
+        self.heroes.update({ char.name : char })
+        return True 
+    def set_background_sprite(self, sprite_key):
+        self.default_sprite_key = sprite_key 
+    def set_background_tile(self, tile):
+        self.default_sprite_key = tile.default_sprite_key 
 
 # Castle.action() || { Castle.update_menu_list() | Castle.new_npc() | TileBuilding.menu_garrison() | TileBuilding.menu_resources() } || { Character.add_item(), TileBuilding.update_inv_window(), Character.remove_item() }
 class Castle(TileBuilding):
@@ -2157,5 +2058,85 @@ class GuardTower(TileBuilding):
         if self.b_enemy: return 
         if self.villagers == 0: self.villagers = 0.1
         self.villagers = min( (1.0+0.005*multiplier)*self.villagers, self.villagers_max )
+
+class MagicTower(TileBuilding):
+    __serialize_only__ = TileBuilding.__serialize_only__ + ["name","heroes","num_heroes"]
+    def __init__(self, x=0, y =0,name = "Magic Tower", b_enemy=False):
+        TileBuilding.__init__(self, x=x, y=y, front_sprite = "magic_tower", walkable=True, sprite_key="grass", b_enemy=b_enemy)
+        self.name = name 
+        self.heroes = {}
+        self.num_heroes = 0
+        self.menu_list = []
+    def action(self):
+        from gui import info 
+        self.update_menu_list()
+        def f(current_menu, current_item, menu_instance, game_instance):
+            self.update_menu_list(menu_instance)
+            if current_item == "..": menu_instance.set_list()
+            if current_item == "Overview >": self.set_population_menu(menu_instance)
+            if current_item == "Exit": menu_instance.close()
+            if "Recruit Healer" in current_item:
+                if self.food >= 500 and self.wood >= 500 and self.metal >= 500 and self.stone >= 500:
+                    if self.new_healer(game_instance):
+                        self.villagers -= 15
+                        self.food -= 500 
+                        self.wood -= 500 
+                        self.stone -= 500 
+                        self.metal -= 500 
+                else:
+                    game_instance.add_message("Can't afford to purchase a Healer ...")
+                menu_instance.close()
+            if self.menu_garrison(current_menu, current_item, menu_instance, game_instance):
+                menu_instance.close()
+                return 
+            if self.menu_resources(current_menu, current_item, menu_instance, game_instance):
+                menu_instance.close()
+                return 
+        return f
+    def update_menu_list(self, selection_box_instance = None):
+        self.menu_list.clear()
+        self.menu_list += [
+            f"Building [{self.name}]",
+            f"-> garrison: {len(self.heroes)}",
+            f"-> food: {self.food:.0f}",
+            f"-> wood: {self.wood:.0f}",
+            f"-> stone: {self.stone:.0f}",
+            f"-> metal: {self.metal:.0f}",
+            "Overview >",
+            "Recruit Healer (500 food, 500 wood, 500 stone, 500 Metal)",
+            "Garrison >",
+            "Resources >",
+            "Exit"
+        ]
+    def new_healer(self, game_instance):
+        if self.villagers <= 15:
+            game_instance.add_message("There are no villagers to recruit ...")
+            return False 
+        dx, dy = game_instance.player.get_forward_direction()
+        player = game_instance.player 
+        spawn_tile = game_instance.map.get_tile(player.x+dx, player.y + dy)
+        if not spawn_tile:
+            game_instance.add_message("Can't generate player at this position, please rotate the current character")
+            return False
+        if spawn_tile.current_char:
+            game_instance.add_message("Can't generate player at this position, please rotate the current character")
+            return False
+        npc_name = "Healer_"+rn(7)
+        npc_obj = game_instance.add_player(
+            key = npc_name, 
+            cls_constructor = Healer,
+            name = npc_name, 
+            x = game_instance.player.x+dx, 
+            y = game_instance.player.y+dy, 
+            b_generate_items = False, 
+            current_map = game_instance.current_map
+        )
+        npc_obj.hunger = npc_obj.max_hunger
+        self.refresh_game_instance(game_instance.player.x+dx, game_instance.player.y+dy, game_instance)
+        return True
+    def production(self, multiplier = 1.0):
+        if self.b_enemy: return 
+        if self.villagers == 0: self.villagers = 0.1
+        self.villagers = min( (1.0+0.005*multiplier)*self.villagers, self.villagers_max )    
 
 # --- END 

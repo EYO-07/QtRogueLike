@@ -592,7 +592,7 @@ def AB_behavior_grudge(char = None, game_instance = None): # - [ok]
         if AB_pursue_current_target(char=char, game_instance=game_instance): return True 
     if AB_random_walk(char=char, game_instance=game_instance): return True 
     return True 
-def AB_behavior_raider(char = None, game_instance = None): # - [testing] 
+def AB_behavior_raider(char = None, game_instance = None): # - [ok] - performace? 
     if AB_ranged_attack(char=char, game_instance=game_instance): return True 
     if AB_find_melee_target(char=char, game_instance=game_instance): 
         if AB_melee_current_target(char=char, game_instance=game_instance): return True 

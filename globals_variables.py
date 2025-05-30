@@ -126,7 +126,7 @@ SPRITE_NAMES = SPRITE_NAMES_WEAPONS + SPRITE_NAMES_CHARACTERS + SPRITE_NAMES_FOO
     "red_flag",
     "metal",
     "stone",
-    "sorceress_tower"
+    "magic_tower"
 ]
 
 # loot

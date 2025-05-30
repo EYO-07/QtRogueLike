@@ -1108,17 +1108,20 @@ def primary_menu(menu, item, instance, game_instance, list_of_weapons, slot):
     if "-> primary" in item:
         game_instance.player.unequip_item(slot = "primary_hand")
         game_instance.update_inv_window()
+        game_instance.draw()
         instance.close()
         return 
     if "-> secondary" in item:
         game_instance.player.unequip_item(slot = "secondary_hand")
         game_instance.update_inv_window()
+        game_instance.draw()
         instance.close()
         return 
     for wp in list_of_weapons:
         if item == wp[1]:
             game_instance.player.equip_item(wp[0], slot)
             game_instance.update_inv_window()
+            game_instance.draw()
             instance.close()
             break 
 def skill_menu(menu, item, instance, game_instance, stamina_bound):
@@ -1214,7 +1217,7 @@ def debugging_menu(menu, item, instance, game_instance):
                 instance.close()
                 return 
             case "Add a Cosmetic Layer >":
-                instance.set_list("Add a Cosmetic Layer >", ["House", "Enemy Tower","Castle","Lumber Mill","Clear","Mill","Tower",".."])
+                instance.set_list("Add a Cosmetic Layer >", ["Magic Tower","House", "Enemy Tower","Castle","Lumber Mill","Clear","Mill","Tower",".."])
                 return 
     # --
     if menu == "Add Item >":
@@ -1313,32 +1316,38 @@ def debugging_menu(menu, item, instance, game_instance):
     if menu == "Add a Cosmetic Layer >":
         tile = player.current_tile
         match item:
-            case "Enemy Tower":
+            case "Magic Tower":
+                MT = MagicTower(x=player.x, y=player.y) 
+                MT.villagers = 40 
+                game_instance.map.set_tile(player.x, player.y, MT) 
+                game_instance.draw() 
+                instance.close() 
+            case "Enemy Tower": 
                 game_instance.map.set_tile(player.x, player.y, GuardTower(x=player.x, y = player.y, b_enemy = True))
                 game_instance.map.update_buildings_list()
                 game_instance.draw()    
                 instance.close()     
-            case "House":
+            case "House": 
                 tile.add_layer("house")
                 game_instance.draw()    
                 instance.close()                            
-            case "Castle":
+            case "Castle": 
                 game_instance.map.set_tile(player.x, player.y, Castle())
                 game_instance.draw()    
                 instance.close()                            
-            case "Lumber Mill":
+            case "Lumber Mill": 
                 game_instance.map.set_tile(player.x, player.y, LumberMill())
                 game_instance.draw()    
                 instance.close()                            
-            case "Mill":
+            case "Mill": 
                 game_instance.map.set_tile(player.x, player.y, Mill())
                 game_instance.draw()    
                 instance.close()     
-            case "Clear":
+            case "Clear": 
                 tile.remove_layer()
                 game_instance.draw()    
                 instance.close()
-            case "Tower":
+            case "Tower": 
                 game_instance.map.set_tile(player.x, player.y, GuardTower(x=player.x, y=player.y))
                 game_instance.draw()    
                 instance.close()     

@@ -311,6 +311,17 @@ class Map_SPECIAL:
             self.buildings.append(GT)
             print("Added Tower at", xy[0], xy[1])
         return True 
+    def add_magic_tower(self, probability = 0.3, border_factor = 0.0, quantity = 1):
+        if d() > probability: return False
+        for i in range(quantity):
+            xy = self.get_random_walkable_tile(border_factor = border_factor) # -- performance check 
+            if not xy: continue 
+            if self.is_xy_special(xy[0], xy[1]): continue 
+            MT = MagicTower(x=xy[0], y=xy[1], b_enemy=False)
+            self.set_tile(xy[0],xy[1],MT)
+            self.buildings.append(MT)
+            print("Added Magic Tower at", xy[0], xy[1])
+        return True     
     def add_dungeon_entrance(self, probability = 1.0, border_factor = 0.0):
         coin = random.random()
         if coin > probability: return False
@@ -787,8 +798,8 @@ class Map(Serializable, Map_SPECIAL, Map_MODELLING, Map_CHARACTERS, Map_TILES):
         self.buildings = []
         if b_generate: 
             self.generate()
-        else:
-            self.grid_init_uniform()
+        # else:
+            # self.grid_init_uniform()
     def from_dict(self, dictionary):
         if not super().from_dict(dictionary):
             return False
@@ -863,6 +874,7 @@ class Map(Serializable, Map_SPECIAL, Map_MODELLING, Map_CHARACTERS, Map_TILES):
         """
         prev_x_map, prev_y_map, prev_z = previous_map_coords
         new_z = prev_z + 1 if up else prev_z - 1
+        dungeon_level = abs(new_z)
         self.coords = (prev_x_map, prev_y_map, new_z)  # Update map coords, it's necessary? 
         self.enemy_type = "dungeon"
         # initialize grid
@@ -887,6 +899,7 @@ class Map(Serializable, Map_SPECIAL, Map_MODELLING, Map_CHARACTERS, Map_TILES):
         #self.ensure_connection([(new_x,new_y)])
         self.add_dungeon_loot()
         self.add_enemy_tower(quantity=2)
+        self.add_magic_tower(probability = 0.1*dungeon_level)
         return new_x, new_y, new_z
     def generate_procedural_field(self):
         self.enemy_type = "field"
