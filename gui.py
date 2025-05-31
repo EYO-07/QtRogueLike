@@ -899,7 +899,7 @@ class BehaviourController(Dialog):
     def build_parts(self):
         self.layout = VLayout() # vertical 
         # self.button_layout = HLayout() 
-        self.activity_slider = new_horizontal_slider("Activity Level",minimum=1, maximum=100) # porcentagem
+        self.activity_slider = new_horizontal_slider("Activity Level",minimum=0, maximum=100) # porcentagem
         self.tolerance_slider = new_horizontal_slider("Distance Tolerance",minimum=1, maximum=10) # valor 
     def assemble_parts(self):
         set_properties_layout(self.layout)
