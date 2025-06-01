@@ -1193,7 +1193,7 @@ def debugging_menu(menu, item, instance, game_instance):
                 instance.set_list("Display Players Info >", [".."]+[ f"{k} {v.current_map} {v.party}" for k,v in game_instance.players.items() ])
                 return 
             case "Add Item >": 
-                instance.set_list("Add Item >", ["Resources","Whetstone","Mace","Long Sword","Food", "Crossbow",".."])
+                instance.set_list("Add Item >", ["Max Pop","Resources","Whetstone","Mace","Long Sword","Food", "Crossbow",".."])
                 return 
             case "Restore Status":
                 player.reset_stats()
@@ -1222,6 +1222,12 @@ def debugging_menu(menu, item, instance, game_instance):
     # --
     if menu == "Add Item >":
         match item:
+            case "Max Pop":
+                BD = game_instance.map.get_tile(player.x, player.y) 
+                if isinstance(BD, TileBuilding):
+                    BD.villagers = BD.villagers_max 
+                    instance.close()
+                    return 
             case "Crossbow":
                 player.add_item(Fireweapon(ammo=10, range=7))
                 player.add_item(Ammo())

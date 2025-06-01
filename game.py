@@ -981,7 +981,7 @@ class Game_ITERATION:
         self.player.update_available_skills()
     def Event_NewDay(self):
         print(f"Day {self.current_day}")
-        if d() < 1.0/10.0: # spawn raiders 
+        if d() < 1.0/20.0: # spawn raiders 
             for i in range(int(d(0, min( self.current_day,15 ) ))):
                 if len(self.map.enemies)>120: break 
                 x,y = self.map.get_random_walkable_tile()
@@ -1205,9 +1205,9 @@ class Game(DraggableView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_P
     def key_press_cycle_between_playables(self, key):
         """ return True means that the keyPressEvent should return imediatly """
         if key == Qt.Key_PageUp: # cycle between playables
-            if self.count_party() > 0: 
-                self.add_message("Release Party to Change Character")
-                return True 
+            # if self.count_party() > 0: 
+                # self.add_message("Release Party to Change Character")
+                # return True 
             if len(self.prior_next_players) <= 1:
                 self.update_prior_next_selection()
             if len(self.prior_next_players) > 0:
@@ -1220,9 +1220,9 @@ class Game(DraggableView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_P
                 self.draw()
             return True 
         elif key == Qt.Key_PageDown: # cycle between playables
-            if self.count_party() > 0: 
-                self.add_message("Release Party to Change Character")
-                return True 
+            # if self.count_party() > 0: 
+                # self.add_message("Release Party to Change Character")
+                # return True 
             if len(self.prior_next_players) <= 1:
                 self.update_prior_next_selection()
             if len(self.prior_next_players) > 0:

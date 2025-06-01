@@ -254,18 +254,23 @@ def AB_pillage_current_target(char = None, game_instance = None):
     if not target: 
         char.current_target_building = None 
         return False 
-    from reality import TileBuilding
+    from reality import TileBuilding, GuardTower
     if not isinstance(target, TileBuilding): return False 
     if target.b_enemy: 
         char.current_target_building = None 
         return False
     if char.distance(target) > 0: return False 
     damage = char.do_damage()
+    if hasattr(target, "turret"):
+        if target.turret:
+            game_instance.events.append( AttackEvent(char, target.turret, damage) )
+            return True 
     target.villagers = max(0, target.villagers - damage)
     if target.villagers <= 0:
         target.clear_resources()
         target.b_enemy = True 
         target.villagers = 10
+        if isinstance(target, GuardTower): target.add_enemy_turret()
     return True 
     
 # 1. AB_melee_attack() || % AB_ready_melee_current_target() || Attack 

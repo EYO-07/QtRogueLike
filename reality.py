@@ -86,7 +86,7 @@ class Resource: # Interface : store in buildings
         setattr(tile_building, self.type, old_val + self.get_value())
         char.remove_item(self)
     def get_utility_info(self):
-        return f"{self.get_value()} [value]"
+        return f"{self.get_value():.1f} [value]"
 
 # SpecialSkillWeapon.consumption() || { SpecialSkillWeapon.get_equipped_slot() } || {}
 # SpecialSkillWeapon.special_attack() || { SpecialSkillWeapon.consumption() | SpecialSkillWeapon.damage() | Character.drop_on_death() } || { SpecialSkillWeapon.get_equipped_slot() }
@@ -1457,16 +1457,17 @@ class TileBuilding(ActionTile): # interface class
         self.turn_counter = 0 
         self.b_enemy = b_enemy
         if self.b_enemy: self.villagers = self.villagers_max 
+        self.enemy_table = TILE_BUILDING_ENEMY_TABLE 
     def clear_resources(self):
         self.food = 0
         self.wood = 0
         self.stone = 0
         self.metal = 0 
     def bonus_resources(self):
-        self.food = d(0,2000)
-        self.wood = d(0,2000)
-        self.stone = d(0,2000)
-        self.metal = d(0,2000)
+        self.food = d(0,100)
+        self.wood = d(0,100)
+        self.stone = d(0,100)
+        self.metal = d(0,100)
     def production(self, multiplier = 1.0):
         if self.b_enemy: return 
         self.villagers = min( (1.0+0.005*multiplier)*self.villagers, self.villagers_max )
@@ -1474,6 +1475,25 @@ class TileBuilding(ActionTile): # interface class
         self.wood += multiplier*d(0,self.villagers/PROD_INV_FACTOR)
         self.stone += multiplier*d(0,self.villagers/PROD_INV_FACTOR)
         self.metal += multiplier*d(0,self.villagers/PROD_INV_FACTOR)
+    def enemy_building_update(self, ply_dist, map):
+        if not self.b_enemy: 
+            self.remove_layer("red_flag")
+            return         
+        self.add_layer_if_not_already("red_flag")
+        if ply_dist >= 4: return 
+        if not map.can_place_character_at(self.x, self.y): return 
+        if self.villagers > 0:
+            enemy = map.generate_enemy_by_chance_by_list_at(self.x, self.y, self.enemy_table)
+            if enemy:
+                self.villagers -= 5
+                map.enemies.append(enemy)
+                map.place_character(enemy)
+        else:
+            self.b_enemy = False 
+            self.villagers = 1
+            self.bonus_resources() 
+    def building_attack(self, game_instance):
+        return True 
     def update(self, game_instance = None):
         if not game_instance: return 
         mult = 1.0
@@ -1481,35 +1501,16 @@ class TileBuilding(ActionTile): # interface class
         self.turn_counter = game_instance.turn
         self.production(multiplier = mult)
         ply_dist = game_instance.player.distance(self)
+        map = game_instance.map
         # message when close to a village 
         if ply_dist < 20:
             game_instance.flag_near_to_village = True 
         else:
             game_instance.flag_near_to_village = False 
-        # % .b_enemy || add red flag cosmetic layer 
-        # % .b_enemy | % else || remove red flag cosmetic layer 
-        if self.b_enemy:
-            self.add_layer_if_not_already("red_flag")
-            # % Player Distance to Building is Less than 5 || % has villagers || spawn rogue and mercenaries | reduze .villagers count 
-            # % Player Distance to Building is Less than 5 || % has villagers || spawn rogue and mercenaries || spawn on free walkable and adjacent walkable adjacent tiles 
-            # % Player Distance to Building is Less than 5 || % has villagers | % else || .b_enemy = False | add one villager 
-            map = game_instance.map
-            # if self.b_enemy: 
-                # print( "TileBuilding.update() || villager count:", self.villagers, "distance :", ply_dist, "cosmetic len :", len(self.cosmetic_layer_sprite_keys) )
-            if ply_dist < 4: 
-                if self.villagers > 0:
-                    enemy = map.generate_enemy_by_chance_by_list_at(self.x, self.y, TILE_BUILDING_ENEMY_TABLE)
-                    if enemy:
-                        self.villagers -= 5
-                        map.enemies.append(enemy)
-                        map.place_character(enemy)
-                        # game_instance.draw()
-                else:
-                    self.b_enemy = False 
-                    self.villagers = 1
-                    self.bonus_resources()
-        else:
-            self.remove_layer("red_flag")
+        # -- 
+        self.building_attack(game_instance)
+        # -- 
+        self.enemy_building_update(ply_dist, map)
     def retrieve_food(self, game_instance, quantity = 500):
         if self.food >= quantity:
             self.food -= quantity
@@ -1615,6 +1616,7 @@ class TileBuilding(ActionTile): # interface class
                 "Wood-", 
                 "Metal-", 
                 "Stone-", 
+                "Resources--",
                 ".." 
             ])
             return False 
@@ -1670,6 +1672,12 @@ class TileBuilding(ActionTile): # interface class
                     )
                     if ok and qtt > 0 and self.retrieve_stone(game_instance, qtt):
                         return True 
+                case "Resources--":
+                    self.retrieve_food(game_instance, self.food)
+                    self.retrieve_wood(game_instance, self.wood)
+                    self.retrieve_metal(game_instance, self.metal)
+                    self.retrieve_stone(game_instance, self.stone)
+                    return True 
         if current_menu == "Resources+":
             res_obj = resources[current_item]
             self.store_resource(res_obj, game_instance.player)
@@ -1904,13 +1912,46 @@ class LumberMill(TileBuilding):
 
 # GuardTower.action() || { GuardTower.update_menu_list() | GuardTower.new_swordman() | GuardTower.new_mounted_knight() | TileBuilding.menu_garrison() | TileBuilding.menu_resources() } || { Character.add_item(), TileBuilding.update_inv_window(), Character.remove_item() }
 class GuardTower(TileBuilding):
-    __serialize_only__ = TileBuilding.__serialize_only__ + ["name","heroes","num_heroes"]
+    __serialize_only__ = TileBuilding.__serialize_only__ + ["name","heroes","num_heroes","turret"]
     def __init__(self, x=0, y =0,name = "Guard Tower", b_enemy=False):
         TileBuilding.__init__(self, x=x, y=y, front_sprite = "tower", walkable=True, sprite_key="grass", b_enemy=b_enemy)
         self.name = name 
         self.heroes = {}
         self.num_heroes = 0
         self.menu_list = []
+        self.turret = None
+        if self.b_enemy: self.add_enemy_turret() 
+    def add_enemy_turret(self):
+        self.turret = RangedRaider(name='turret', hp=200, b_generate_items=True, sprite='evil_crossbowman')
+    def building_attack(self, game_instance):
+        if self.turret is None: return False 
+        self.turret.x = self.x 
+        self.turret.y = self.y
+        if self.turret.hp <= 0 or self.villagers <= 0 : 
+            self.turret = None 
+            return False 
+        primary = self.turret.primary_hand 
+        if primary and primary.ammo <= 0: # ammo recharge  
+            if self.b_enemy: 
+                primary.ammo += 50 
+            else: 
+                if self.wood >=10 and self.metal >= 10: 
+                    primary.ammo += 50 
+                    self.wood -= 10 
+                    self.metal -= 10 
+        if AB_ranged_attack(char=self.turret, game_instance=game_instance): return True 
+    def add_sentinel(self, game_instance): 
+        if self.b_enemy: return False 
+        if self.villagers < 2: 
+            game_instance.add_message("Not enough villagers to recruit ...") 
+            return False 
+        if isinstance(self.turret, Player): 
+            self.turret.hp += 50 
+            return True 
+        else: 
+            self.turret = Player(name = "turret", hp=50,x=self.x, y=self.y) 
+            self.turret.equip_item(Fireweapon(name = "Crossbow", damage = 7, ammo=100, range=7, projectile_sprite='bolt', ammo_type='bolt'), "primary_hand")
+            return True 
     def action(self):
         from gui import info 
         self.update_menu_list()
@@ -1919,14 +1960,25 @@ class GuardTower(TileBuilding):
             if current_item == "..": menu_instance.set_list()
             if current_item == "Overview >": self.set_population_menu(menu_instance)
             if current_item == "Exit": menu_instance.close()
-            if "Recruit Swordman" in current_item:
-                if self.food >= 500:
+            if "Add a Tower Sentinel" in current_item:
+                if self.food >= 200 and self.wood >= 400:
+                    if self.add_sentinel(game_instance):
+                        self.villagers -= 2 
+                        self.food -= 200 
+                        self.wood -= 400 
+                else:
+                    game_instance.add_message("Can't afford to purchase a sentinel ...")
+                menu_instance.close()
+                return 
+            if "Recruit Swordman" in current_item: 
+                if self.food >= 500: 
                     if self.new_swordman(game_instance):
-                        self.villagers -= 2
+                        self.villagers -= 2 
                         self.food -= 500 
                 else:
                     game_instance.add_message("Can't afford to purchase Swordman ...")
                 menu_instance.close()
+                return 
             if "Recruit Crossbowman" in current_item:
                 if self.food >= 400 and self.wood >= 700:
                     if self.new_crossbowman(game_instance):
@@ -1936,6 +1988,7 @@ class GuardTower(TileBuilding):
                 else:
                     game_instance.add_message("Can't afford to purchase Swordman ...")
                 menu_instance.close()
+                return 
             if "Recruit Mounted Knight" in current_item:
                 if self.food >= 700 and self.wood >= 1200:
                     if self.new_mounted_knight(game_instance):
@@ -1945,6 +1998,7 @@ class GuardTower(TileBuilding):
                 else:
                     game_instance.add_message("Can't afford to purchase Mounted Knight ...")
                 menu_instance.close()
+                return 
             if self.menu_garrison(current_menu, current_item, menu_instance, game_instance):
                 menu_instance.close()
                 return 
@@ -1954,12 +2008,20 @@ class GuardTower(TileBuilding):
         return f
     def update_menu_list(self, selection_box_instance = None):
         self.menu_list.clear()
+        if self.turret:
+            sentinel_str = f"-> sentinel: {self.turret.hp} (HP) {self.turret.primary_hand.ammo} (Shoots)"
+        else:
+            sentinel_str = f"-> sentinel: {0} (HP)"
         self.menu_list += [
             f"Building [{self.name}]",
+            sentinel_str, 
             f"-> garrison: {len(self.heroes)}",
             f"-> food: {self.food:.0f}",
             f"-> wood: {self.wood:.0f}",
+            f"-> metal: {self.metal:.0f}",
+            f"-> stone: {self.stone:.0f}",
             "Overview >",
+            "Add a Tower Sentinel +50 HP (200 Food, 400 Wood)", 
             "Recruit Swordman (500 Food)",
             "Recruit Crossbowman (400 Food, 700 Wood)",
             "Recruit Mounted Knight (700 Food 1200 Wood)",
