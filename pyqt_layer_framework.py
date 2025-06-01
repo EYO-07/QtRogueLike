@@ -1,5 +1,8 @@
 # pyqt_layer_framework.py 
 
+# project
+from serialization import * 
+
 # third-party
 from PyQt5.QtWidgets import QWidget, QListWidget, QVBoxLayout, QPushButton, QHBoxLayout, QMenu, QDialog, QLabel, QTextEdit, QSizePolicy, QInputDialog, QLayout
 from PyQt5.QtCore import Qt, QEvent
@@ -93,7 +96,39 @@ class HLayout(QHBoxLayout):
         else:
             raise TypeError(f"Cannot divide layout by object of type {type(other).__name__}")
         return self
-class Dialog(QDialog):
+class Dialog(QDialog, Serializable):
+    __serialize_only__ = ["window_width", "window_height", "window_x", "window_y"]
+    def __init__(self, parent=None):
+        QDialog.__init__(self, parent=parent)
+        Serializable.__init__(self)
+        self.window_name = "Default"
+        self.window_x = 0
+        self.window_y = 0 
+        self.window_width = 400
+        self.window_height = 400 
+    def restore_state(self): # should be called on init or else in derived classes.    
+        if self.Load_JSON(self.window_name+".ini"):
+            self.setGeometry(self.window_x, self.window_y, self.window_width, self.window_height)
+    def closeEvent(self, event):
+        """Save the game state when the window is closed."""
+        rect = self.geometry()
+        self.window_x = rect.x()
+        self.window_y = rect.y()
+        self.window_width = rect.width()
+        self.window_height = rect.height()
+        try:
+            self.Save_JSON(self.window_name+".ini")
+        except Exception as e:
+            print(f"Error saving game on exit: {e}")
+        event.accept()    
+    def resizeEvent(self, event):
+        # This method is called whenever the window is resized
+        rect = self.geometry()
+        self.window_x = rect.x()
+        self.window_y = rect.y()
+        self.window_width = rect.width()
+        self.window_height = rect.height()
+        super().resizeEvent(event)  # Make sure to call the base class implementation       
     def __truediv__(self, other):
         if isinstance(other, QLayout):
             self.setLayout(other)

@@ -277,39 +277,26 @@ def set_properties_layout(layout):
 # -> JournalWindow() || ... .build_parts() || ... .update_character_buttons() 
 class JournalWindow(Dialog):
     def __init__(self, parent=None):
-        self.key_name = "journal_window" # used for dictionary of windows 
         Dialog.__init__(self, parent)
+        self.window_name = "journal_window"
+        self.key_name = "journal_window" # used for dictionary of windows 
         set_properties_non_modal_popup(self, "Journal")
         self.setFixedSize(POPUP_WIDTH, POPUP_HEIGHT)  # Similar size to InventoryWindow 
         self.build_parts()
         self.assemble_parts()
         # -- 
-        self.hide()  # Hidden by default
         self.update_position()
-        # self.update_behavior_controllers()
+        self.restore_state()
+        self.hide()  # Hidden by default
         if self.parent(): self.parent().setFocus()
     def build_parts(self):
         self.layout = VLayout() # vertical 
         self.button_layout = HLayout()
         self.char_button_list = []
-        # --
-        # self.activity_slider = new_horizontal_slider("Activity Level",minimum=1, maximum=100) # porcentagem
-        # self.tolerance_slider = new_horizontal_slider("Distance Tolerance",minimum=1, maximum=10) # valor 
         self.text_edit = new_text(foreground = "yellow")
-        # self.behaviour_controller_layout = VLayout()
-        # self.tab_widgets = new_tab_widget({
-            # "Journal" : self.text_edit,
-            # "Behavior" : self.activity_slider # self.behaviour_controller_layout / self.activity_slider / self.tolerance_slider
-        # })
-        # --
         self.update_character_buttons()
         self.save_button = new_button("Save", self.save_journal)
         self.log_button = new_button("Log Entry", self.log_diary_entry)
-    # def update_behavior_controllers(self):
-        # get_label_list(self.activity_slider)[0].setText( f"Activity Level : { self.parent().player.activity }" )
-        # get_label_list(self.tolerance_slider)[0].setText( f"Distance Tolerance : { self.parent().player.tolerance }" )
-        # get_slider_list(self.activity_slider)[0].setValue( int(self.parent().player.activity*100) ) 
-        # get_slider_list(self.tolerance_slider)[0].setValue( max(1,int(self.parent().player.tolerance)) )
     def update_character_buttons(self):        
         def button_callback(k,v):
             print(k,v)
@@ -337,7 +324,6 @@ class JournalWindow(Dialog):
             button.setIcon(QIcon(pix))
             button.setIconSize(pix.size())
             self.button_layout / button
-        # self.update_behavior_controllers()
     def update_char_button_images(self):
         if not self.char_button_list: return 
         for L in self.char_button_list:
@@ -350,25 +336,10 @@ class JournalWindow(Dialog):
                 button.setStyleSheet("border: 1px solid lightgray")
             else:
                 button.setStyleSheet("border: 1px solid black")
-        # self.update_behavior_controllers()
-    
-    # def on_change_tolerance(self, value):
-        # player = self.parent().player
-        # if not player: return 
-        # player.tolerance = get_slider_list(self.tolerance_slider)[0].value()
-        # self.update()
-    # def on_change_activity(self, value):
-        # player = self.parent().player
-        # if not player: return 
-        # player.activity = get_slider_list(self.activity_slider)[0].value()/100.0
-        # self.update()
-    
     def assemble_parts(self):
         set_properties_layout(self.layout)
         self.layout / self.button_layout 
         self/( self.layout/self.text_edit/( HLayout()/self.save_button/self.log_button ) )
-        # get_slider_list(self.activity_slider)[0].valueChanged.connect( self.on_change_activity )
-        # get_slider_list(self.tolerance_slider)[0].valueChanged.connect( self.on_change_tolerance )
     def whereAmI(self):
         player = self.parent().player
         if not player: return ""
@@ -407,8 +378,9 @@ class JournalWindow(Dialog):
                 return "I'm on southeast part of this region, where should I go ? ..."
         return ""
     def update(self):
+        Dialog.update(self)
         self.load_journal()
-        self.update_position()
+        # self.update_position()
         self.update_character_buttons()
     def update_position(self):
         set_relative_horizontal_position(self, self.parent(), side = "right")
@@ -500,8 +472,9 @@ class JournalWindow(Dialog):
             super().keyPressEvent(event)
 class MessagePopup(Dialog):
     def __init__(self, parent=None):
-        self.key_name = "message_window" # used for dictionary of windows 
         Dialog.__init__(self, parent)
+        self.window_name = "message_window"
+        self.key_name = "message_window" # used for dictionary of windows 
         # window settings
         set_properties_non_modal_popup(self, "Messages")
         self.setAttribute(Qt.WA_ShowWithoutActivating) # Show without taking focus
@@ -512,12 +485,13 @@ class MessagePopup(Dialog):
         self.base_height = 31 # Height per message
         self.max_messages = 15 # Limit to prevent oversized pop-up
         set_relative_vertical_position(self, self.parent(), 'down', 10)
+        self.restore_state()
         self.hide()
     def set_message(self, messages):
         """Display a list of messages, newest at the top."""
-        if not messages:
-            self.hide()
-            return
+        # if not messages:
+            # self.hide()
+            # return
         # Limit to max_messages
         messages = messages[-self.max_messages:] # Take newest messages
         text = " | ".join(reversed(messages)) # Newest at top
@@ -527,7 +501,7 @@ class MessagePopup(Dialog):
         # self.setFixedSize(fixed_width + 20, self.label.height() + 20)
         self.label.adjustSize()
         self.adjustSize()
-        set_relative_vertical_position(self, self.parent(), 'down', 10)
+        # set_relative_vertical_position(self, self.parent(), 'down', 10)
         # Show and ensure main window retains focus
         self.show()
         if self.parent(): self.parent().setFocus()
@@ -611,8 +585,9 @@ class SelectionBox(Widget):
         self.action(self.current_key, item.text(),self, **self.kw)
 class InventoryWindow(Dialog):
     def __init__(self, parent=None):
-        self.key_name = "inventory_window" # used for dictionary of windows 
         Dialog.__init__(self, parent)        
+        self.window_name = "inventory_window"
+        self.key_name = "inventory_window" # used for dictionary of windows 
         set_properties_non_modal_popup(self, "Inventory")
         self.setFixedSize(POPUP_WIDTH, POPUP_HEIGHT)
         self.build_parts()
@@ -622,6 +597,8 @@ class InventoryWindow(Dialog):
         self.list_widget_last_size = 0
         self.current_filter = ""
         # -- 
+        self.update_position()
+        self.restore_state()
         self.hide()  # Hidden by default
         self.parent().setFocus()
     def build_parts(self):
@@ -804,7 +781,7 @@ class InventoryWindow(Dialog):
         self.update_row_index(last_list_widget_size, last_list_widget_current_item_index)
         # show         
         self.show()
-        set_relative_horizontal_position(self, self.parent(), 'left', 10)
+        # set_relative_horizontal_position(self, self.parent(), 'left', 10)
         self.parent().setFocus()
     def show_context_menu(self, pos):
         """Show a context menu for equip and drop actions."""
@@ -888,14 +865,16 @@ class InventoryWindow(Dialog):
         self.update_selected_item_label_content() # self.list_widget_objects[new_idx] )
 class BehaviourController(Dialog):
     def __init__(self, parent=None):
-        self.key_name = "behaviour_window" # used for dictionary of windows 
         Dialog.__init__(self, parent)
+        self.window_name = "behaviour_window"
+        self.key_name = "behaviour_window" # used for dictionary of windows 
         set_properties_non_modal_popup(self, "Behaviour Controller")
         self.resize(400,100)
         # self.char_button_list = []
         self.build_parts()
         self.assemble_parts()
         self.update()
+        self.restore_state()
     def build_parts(self):
         self.layout = VLayout() # vertical 
         # self.button_layout = HLayout() 
@@ -918,22 +897,23 @@ class BehaviourController(Dialog):
         player.activity = get_slider_list(self.activity_slider)[0].value()/100.0
         self.update()
     def update(self):
-        # self.update_character_buttons()
+        Dialog.update(self)
         get_label_list(self.activity_slider)[0].setText( f"Activity Level : { self.parent().player.activity }" )
         get_label_list(self.tolerance_slider)[0].setText( f"Distance Tolerance : { self.parent().player.tolerance }" )
         get_slider_list(self.activity_slider)[0].setValue( int(self.parent().player.activity*100) ) 
         get_slider_list(self.tolerance_slider)[0].setValue( max(1,int(self.parent().player.tolerance)) )
-
 class PartyWindow(Dialog):
     def __init__(self, parent = None):
-        self.key_name = "party_window" # used for dictionary of windows 
         Dialog.__init__(self, parent)
+        self.window_name = "party_window"
+        self.key_name = "party_window" # used for dictionary of windows 
         set_properties_non_modal_popup(self, "Party")
         self.setFixedWidth(POPUP_WIDTH)
         self.char_button_list = []
         self.build_parts()
         self.assemble_parts()
         self.update()
+        self.restore_state()
     def build_parts(self):
         self.button_layout = HLayout() 
     def assemble_parts(self):
@@ -973,6 +953,7 @@ class PartyWindow(Dialog):
             button.setIcon(QIcon(pix))
             button.setIconSize(pix.size())
     def update(self):
+        Dialog.update(self)
         self.update_character_buttons()
         
 # menu components

@@ -1105,6 +1105,8 @@ class DraggableView(QGraphicsView):
     def mouseMoveEvent(self, event):
         if self._drag_pos is not None and event.buttons() & Qt.RightButton:
             self.window().move(event.globalPos() - self._drag_pos)
+            self.window_x = self.pos().x()
+            self.window_y = self.pos().y()
             event.accept()
         else:
             super().mouseMoveEvent(event)
@@ -1113,12 +1115,6 @@ class DraggableView(QGraphicsView):
         super().mouseReleaseEvent(event)
         # print("mouse :", self.mouse_x//TILE_SIZE, self.mouse_y//TILE_SIZE)
             
-# ? ... 
-class WindowSettings(Serializable):
-    __serialize_only__ = []
-    def __init__(self):
-        pass 
-
 # Main Window Class 
 class Game(DraggableView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_PLAYERS, Game_MAPTRANSITION, Game_DATA, Game_GUI, Game_ITERATION):
     __serialize_only__ = [
@@ -1131,7 +1127,9 @@ class Game(DraggableView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_P
         "current_day",
         "is_music_muted",
         "current_player",
-        "certificates"
+        "certificates",
+        "window_x",
+        "window_y"
     ]
     def __init__(self):
         DraggableView.__init__(self)
@@ -1145,9 +1143,12 @@ class Game(DraggableView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_P
         Game_DATA.__init__(self)
         Game_GUI.__init__(self)
         Game_ITERATION.__init__(self)
+        self.window_x = 0
+        self.window_y = 0
         self.alt_pressed = False
         self.version = "1.0.0"
         self.load_current_game()
+        if self.window_x and self.window_y: self.move(self.window_x, self.window_y)
     def mouseDoubleClickEvent(self, event):
         if event.button() == Qt.LeftButton:
             x, y = self.mouse_map_pos()
@@ -1279,7 +1280,7 @@ class Game(DraggableView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_P
                     f"[ Available Skills ](days survived: {self.player.days_survived})",
                     f"-> Current Map: { self.player.current_map[0]}, {-self.player.current_map[1] }, {self.player.current_map[2] }",
                     f"-> Map Position: { self.player.x}, { self.map.height -self.player.y }",
-                    f"Release Party: { self.player.count_party() if isinstance(self.player, Hero) else "..." }",
+                    f"Release Party: { self.player.count_party() if isinstance(self.player, Hero) else '...' }",
                     f"Dodge Skill: { self.player.can_use_dodge_skill }",
                     f"Thrust Skill: { self.player.can_use_thrust_skill }",
                     f"Knight Slash Skill: { self.player.can_use_knight_skill }",
@@ -1311,6 +1312,7 @@ class Game(DraggableView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_P
                     self.inventory_window.hide()
                 else:
                     self.inventory_window.update_inventory(self.player)
+                    self.inventory_window.show()
                 return True     
             case Qt.Key_Z: # behaviour window
                 if not self.behaviour_controller_window:
@@ -1318,16 +1320,16 @@ class Game(DraggableView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_P
                 if self.behaviour_controller_window.isVisible():
                     self.behaviour_controller_window.hide()
                 else:
-                    self.behaviour_controller_window.show()
                     self.behaviour_controller_window.update()
+                    self.behaviour_controller_window.show()
             case Qt.Key_P: # party window
                 if not self.party_window:
                     self.party_window = PartyWindow(self)
                 if self.party_window.isVisible():
                     self.party_window.hide()
                 else:
-                    self.party_window.show()
                     self.party_window.update()
+                    self.party_window.show()
         match key: # music 
             case Qt.Key_M:  # Toggle music
                 self.toggle_music()
