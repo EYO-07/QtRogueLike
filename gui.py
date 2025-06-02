@@ -13,7 +13,7 @@ from datetime import datetime
 # third-party
 from PyQt5.QtWidgets import QWidget, QListWidget, QVBoxLayout, QPushButton, QHBoxLayout, QMenu, QDialog, QLabel, QTextEdit, QSizePolicy, QInputDialog, QTabBar, QTabWidget, QSlider, QLayoutItem
 from PyQt5.QtCore import Qt, QEvent
-from PyQt5.QtGui import QTextCursor, QColor, QIcon
+from PyQt5.QtGui import QTextCursor, QColor, QIcon, QFont, QFontDatabase
 
 # -- helpers 
 def item_text_color(game_item):
@@ -29,8 +29,20 @@ def item_text_color(game_item):
 def info(game_item):
     return game_item.info(), item_text_color(game_item)
 
+def get_font(path, size=11):
+    # Load the custom font (replace with your actual path)
+    font_id = QFontDatabase.addApplicationFont(path)
+    custom_font = None 
+    if font_id != -1:
+        family = QFontDatabase.applicationFontFamilies(font_id)[0]
+        custom_font = QFont(family, size)
+    else:
+        print("Failed to load custom font.")
+        custom_font = QFont("Arial", size)  # fallback
+    return custom_font 
+
 # -- constructors 
-def new_text(foreground = "white", layout = None):
+def new_text(foreground = "white", layout = None, font = None, fontsize = 11):
     color_css = color_to_css(foreground)
     text_edit = QTextEdit()
     text_edit.setStyleSheet(f"""
@@ -40,9 +52,10 @@ def new_text(foreground = "white", layout = None):
             border: 1px solid rgba(255, 255, 255, 50);
             border-radius: 5px;
             padding: 5px;
-            font-size: 11px;
+            font-size: {fontsize}px;
         }}
     """)
+    if font: text_edit.setFont(font)
     text_edit.setFocusPolicy(Qt.StrongFocus)
     if layout is None: return text_edit
     layout.addWidget(text_edit)
@@ -293,7 +306,7 @@ class JournalWindow(Dialog):
         self.layout = VLayout() # vertical 
         self.button_layout = HLayout()
         self.char_button_list = []
-        self.text_edit = new_text(foreground = "yellow")
+        self.text_edit = new_text(foreground = "yellow", font = get_font("fonts/Lobster-Regular.ttf"), fontsize=14)
         self.update_character_buttons()
         self.save_button = new_button("Save", self.save_journal)
         self.log_button = new_button("Log Entry", self.log_diary_entry)

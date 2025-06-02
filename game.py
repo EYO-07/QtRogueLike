@@ -981,7 +981,7 @@ class Game_ITERATION:
         self.player.update_available_skills()
     def Event_NewDay(self):
         print(f"Day {self.current_day}")
-        if d() < 1.0/20.0: # spawn raiders 
+        if d() < 1.0/15.0: # spawn raiders 
             for i in range(int(d(0, min( self.current_day,15 ) ))):
                 if len(self.map.enemies)>120: break 
                 x,y = self.map.get_random_walkable_tile()
