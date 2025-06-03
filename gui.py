@@ -390,10 +390,8 @@ class JournalWindow(Dialog):
             else: # southest
                 return "I'm on southeast part of this region, where should I go ? ..."
         return ""
-    def update(self):
-        Dialog.update(self)
+    def update_journal(self):
         self.load_journal()
-        # self.update_position()
         self.update_character_buttons()
     def update_position(self):
         set_relative_horizontal_position(self, self.parent(), side = "right")

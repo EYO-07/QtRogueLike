@@ -390,7 +390,7 @@ class Game_PLAYERS:
         self.set_player(new_key_name)
         self.update_prior_next_selection()
     def update_prior_next_selection(self):
-        if self.journal_window: self.journal_window.update()
+        if self.journal_window: self.journal_window.update_journal()
         if self.player is None:
             print("Bad Timing to Call .update_prior_next_selection() the current player is None")
             self.prior_next_players = []
@@ -567,6 +567,7 @@ class Game_MAPTRANSITION:
         self.map_transition(new_map_file, new_map_coord, map_type)
         # placing character to the new map 
         self.safely_place_character_to_new_map()
+        self.place_players() # testing
         self.scene.clear()
         self.dirty_tiles.clear()
         self.draw_grid()
@@ -618,6 +619,8 @@ class Game_MAPTRANSITION:
         else: # old map
             if not self.map.place_character(self.player):
                 print(">>> Failed to Place Character")
+        # -- 
+        self.place_players() # testing
         # Update of Game Scene 
         self.scene.clear()
         self.dirty_tiles.clear()
@@ -823,7 +826,7 @@ class Game_GUI:
             self.journal_window.save_journal()
             if self.journal_window.isVisible():
                 self.journal_window.load_journal(self.current_slot)
-                self.journal_window.update_position()
+                # self.journal_window.update_position() 
     def update_behav_window(self):
         if self.behaviour_controller_window:
             if self.behaviour_controller_window.isVisible():
@@ -837,7 +840,7 @@ class Game_GUI:
             self.journal_window.load_journal(self.current_slot)  # Refresh contents
             self.journal_window.log_quick_diary_entry()
             self.journal_window.show()
-            self.journal_window.update_position()
+            # self.journal_window.update_position()
         self.journal_window.save_journal()
         self.setFocus()
 class Game_ITERATION:
@@ -1300,7 +1303,7 @@ class Game(DraggableView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_P
                     self.journal_window.hide()
                 else:
                     self.journal_window.load_journal(self.current_slot)  # Refresh contents
-                    self.journal_window.update()
+                    self.journal_window.update_journal()
                     self.journal_window.show()
                 self.setFocus()
                 return True 
@@ -1446,15 +1449,7 @@ class Game(DraggableView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_P
         elif key == Qt.Key_D:
             dx, dy = self.rotated_direction(1, 0)
         elif key == Qt.Key_H:
-            # ptr_b_exit = [ False ]
-            # def is_exit(last_result, it):
-                # if last_result: 
-                    # ptr_b_exit[0] = True 
-                    # self.add_message(f"Rested {it} turns")
-                # return ptr_b_exit[0] 
-            # [ i for i in range(10) if not is_exit( self.game_iteration_not_draw(), i+1 ) ]    
-            # T1 = tic()
-            # toc(T1, f"Key Press H || Enemies:{len(self.map.enemies)} | Buildings:{len(self.map.buildings)} |") 
+            self.save_current_game(slot=1)
             for i in range(H_REST_TURNS): 
                 if self.game_iteration_not_draw(): 
                     self.add_message(f"Rested {i} turns, you've being interrupted !!!")

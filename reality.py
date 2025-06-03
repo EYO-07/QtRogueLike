@@ -1588,21 +1588,21 @@ class TileBuilding(ActionTile): # interface class
                 print( hero.name, hero.party, hero.current_map )
                 game_instance.place_players()
                 game_instance.update_prior_next_selection() # -- fix -- Can't cycle hero that comes from garrison
-                if game_instance.journal_window: game_instance.journal_window.update() 
+                if game_instance.journal_window: game_instance.journal_window.update_journal() 
                 game_instance.draw()
                 return True
         return False
     def menu_resources(self, current_menu, current_item, menu_instance, game_instance):
         """ return True means that the menu should close """
         from gui import info 
-        counter = [0]
-        def resource_counter(obj, counter):
-            if isinstance(obj, Food) or isinstance(obj, Resource):
-                counter[0] += 1
-                return True
-            else:
-                return False
-        resources = { f"{counter[0]}. {info(e)[0]}" : e for e in game_instance.player.items if resource_counter(e, counter) }
+        # counter = [0]
+        # def resource_counter(obj, counter):
+            # if isinstance(obj, Food) or isinstance(obj, Resource):
+                # counter[0] += 1
+                # return True
+            # else:
+                # return False
+        resources = { e.info() : e for e in game_instance.player.items if isinstance(e, Food) or isinstance(e, Resource) }
         # -- 
         if current_item == "Resources >":
             menu_instance.set_list("Resources >",[ 
@@ -1612,11 +1612,11 @@ class TileBuilding(ActionTile): # interface class
                 f"-> stone: {self.stone:.0f}", 
                 "Resources+", 
                 "Resources++", 
+                "Resources--",
                 "Food-", 
                 "Wood-", 
                 "Metal-", 
                 "Stone-", 
-                "Resources--",
                 ".." 
             ])
             return False 
@@ -1627,9 +1627,10 @@ class TileBuilding(ActionTile): # interface class
                     menu_instance.set_list()
                     return False
                 case "Resources+":
-                    if len(resources) > 0:
-                        menu_instance.set_list("Resources+", list(resources.keys()))
-                        return False # necessary ? 
+                    if self.update_resource_p_menu(menu_instance, resources): return False 
+                    # if len(resources) > 0:
+                        # menu_instance.set_list("Resources+", list(resources.keys()))
+                        # return False # necessary ? 
                 case "Resources++":
                     if len(resources) > 0:
                         for k,v in iter(resources.items()):
@@ -1673,15 +1674,21 @@ class TileBuilding(ActionTile): # interface class
                     if ok and qtt > 0 and self.retrieve_stone(game_instance, qtt):
                         return True 
                 case "Resources--":
-                    self.retrieve_food(game_instance, self.food)
-                    self.retrieve_wood(game_instance, self.wood)
-                    self.retrieve_metal(game_instance, self.metal)
-                    self.retrieve_stone(game_instance, self.stone)
+                    if self.food>0.1: self.retrieve_food(game_instance, self.food)
+                    if self.wood>0.1: self.retrieve_wood(game_instance, self.wood)
+                    if self.metal>0.1: self.retrieve_metal(game_instance, self.metal)
+                    if self.stone>0.1: self.retrieve_stone(game_instance, self.stone)
                     return True 
         if current_menu == "Resources+":
-            res_obj = resources[current_item]
-            self.store_resource(res_obj, game_instance.player)
-            game_instance.update_inv_window()
+            if current_item in resources:
+                res_obj = resources.pop(current_item)
+                self.store_resource(res_obj, game_instance.player)
+                game_instance.update_inv_window()
+                return not self.update_resource_p_menu(menu_instance, resources)
+        return False 
+    def update_resource_p_menu(self, menu_instance, resources):
+        if len(resources) > 0:
+            menu_instance.set_list("Resources+", [f"-> food: {self.food:.0f}", f"-> wood: {self.wood:.0f}", f"-> metal: {self.metal:.0f}", f"-> stone: {self.stone:.0f}", ]+list(resources.keys())+[".."])
             return True 
         return False 
     def set_population_menu(self, menu_instance):
@@ -1870,6 +1877,9 @@ class LumberMill(TileBuilding):
         self.name = name 
         self.menu_list = []
         self.wood = wood
+        self.melt_weap_dict = None
+    def update_melt_menu(self, menu_instance):
+        menu_instance.set_list("Melt Weapons >", ["Lumber Mill > Melt Weapons"] + list(self.melt_weap_dict.keys())+[".."])
     def action(self):
         self.update_menu_list()
         def f(current_menu, current_item, menu_instance, game_instance):
@@ -1877,23 +1887,35 @@ class LumberMill(TileBuilding):
             if current_item == "..": 
                 menu_instance.set_list()
                 return 
-            if current_item == "Overview >": 
-                self.set_population_menu(menu_instance)
-                return 
-            if current_item == "Buy 100 Bolts for Crossbows (500 Wood)": 
-                if self.wood >= 500:
-                    self.wood -= 500
-                    game_instance.player.add_item( Ammo(name="bolt", uses=100) )
-                    game_instance.add_message("100 Bolts Added to Inventory")
-                    game_instance.update_inv_window()
-                    menu_instance.close()
-                    return 
             if current_item == "Exit": 
                 menu_instance.close()
-                return 
+                return     
+            if current_menu == "main":
+                if current_item == "Overview >": 
+                    self.set_population_menu(menu_instance)
+                    return 
+                if current_item == "Buy 100 Bolts for Crossbows (500 Wood)": 
+                    if self.wood >= 500:
+                        self.wood -= 500
+                        game_instance.player.add_item( Ammo(name="bolt", uses=100) )
+                        game_instance.add_message("100 Bolts Added to Inventory")
+                        game_instance.update_inv_window()
+                        menu_instance.close()
+                        return 
+                if current_item == "Melt Weapons >":
+                    self.melt_weap_dict = { it.info() : it for it in game_instance.player.items if isinstance(it, Sword) or isinstance(it, Mace) }
+                    self.update_melt_menu(menu_instance)
+                    return 
             if self.menu_resources(current_menu, current_item, menu_instance, game_instance):
                 menu_instance.close()
                 return 
+            if current_menu == "Melt Weapons >":
+                if self.melt_weap_dict:
+                    if current_item in self.melt_weap_dict:
+                        game_instance.player.remove_item( self.melt_weap_dict.pop(current_item) )
+                        self.metal += 50 
+                        self.update_melt_menu(menu_instance)
+                        return 
         return f
     def update_menu_list(self, selection_box_instance = None):
         self.menu_list.clear()
@@ -1903,6 +1925,7 @@ class LumberMill(TileBuilding):
             "Overview >",
             "Resources >",
             "Buy 100 Bolts for Crossbows (500 Wood)",
+            "Melt Weapons >",
             "Exit"
         ]
     def production(self, multiplier = 1.0):
