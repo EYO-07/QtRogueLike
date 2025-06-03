@@ -273,17 +273,14 @@ def AB_pillage_current_target(char = None, game_instance = None):
         if isinstance(target, GuardTower): target.add_enemy_turret()
     return True 
     
-# 1. AB_melee_attack() || % AB_ready_melee_current_target() || Attack 
-# 2. AB_melee_attack() || % AB_ready_melee_current_target() | & Search Adjacent 
-def AB_melee_attack(char = None, game_instance = None):
+def AB_adjacent_melee_attack(char = None, game_instance = None):
     if char is None: return False 
     if game_instance is None: return False 
     map = game_instance.map 
     if not map: return False 
-    if AB_melee_current_target(char = char, game_instance = game_instance): return True 
     from reality import Damageable 
     target = None 
-    for dx, dy in random.sample(CROSS_DIFF_MOVES_1x1):
+    for dx, dy in random.sample(CROSS_DIFF_MOVES_1x1, len(CROSS_DIFF_MOVES_1x1)):
         x = char.x + dx 
         y = char.y + dy
         target = map.get_char(x, y)
@@ -296,6 +293,31 @@ def AB_melee_attack(char = None, game_instance = None):
     damage = char.do_damage()
     game_instance.events.append( AttackEvent(char, target, damage) )
     return True
+
+# 1. AB_melee_attack() || % AB_ready_melee_current_target() || Attack 
+# 2. AB_melee_attack() || % AB_ready_melee_current_target() | & Search Adjacent     
+def AB_melee_attack(char = None, game_instance = None):
+    if char is None: return False 
+    if game_instance is None: return False 
+    if AB_adjacent_melee_attack(char=char, game_instance=game_instance): return True 
+    if AB_melee_current_target(char=char, game_instance=game_instance): return True 
+    # map = game_instance.map 
+    # if not map: return False 
+    # from reality import Damageable 
+    # target = None 
+    # for dx, dy in random.sample(CROSS_DIFF_MOVES_1x1):
+        # x = char.x + dx 
+        # y = char.y + dy
+        # target = map.get_char(x, y)
+        # if not target: continue 
+        # if not isinstance(target, Damageable): 
+            # target = None 
+            # continue 
+        # if is_enemy_of(char, target): break 
+    # if not target: return False 
+    # damage = char.do_damage()
+    # game_instance.events.append( AttackEvent(char, target, damage) )
+    return False 
 def AB_healing(char = None, game_instance = None):
     from reality import Damageable, Player
     if char is None: return False 
@@ -586,21 +608,21 @@ def AB_find_random_tile_target(char = None, game_instance = None): # forker -- b
 def AB_behavior_default(char = None, game_instance = None): # - [ok]
     if AB_ranged_attack(char=char, game_instance=game_instance): return True 
     if AB_find_melee_target(char=char, game_instance=game_instance): 
-        if AB_melee_current_target(char=char, game_instance=game_instance): return True 
+        if AB_melee_attack(char=char, game_instance=game_instance): return True 
         if AB_pursue_current_target(char=char, game_instance=game_instance): return True 
     if AB_random_walk(char=char, game_instance=game_instance): return True 
     return True 
 def AB_behavior_grudge(char = None, game_instance = None): # - [ok]
     if AB_ranged_attack(char=char, game_instance=game_instance): return True 
     if AB_find_melee_target_grudge(char=char, game_instance=game_instance): 
-        if AB_melee_current_target(char=char, game_instance=game_instance): return True 
+        if AB_melee_attack(char=char, game_instance=game_instance): return True 
         if AB_pursue_current_target(char=char, game_instance=game_instance): return True 
     if AB_random_walk(char=char, game_instance=game_instance): return True 
     return True 
 def AB_behavior_raider(char = None, game_instance = None): # - [ok] - performace? 
     if AB_ranged_attack(char=char, game_instance=game_instance): return True 
     if AB_find_melee_target(char=char, game_instance=game_instance): 
-        if AB_melee_current_target(char=char, game_instance=game_instance): return True 
+        if AB_melee_attack(char=char, game_instance=game_instance): return True 
         if AB_pursue_current_target(char=char, game_instance=game_instance): return True 
     if AB_find_building_target(char=char, game_instance=game_instance): 
         if AB_pillage_current_target(char=char, game_instance=game_instance): return True 
@@ -613,7 +635,7 @@ def AB_behavior_healer(char = None, game_instance = None): # - [ok]
         if AB_pursue_current_target_healing(char=char, game_instance=game_instance): return True 
     if AB_ranged_attack(char=char, game_instance=game_instance): return True 
     if AB_find_melee_target(char=char, game_instance=game_instance): 
-        if AB_melee_current_target(char=char, game_instance=game_instance): return True 
+        if AB_melee_attack(char=char, game_instance=game_instance): return True 
         if AB_pursue_current_target(char=char, game_instance=game_instance): return True 
     if AB_random_walk(char=char, game_instance=game_instance): return True 
     return True 

@@ -1449,7 +1449,7 @@ class Game(DraggableView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_P
         elif key == Qt.Key_D:
             dx, dy = self.rotated_direction(1, 0)
         elif key == Qt.Key_H:
-            self.save_current_game(slot=1)
+            # self.save_current_game(slot=1)
             for i in range(H_REST_TURNS): 
                 if self.game_iteration_not_draw(): 
                     self.add_message(f"Rested {i} turns, you've being interrupted !!!")

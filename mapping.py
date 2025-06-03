@@ -300,24 +300,24 @@ class Map_SPECIAL:
             self.buildings.append(LM)
             print("Added Lumber Mill at", xy[0], xy[1])
         return True 
-    def add_enemy_tower(self, probability = 0.3, border_factor = 0.0, quantity = 1):
+    def add_enemy_tower(self, probability = 0.3, border_factor = 0.0, quantity = 1, floor_sprite = "grass"):
         if d() > probability: return False
         for i in range(quantity):
             xy = self.get_random_walkable_tile(border_factor = border_factor) # -- performance check 
             if not xy: continue 
             if self.is_xy_special(xy[0], xy[1]): continue 
-            GT = GuardTower(x=xy[0], y=xy[1], b_enemy=True)
+            GT = GuardTower(x=xy[0], y=xy[1], b_enemy=True, floor_sprite=floor_sprite)
             self.set_tile(xy[0],xy[1],GT)
             self.buildings.append(GT)
             print("Added Tower at", xy[0], xy[1])
         return True 
-    def add_magic_tower(self, probability = 0.3, border_factor = 0.0, quantity = 1):
+    def add_magic_tower(self, probability = 0.3, border_factor = 0.0, quantity = 1, floor_sprite = "grass"):
         if d() > probability: return False
         for i in range(quantity):
             xy = self.get_random_walkable_tile(border_factor = border_factor) # -- performance check 
             if not xy: continue 
             if self.is_xy_special(xy[0], xy[1]): continue 
-            MT = MagicTower(x=xy[0], y=xy[1], b_enemy=False)
+            MT = MagicTower(x=xy[0], y=xy[1], b_enemy=False, floor_sprite=floor_sprite)
             self.set_tile(xy[0],xy[1],MT)
             self.buildings.append(MT)
             print("Added Magic Tower at", xy[0], xy[1])
@@ -898,8 +898,8 @@ class Map(Serializable, Map_SPECIAL, Map_MODELLING, Map_CHARACTERS, Map_TILES):
         self.starting_y = new_y
         #self.ensure_connection([(new_x,new_y)])
         self.add_dungeon_loot()
-        self.add_enemy_tower(quantity=2)
-        self.add_magic_tower(probability = 0.1*dungeon_level)
+        self.add_enemy_tower(quantity=2, floor_sprite = "floor")
+        self.add_magic_tower(probability = 0.1*dungeon_level, floor_sprite = "floor")
         return new_x, new_y, new_z
     def generate_procedural_field(self):
         self.enemy_type = "field"

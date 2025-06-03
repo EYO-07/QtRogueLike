@@ -1936,8 +1936,8 @@ class LumberMill(TileBuilding):
 # GuardTower.action() || { GuardTower.update_menu_list() | GuardTower.new_swordman() | GuardTower.new_mounted_knight() | TileBuilding.menu_garrison() | TileBuilding.menu_resources() } || { Character.add_item(), TileBuilding.update_inv_window(), Character.remove_item() }
 class GuardTower(TileBuilding):
     __serialize_only__ = TileBuilding.__serialize_only__ + ["name","heroes","num_heroes","turret"]
-    def __init__(self, x=0, y =0,name = "Guard Tower", b_enemy=False):
-        TileBuilding.__init__(self, x=x, y=y, front_sprite = "tower", walkable=True, sprite_key="grass", b_enemy=b_enemy)
+    def __init__(self, x=0, y =0,name = "Guard Tower", b_enemy=False, floor_sprite = "grass"):
+        TileBuilding.__init__(self, x=x, y=y, front_sprite = "tower", walkable=True, sprite_key=floor_sprite, b_enemy=b_enemy)
         self.name = name 
         self.heroes = {}
         self.num_heroes = 0
@@ -2146,8 +2146,8 @@ class GuardTower(TileBuilding):
 
 class MagicTower(TileBuilding):
     __serialize_only__ = TileBuilding.__serialize_only__ + ["name","heroes","num_heroes"]
-    def __init__(self, x=0, y =0,name = "Magic Tower", b_enemy=False):
-        TileBuilding.__init__(self, x=x, y=y, front_sprite = "magic_tower", walkable=True, sprite_key="grass", b_enemy=b_enemy)
+    def __init__(self, x=0, y =0,name = "Magic Tower", b_enemy=False, floor_sprite = "grass"):
+        TileBuilding.__init__(self, x=x, y=y, front_sprite = "magic_tower", walkable=True, sprite_key=floor_sprite, b_enemy=b_enemy)
         self.name = name 
         self.heroes = {}
         self.num_heroes = 0
