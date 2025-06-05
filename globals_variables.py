@@ -18,8 +18,10 @@ def rn(num = 5):
     return str(random.randint(0,9))+rn(num-1)
 
 # Global Variables
-
+PERFORMANCE_DISTANCE = 12
+PERFORMANCE_TIME = 0.03 
 H_REST_TURNS = 15
+RAIDER_SPAWN_PROBABILITY = 0.1
 
 # map configuration 
 MAP_WIDTH = 70
@@ -52,6 +54,7 @@ CHESS_KNIGHT_DIFF_MOVES = [
 ]
 SQUARE_DIFF_MOVES = Generate_Square_Diffs(2)
 SQUARE_DIFF_MOVES_5x5 = Generate_Square_Diffs(3)
+SQUARE_DIFF_MOVES_10 = Generate_Square_Diffs(10)
 CROSS_DIFF_MOVES = [
     (0,1), (0,2), (0,3),
     (0,-1), (0,-2), (0,-3),

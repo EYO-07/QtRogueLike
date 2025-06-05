@@ -787,11 +787,12 @@ class EquippedCharacter(Container): # interface : equip items
         return getattr(self, slot, None)
     
 class Character(EquippedCharacter, BehaviourCharacter):
-    __serialize_only__ = EquippedCharacter.__serialize_only__ + BehaviourCharacter.__serialize_only__ +  ["name"]
+    __serialize_only__ = EquippedCharacter.__serialize_only__ + BehaviourCharacter.__serialize_only__ +  ["name", "description"]
     def __init__(self, name="", hp=100, x=50, y=50):
         EquippedCharacter.__init__(self)
         BehaviourCharacter.__init__(self)
         self.name = name
+        self.description = ""
         self.hp = hp
         self.max_hp = hp
         self.x = x

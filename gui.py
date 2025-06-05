@@ -1262,15 +1262,7 @@ def debugging_menu(menu, item, instance, game_instance):
                 instance.close()
                 return 
             case "Raider":
-                # __init__(self, name='', hp=30, x=50, y=50, b_generate_items=False, sprite='enemy')
-                for i in range(3):
-                    x,y = game_instance.map.get_random_walkable_tile()
-                    if not x or not y: continue 
-                    enemy = game_instance.map.generate_enemy_by_chance_by_list_at(x, y, RAIDERS_TABLE)
-                    if enemy:
-                        print(enemy)
-                        game_instance.map.enemies.append(enemy)
-                        game_instance.map.place_character(enemy)
+                game_instance.map.generate_raiders_spawn(game_instance, probability = 1.0)
                 game_instance.draw() 
                 instance.close() 
                 return 

@@ -306,7 +306,6 @@ class Game_VIEWPORT:
             return dy, -dx            
     def rotated_direction(self, dx, dy):
         return self.rotate_vector_for_movement(dx, dy)
-    
 class Game_PLAYERS:
     def __init__(self):
         self.turn = 0
@@ -848,6 +847,9 @@ class Game_ITERATION:
         self.events = []  # Initialize events list
         # -- message flags || 100 turns 
         self.flag_near_to_village = False 
+        self.flag_performance_players = False 
+        self.flag_performance_enemies = False 
+        self.flag_performance_buldings = False 
     def game_iteration_not_draw(self):
         prev_hp = self.player.hp 
         # -- 
@@ -955,18 +957,46 @@ class Game_ITERATION:
         self.events.clear()
     def update_players(self):
         self.player.update(self)
+        t_1 = tic()
+        T = 0
+        t = t_1
+        player = self.player 
+        self.flag_performance_players = False 
+        flag_performance = self.flag_performance_players or self.flag_performance_enemies or self.flag_performance_buldings
         for k,v in self.players.items():
-            if v is self.player: continue 
+            if T>PERFORMANCE_TIME or flag_performance: 
+                if T>PERFORMANCE_TIME: self.flag_performance_players = True 
+                if player.distance(v) > PERFORMANCE_DISTANCE: continue 
+            if v is player: continue 
             if v.party:
                 if v.is_placed_on_map(self.map):
                     self.map.remove_character(v)
                 continue 
             v.behaviour_update(self)
+            dt = toc(t)[0] 
+            t += dt 
+            T += dt 
+        if self.flag_performance_players: print("performance mode: update_players()")     
+        toc(t_1, "game.update_players() ||")
     def update_enemies(self): # maybe more maps could be updated, like maps with alive players 
         self.map.update_enemies(self)
     def update_buildings(self):
+        t_1 = tic()
+        T = 0
+        t = t_1
+        player = self.player 
+        self.flag_performance_buldings = False 
+        flag_performance = self.flag_performance_players or self.flag_performance_enemies or self.flag_performance_buldings
         for b in self.map.buildings:
+            if T>PERFORMANCE_TIME or flag_performance: 
+                if T>PERFORMANCE_TIME: self.flag_performance_buldings = True 
+                if player.distance(b) > PERFORMANCE_DISTANCE: continue 
             b.update(self)
+            dt = toc(t)[0] 
+            t += dt 
+            T += dt 
+        if self.flag_performance_buldings: print("performance mode: update_buildings()") 
+        toc(t_1, "game.update_buildings() ||")    
     def Event_NewTurn(self):
         if self.turn // self.turns_per_day + 1 > self.current_day:
             self.current_day += 1
@@ -984,17 +1014,17 @@ class Game_ITERATION:
         self.player.update_available_skills()
     def Event_NewDay(self):
         print(f"Day {self.current_day}")
-        if d() < 1.0/15.0: # spawn raiders 
-            for i in range(int(d(0, min( self.current_day,15 ) ))):
-                if len(self.map.enemies)>120: break 
-                x,y = self.map.get_random_walkable_tile()
-                if not x or not y: continue 
-                enemy = self.map.generate_enemy_by_chance_by_list_at(x, y, RAIDERS_TABLE)
-                if enemy:
-                    print("Raider Generated")
-                    self.map.enemies.append(enemy)
-                    self.map.place_character(enemy)
-        #self.player.days_survived += 1
+        if self.map.generate_raiders_spawn(self, probability = RAIDER_SPAWN_PROBABILITY): self.add_message("beware, I feel a bad omen ...")
+        # if d() < 1.0/15.0: # spawn raiders 
+            # for i in range(int(d(3, min( self.current_day,15 ) ))):
+                # if len(self.map.enemies)>120: break 
+                # x,y = self.map.get_random_walkable_tile()
+                # if not x or not y: continue 
+                # enemy = self.map.generate_enemy_by_chance_by_list_at(x, y, RAIDERS_TABLE)
+                # if enemy:
+                    # print("Raider Generated")
+                    # self.map.enemies.append(enemy)
+                    # self.map.place_character(enemy)
         for k,v in self.players.items():
             if not v: continue 
             if not v.is_placed_on_map(self.map): continue 
@@ -1087,8 +1117,7 @@ class Game_ITERATION:
         if not map: return 
         tile = map.get_tile(map_tile_x, map_tile_y) 
         char = map.get_char(map_tile_x, map_tile_y) 
-        # Distancia Inclinada é Maior que Distancia Não Inclinada 
-
+        
 class DraggableView(QGraphicsView):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -1116,7 +1145,6 @@ class DraggableView(QGraphicsView):
     def mouseReleaseEvent(self, event):
         self._drag_pos = None
         super().mouseReleaseEvent(event)
-        # print("mouse :", self.mouse_x//TILE_SIZE, self.mouse_y//TILE_SIZE)
             
 # Main Window Class 
 class Game(DraggableView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_PLAYERS, Game_MAPTRANSITION, Game_DATA, Game_GUI, Game_ITERATION):

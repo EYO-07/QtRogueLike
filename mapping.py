@@ -14,6 +14,7 @@ from PyQt5.QtWidgets import QGraphicsPixmapItem
 import noise  # Use python-perlin-noise instead of pynoise
 
 # project
+from performance import *
 from events import * 
 from serialization import * 
 from globals_variables import *
@@ -386,6 +387,27 @@ class Map_CHARACTERS:
     def __init__(self):
         self.enemy_type = "default" # used for fill_enemies to know which type of enemies should spawn. 
         self.enemies = []
+    def generate_raiders_spawn(self, game_instance, probability = 1.0/12.0):
+        if d() >= probability: return False 
+        if len(self.enemies)>120: return False 
+        center_x, center_y = self.get_random_walkable_tile() 
+        if center_x is None or center_y is None: return False 
+        b_at_least_one = False 
+        spawn_size = int( d(3, min( game_instance.player.days_survived,15 ) ) )
+        print("Raider Spawn Size :", spawn_size)
+        for i in range(spawn_size): 
+            dx = 0
+            dy = 0
+            for i in range(10):
+                dx, dy = random.choice(SQUARE_DIFF_MOVES_10)
+                if self.can_place_character_at(center_x+dx, center_y+dy): break 
+            enemy = self.generate_enemy_by_chance_by_list_at(center_x + dx, center_y + dy, RAIDERS_TABLE)
+            if enemy:
+                print("Raider Generated",center_x + dx, center_y + dy) 
+                self.enemies.append(enemy)
+                self.place_character(enemy) 
+                b_at_least_one = True 
+        return b_at_least_one
     def get_char(self, x, y):
         tile = self.get_tile(x,y)
         if not tile: return None 
@@ -527,8 +549,22 @@ class Map_CHARACTERS:
         if not self.is_adjacent_walkable(tile, x, y): return False 
         return (tile.walkable and not tile.current_char) 
     def update_enemies(self, game_instance):
+        t_1 = tic()
+        T = 0
+        t = t_1
+        player = game_instance.player 
+        game_instance.flag_performance_enemies = False 
+        flag_performance = game_instance.flag_performance_players or game_instance.flag_performance_enemies or game_instance.flag_performance_buldings
         for enemy in self.enemies:
-            enemy.behaviour_update(game_instance)            
+            if T>PERFORMANCE_TIME or flag_performance: 
+                if T>PERFORMANCE_TIME: game_instance.flag_performance_enemies = True  
+                if player.distance(enemy) > PERFORMANCE_DISTANCE: continue 
+            enemy.behaviour_update(game_instance) 
+            dt = toc(t)[0] 
+            t += dt 
+            T += dt 
+        if game_instance.flag_performance_enemies: print("performance mode: update_enemies()")    
+        toc(t_1, "map.update_enemies() ||")
     def can_place_character(self, char):
         tile = self.get_tile(char.x, char.y)
         if not tile: return False 
