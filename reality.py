@@ -1465,11 +1465,11 @@ class TileBuilding(ActionTile): # interface class
         self.wood = 0
         self.stone = 0
         self.metal = 0 
-    def bonus_resources(self):
-        self.food = d(0,100)
-        self.wood = d(0,100)
-        self.stone = d(0,100)
-        self.metal = d(0,100)
+    def bonus_resources(self, max = 100):
+        self.food += d(0,max)
+        self.wood += d(0,max)
+        self.stone += d(0,max)
+        self.metal += d(0,max) 
     def production(self, multiplier = 1.0):
         if self.b_enemy: return 
         self.villagers = min( (1.0+0.005*multiplier)*self.villagers, self.villagers_max )

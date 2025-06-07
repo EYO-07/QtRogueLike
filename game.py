@@ -785,6 +785,7 @@ class Game_DATA:
             self.journal_window = JournalWindow(self)
         self.journal_window.load_journal(slot)
         self.player.rotation = self.rotation 
+        self.backup_players = [ v for k,v in self.players.items() ] 
 class Game_GUI:
     def __init__(self):
         self.setWindowFlags(Qt.FramelessWindowHint)

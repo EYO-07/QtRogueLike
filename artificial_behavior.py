@@ -212,6 +212,8 @@ def AB_ranged_attack(char = None, game_instance = None):
     primary = char.primary_hand 
     if not isinstance(primary, Fireweapon): return False 
     target, path = primary.find_target(char, game_instance)
+    if target is None: return False 
+    if not target.is_placed_on_map(game_instance.map): return False 
     if primary.perform_attack(char, target, path, game_instance):
         primary.do_ammo_consumption() # maybe add full stats update, but for simplicity
         return True 
@@ -221,6 +223,9 @@ def AB_melee_current_target(char = None, game_instance = None):
     if not target: 
         char.current_target = None 
         return False 
+    if not target.is_placed_on_map(game_instance.map): 
+        char.current_target = None 
+        return False     
     from reality import Damageable 
     if not isinstance(target, Damageable): return False 
     if target.hp <= 0: 
@@ -235,6 +240,9 @@ def AB_heal_current_target(char = None, game_instance= None):
     if not target: 
         char.current_target_healing = None 
         return False 
+    if not target.is_placed_on_map(game_instance.map): 
+        char.current_target = None 
+        return False         
     from reality import Damageable 
     if not isinstance(target, Damageable): return False 
     if target.hp > 0.9*target.max_hp:
@@ -285,6 +293,7 @@ def AB_adjacent_melee_attack(char = None, game_instance = None):
         y = char.y + dy
         target = map.get_char(x, y)
         if not target: continue 
+        if not target.is_placed_on_map(map): continue 
         if not isinstance(target, Damageable): 
             target = None 
             continue 
@@ -301,22 +310,6 @@ def AB_melee_attack(char = None, game_instance = None):
     if game_instance is None: return False 
     if AB_adjacent_melee_attack(char=char, game_instance=game_instance): return True 
     if AB_melee_current_target(char=char, game_instance=game_instance): return True 
-    # map = game_instance.map 
-    # if not map: return False 
-    # from reality import Damageable 
-    # target = None 
-    # for dx, dy in random.sample(CROSS_DIFF_MOVES_1x1):
-        # x = char.x + dx 
-        # y = char.y + dy
-        # target = map.get_char(x, y)
-        # if not target: continue 
-        # if not isinstance(target, Damageable): 
-            # target = None 
-            # continue 
-        # if is_enemy_of(char, target): break 
-    # if not target: return False 
-    # damage = char.do_damage()
-    # game_instance.events.append( AttackEvent(char, target, damage) )
     return False 
 def AB_healing(char = None, game_instance = None):
     from reality import Damageable, Player

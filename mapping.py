@@ -286,6 +286,7 @@ class Map_SPECIAL:
             if not xy: continue 
             if self.is_xy_special(xy[0], xy[1]): continue 
             M = Mill(x=xy[0], y =xy[1], b_enemy = True) 
+            M.bonus_resources(max=1000)
             self.set_tile( xy[0], xy[1], M)
             self.buildings.append(M)
             print("Added Mill at", xy[0], xy[1])
@@ -297,6 +298,7 @@ class Map_SPECIAL:
             if not xy: continue 
             if self.is_xy_special(xy[0], xy[1]): continue 
             LM = LumberMill(x=xy[0], y=xy[1], b_enemy = True)
+            LM.bonus_resources(max=1000)
             self.set_tile( xy[0], xy[1], LM )
             self.buildings.append(LM)
             print("Added Lumber Mill at", xy[0], xy[1])
@@ -308,6 +310,7 @@ class Map_SPECIAL:
             if not xy: continue 
             if self.is_xy_special(xy[0], xy[1]): continue 
             GT = GuardTower(x=xy[0], y=xy[1], b_enemy=True, floor_sprite=floor_sprite)
+            GT.bonus_resources(max=1000)
             self.set_tile(xy[0],xy[1],GT)
             self.buildings.append(GT)
             print("Added Tower at", xy[0], xy[1])
