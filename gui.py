@@ -42,12 +42,13 @@ def get_font(path, size=11):
     return custom_font 
 
 # -- constructors 
-def new_text(foreground = "white", layout = None, font = None, fontsize = 11):
-    color_css = color_to_css(foreground)
-    text_edit = QTextEdit()
+def new_text(foreground = "white", layout = None, font = None, fontsize = 11, background = "rgba(0, 0, 0, 150)"):
+    color_css = color_to_css(foreground) 
+    color_css_bg = color_to_css(background) 
+    text_edit = QTextEdit() 
     text_edit.setStyleSheet(f"""
         QTextEdit {{
-            background-color: rgba(0, 0, 0, 150);
+            background-color: {color_css_bg};
             color: {color_css};
             border: 1px solid rgba(255, 255, 255, 50);
             border-radius: 5px;
@@ -306,7 +307,8 @@ class JournalWindow(Dialog):
         self.layout = VLayout() # vertical 
         self.button_layout = HLayout()
         self.char_button_list = []
-        self.text_edit = new_text(foreground = "yellow", font = get_font("fonts/Lobster-Regular.ttf"), fontsize=14)
+        # -- G:\mdr\pdr\pyQtRogueLike14042025\QtRogueLike\fonts\
+        self.text_edit = new_text(foreground = "black", font = get_font("fonts/Tangerine-Bold.ttf"), fontsize=27, background = "rgba(240, 240, 180, 255)")
         self.update_character_buttons()
         self.save_button = new_button("Save", self.save_journal)
         self.log_button = new_button("Log Entry", self.log_diary_entry)

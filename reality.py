@@ -1114,6 +1114,7 @@ class Hero(Player): # playable character that can "carry" a party
             break 
         game_instance.update_all_gui() 
     def release_party(self, game_instance):
+        game_instance.check_player_dict()
         x = self.x 
         y = self.y 
         for dx,dy in CROSS_DIFF_MOVES_1x1:

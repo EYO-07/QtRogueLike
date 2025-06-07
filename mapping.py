@@ -393,7 +393,7 @@ class Map_CHARACTERS:
         center_x, center_y = self.get_random_walkable_tile() 
         if center_x is None or center_y is None: return False 
         b_at_least_one = False 
-        spawn_size = int( d(3, min( game_instance.player.days_survived,15 ) ) )
+        spawn_size = int( d(3, min( game_instance.player.days_survived,30 ) ) )
         print("Raider Spawn Size :", spawn_size)
         for i in range(spawn_size): 
             dx = 0
@@ -408,6 +408,8 @@ class Map_CHARACTERS:
                 self.place_character(enemy) 
                 b_at_least_one = True 
         return b_at_least_one
+    def generate_demons_spawn(self,game_instance, probability = 1.0/12.0):
+        pass 
     def get_char(self, x, y):
         tile = self.get_tile(x,y)
         if not tile: return None 

@@ -18,8 +18,8 @@ def rn(num = 5):
     return str(random.randint(0,9))+rn(num-1)
 
 # Global Variables
-PERFORMANCE_DISTANCE = 12
-PERFORMANCE_TIME = 0.03 
+PERFORMANCE_DISTANCE = 8
+PERFORMANCE_TIME = 0.02 
 H_REST_TURNS = 15
 RAIDER_SPAWN_PROBABILITY = 0.1
 

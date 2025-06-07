@@ -318,20 +318,32 @@ class Game_PLAYERS:
         self.player = None 
         self.current_player = None 
         self.players = {} 
+        self.backup_players = [] 
         self.prior_next_index = 0
         self.prior_next_players = []
+    def check_player_dict(self):
+        for k in self.players:
+            v = self.players.get(k,None)
+            if not (v is None): continue 
+            print("Character Vanished from Dictionary! Restoring from Emergency List")
+            for char in self.backup_players: 
+                if k == char.name: 
+                    self.players.update({k:char}) 
+                    break 
     def add_player(self, key, cls_constructor = Player,**kwargs): # add a player or ally in dictionary 
         obj = cls_constructor(**kwargs)
         self.players.update({ key : obj })
+        self.backup_players.append(obj)
         self.update_prior_next_selection()
         return obj 
     def add_hero(self, key, **kwargs):
         obj = Hero(**kwargs)
         self.players.update({ key : obj })
+        self.backup_players.append(obj)
         self.update_prior_next_selection()
         return obj 
     def set_player(self, name): # set the Game.player by dictionary name  
-        """ return True if successfully set the current player, False otherwise """
+        """ return True if successfully set the current player, False otherwise """ 
         if not name in self.players: return False 
         new_player = self.players[name]
         self.player = new_player
@@ -378,6 +390,7 @@ class Game_PLAYERS:
         char_to_remove = self.players[key]
         self.map.remove_character(char_to_remove)
         self.players.pop(key)
+        self.backup_players.remove(char_to_remove) 
         if not char_to_remove is self.player: 
             self.update_prior_next_selection()
             return 
@@ -683,6 +696,7 @@ class Game_DATA:
         self.dirty_tiles.clear()    
     def save_current_game(self, slot=1):
         """Save the current map to its JSON file and player state to a central file."""
+        self.check_player_dict()
         T1 = tic()
         # Delay the save operation slightly to allow fade-in
         try:
@@ -1014,17 +1028,10 @@ class Game_ITERATION:
         self.player.update_available_skills()
     def Event_NewDay(self):
         print(f"Day {self.current_day}")
-        if self.map.generate_raiders_spawn(self, probability = RAIDER_SPAWN_PROBABILITY): self.add_message("beware, I feel a bad omen ...")
-        # if d() < 1.0/15.0: # spawn raiders 
-            # for i in range(int(d(3, min( self.current_day,15 ) ))):
-                # if len(self.map.enemies)>120: break 
-                # x,y = self.map.get_random_walkable_tile()
-                # if not x or not y: continue 
-                # enemy = self.map.generate_enemy_by_chance_by_list_at(x, y, RAIDERS_TABLE)
-                # if enemy:
-                    # print("Raider Generated")
-                    # self.map.enemies.append(enemy)
-                    # self.map.place_character(enemy)
+        if len(self.players)>7:
+            if self.map.generate_raiders_spawn(self, probability = 1.0): self.add_message("beware, I feel a bad omen ...")
+        else:
+            if self.map.generate_raiders_spawn(self, probability = RAIDER_SPAWN_PROBABILITY): self.add_message("beware, I feel a bad omen ...")
         for k,v in self.players.items():
             if not v: continue 
             if not v.is_placed_on_map(self.map): continue 
