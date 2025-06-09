@@ -4,6 +4,37 @@ import random
 def Generate_Square_Diffs(radius=3):
     return [ (x,y) for y in range(-radius+1,radius) for x in range(-radius+1,radius) ]
     
+def Generate_Square_Spiral_Traversal_Diffs(radius=3):
+    """
+    Generate (x, y) coordinate offsets in a square spiral order
+    starting from (0, 0) within a square of side length 2*radius - 1.
+
+    Parameters:
+        radius (int): Distance from center to edge (half side-length + 1)
+
+    Returns:
+        List[Tuple[int, int]]: Spiral-ordered (x, y) coordinates
+    """
+    max_distance = radius - 1
+    x, y = 0, 0
+    dx, dy = 1, 0  # Initial direction: right
+    spiral = [(x, y)]
+    step_size = 1  # Number of steps in current direction
+    direction_changes = 0
+    while True:
+        for _ in range(2):  # Repeat each step size twice (e.g., right, down; then step_size++)
+            for _ in range(step_size):
+                x += dx
+                y += dy
+                if abs(x) <= max_distance and abs(y) <= max_distance:
+                    spiral.append((x, y))
+                else:
+                    return spiral  # Exit if out of bounds
+            # Rotate direction clockwise
+            dx, dy = -dy, dx
+            direction_changes += 1
+        step_size += 1    
+    
 def d(a = None,b = None): # float dice 
     if (a is None) and (b is None):
         return random.random()
@@ -55,6 +86,8 @@ CHESS_KNIGHT_DIFF_MOVES = [
 SQUARE_DIFF_MOVES = Generate_Square_Diffs(2)
 SQUARE_DIFF_MOVES_5x5 = Generate_Square_Diffs(3)
 SQUARE_DIFF_MOVES_10 = Generate_Square_Diffs(10)
+SQUARE_DIFF_SPIRAL_MOVES_10 = Generate_Square_Spiral_Traversal_Diffs(10)
+SQUARE_DIFF_SPIRAL_MOVES_15 = Generate_Square_Spiral_Traversal_Diffs(15)
 CROSS_DIFF_MOVES = [
     (0,1), (0,2), (0,3),
     (0,-1), (0,-2), (0,-3),
@@ -122,6 +155,7 @@ SPRITE_NAMES = SPRITE_NAMES_WEAPONS + SPRITE_NAMES_CHARACTERS + SPRITE_NAMES_FOO
     "house", 
     "castle", 
     "lumber_mill", 
+    "blacksmith",
     "quarry",
     "mill",
     "wood",

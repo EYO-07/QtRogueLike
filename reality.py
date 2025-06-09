@@ -1711,6 +1711,13 @@ class TileBuilding(ActionTile): # interface class
         self.default_sprite_key = sprite_key 
     def set_background_tile(self, tile):
         self.default_sprite_key = tile.default_sprite_key 
+    def get_free_spawn_position(self, game_instance):
+        map = game_instance.map 
+        for dx, dy in SQUARE_DIFF_SPIRAL_MOVES_15:
+            x = self.x + dx
+            y = self.y + dy 
+            if map.can_place_character_at(x,y): return (x,y) 
+        return None 
 
 # Castle.action() || { Castle.update_menu_list() | Castle.new_npc() | TileBuilding.menu_garrison() | TileBuilding.menu_resources() } || { Character.add_item(), TileBuilding.update_inv_window(), Character.remove_item() }
 class Castle(TileBuilding):
@@ -1735,16 +1742,20 @@ class Castle(TileBuilding):
             if current_item == "Overview >": self.set_population_menu(menu_instance)
             if current_item == "Exit": menu_instance.close()
             if current_item == "Certificates >": 
-                menu_instance.set_list("Certificates >", ["Lumber Mill (500 Wood, 250 Food)", "Farm (500 Wood, 500 Food)", "Guard Tower (2000 Wood, 2500 Food)", ".."])
+                menu_instance.set_list("Certificates >", [
+                    "Lumber Mill (500 Wood, 250 Food)", 
+                    "Farm (500 Wood, 500 Food)", 
+                    "Blacksmith (500 Wood, 500 Food, 200 Metal)",
+                    "Guard Tower (2000 Wood, 2500 Food)", ".."])
                 return 
-            if "Weapon Repair" in current_item: 
-                if self.metal >= 100:
-                    self.metal -= 100
-                    game_instance.player.add_item(WeaponRepairTool(name="Whetstone", uses=10))
-                    game_instance.add_message("Whetstone Added to Inventory")
-                    game_instance.update_inv_window()
-                    menu_instance.close()
-                    return 
+            # if "Weapon Repair" in current_item: 
+                # if self.metal >= 100:
+                    # self.metal -= 100
+                    # game_instance.player.add_item(WeaponRepairTool(name="Whetstone", uses=10))
+                    # game_instance.add_message("Whetstone Added to Inventory")
+                    # game_instance.update_inv_window()
+                    # menu_instance.close()
+                    # return 
             if "Guard Tower" in current_item:
                 if self.wood >= 2000 and self.food >= 2500:
                     self.wood -= 2000 
@@ -1766,6 +1777,16 @@ class Castle(TileBuilding):
                     game_instance.certificates.append("Farm")
                     menu_instance.close()
                     return 
+            
+            if "Blacksmith" in current_item:
+                if self.wood >= 500 and self.food >= 500 and self.metal >= 200:
+                    self.wood -= 500 
+                    self.food -= 500
+                    self.metal -= 200
+                    game_instance.certificates.append("Blacksmith")
+                    menu_instance.close()
+                    return 
+            
             if "New Hero" in current_item:
                 if self.food >= 2000:
                     if self.new_hero(game_instance):
@@ -1788,29 +1809,31 @@ class Castle(TileBuilding):
             f"-> heroes: {len(self.heroes)}",
             f"-> food: {self.food:.0f}",
             f"-> wood: {self.wood:.0f}",
+            f"-> metal: {self.metal:.0f}",
+            f"-> stone: {self.stone:.0f}",
             "Overview >",
             "New Hero (2000 Food)",
             "Garrison >",
             "Resources >",
             "Certificates >",
-            "Weapon Repair (100 Metal)",
             "Exit"
         ]
+        # "Weapon Repair (100 Metal)",
     def new_hero(self, game_instance):
         if self.villagers <= 15: 
             game_instance.add_message("There are no villagers to recruit ...")
             return False 
-        dx, dy = game_instance.player.get_forward_direction()
-        player = game_instance.player 
-        spawn_tile = game_instance.map.get_tile(player.x+dx, player.y + dy)
+        # dx, dy = game_instance.player.get_forward_direction()
+        # player = game_instance.player 
+        spawn_tile = game_instance.map.get_tile( *self.get_free_spawn_position(game_instance) ) #player.x+dx, player.y + dy)
         if not spawn_tile:
             print("invalid tile")
             game_instance.add_message("Can't generate player at this position, please rotate the current character")
             return False
-        if spawn_tile.current_char:
-            print("tile occupied by character")
-            game_instance.add_message("Can't generate player at this position, please rotate the current character")
-            return False
+        # if spawn_tile.current_char:
+            # print("tile occupied by character")
+            # game_instance.add_message("Can't generate player at this position, please rotate the current character")
+            # return False
         new_name = QInputDialog.getText(game_instance, 'Input Dialog', 'Character Name :')
         if new_name:
             npc_name = new_name[0]
@@ -1819,13 +1842,13 @@ class Castle(TileBuilding):
         game_instance.add_hero(
             key = npc_name, 
             name = npc_name, 
-            x = game_instance.player.x+dx, 
-            y = game_instance.player.y+dy, 
+            x = spawn_tile.x, 
+            y = spawn_tile.y, 
             b_generate_items = False, 
             current_map = game_instance.current_map,
             sprite = random.choice(SPRITE_NAMES_PLAYABLES)
         )
-        self.refresh_game_instance(game_instance.player.x+dx, game_instance.player.y+dy, game_instance)
+        self.refresh_game_instance(spawn_tile.x, spawn_tile.y, game_instance)
         return True
     
     @classmethod
@@ -1880,8 +1903,8 @@ class LumberMill(TileBuilding):
         self.menu_list = []
         self.wood = wood
         self.melt_weap_dict = None
-    def update_melt_menu(self, menu_instance):
-        menu_instance.set_list("Melt Weapons >", ["Lumber Mill > Melt Weapons"] + list(self.melt_weap_dict.keys())+[".."])
+    # def update_melt_menu(self, menu_instance):
+        # menu_instance.set_list("Melt Weapons >", ["Lumber Mill > Melt Weapons"] + list(self.melt_weap_dict.keys())+[".."])
     def action(self):
         self.update_menu_list()
         def f(current_menu, current_item, menu_instance, game_instance):
@@ -1896,6 +1919,74 @@ class LumberMill(TileBuilding):
                 if current_item == "Overview >": 
                     self.set_population_menu(menu_instance)
                     return 
+                # if current_item == "Buy 100 Bolts for Crossbows (500 Wood)": 
+                    # if self.wood >= 500:
+                        # self.wood -= 500
+                        # game_instance.player.add_item( Ammo(name="bolt", uses=100) )
+                        # game_instance.add_message("100 Bolts Added to Inventory")
+                        # game_instance.update_inv_window()
+                        # menu_instance.close()
+                        # return 
+                # if current_item == "Melt Weapons >":
+                    # self.melt_weap_dict = { it.info() : it for it in game_instance.player.items if isinstance(it, Sword) or isinstance(it, Mace) }
+                    # self.update_melt_menu(menu_instance)
+                    # return 
+            if self.menu_resources(current_menu, current_item, menu_instance, game_instance):
+                menu_instance.close()
+                return 
+            # if current_menu == "Melt Weapons >":
+                # if self.melt_weap_dict:
+                    # if current_item in self.melt_weap_dict:
+                        # game_instance.player.remove_item( self.melt_weap_dict.pop(current_item) )
+                        # self.metal += 50 
+                        # self.update_melt_menu(menu_instance)
+                        # return 
+        return f
+    def update_menu_list(self, selection_box_instance = None):
+        self.menu_list.clear()
+        self.menu_list += [
+            f"Resource [{self.name}]",
+            f"-> wood: {self.wood:.0f}",
+            "Overview >",
+            "Resources >",
+            "Exit"
+        ]
+    def production(self, multiplier = 1.0):
+        if self.b_enemy: return 
+        self.villagers = min( (1.0+0.005*multiplier)*self.villagers, self.villagers_max )
+        self.wood += multiplier*d(0,2*self.villagers/PROD_INV_FACTOR)
+
+class Blacksmith(TileBuilding):
+    __serialize_only__ = TileBuilding.__serialize_only__ + ["name"]
+    def __init__(self, x=0, y =0, name = "Blacksmith", b_enemy=False):
+        TileBuilding.__init__(self, x=x,y=y,front_sprite = "blacksmith", walkable=True, sprite_key="dirt", b_enemy=b_enemy)
+        self.name = name 
+        self.menu_list = []
+        self.melt_weap_dict = None
+    def update_melt_menu(self, menu_instance):
+        menu_instance.set_list("Melt Weapons >", ["Blacksmith > Melt Weapons"] + list(self.melt_weap_dict.keys())+[".."])
+    def action(self):
+        self.update_menu_list()
+        def f(current_menu, current_item, menu_instance, game_instance):
+            self.update_menu_list(menu_instance)
+            if current_item == "..": 
+                menu_instance.set_list()
+                return 
+            if current_item == "Exit": 
+                menu_instance.close()
+                return     
+            if current_menu == "main":
+                if current_item == "Overview >": 
+                    self.set_population_menu(menu_instance)
+                    return 
+                if "Weapon Repair" in current_item: 
+                    if self.metal >= 100:
+                        self.metal -= 100
+                        game_instance.player.add_item(WeaponRepairTool(name="Whetstone", uses=10))
+                        game_instance.add_message("Whetstone Added to Inventory")
+                        game_instance.update_inv_window()
+                        menu_instance.close()
+                        return     
                 if current_item == "Buy 100 Bolts for Crossbows (500 Wood)": 
                     if self.wood >= 500:
                         self.wood -= 500
@@ -1923,17 +2014,18 @@ class LumberMill(TileBuilding):
         self.menu_list.clear()
         self.menu_list += [
             f"Resource [{self.name}]",
-            f"-> wood: {self.wood:.0f}",
+            f"-> metal: {self.metal:.0f}",
             "Overview >",
             "Resources >",
-            "Buy 100 Bolts for Crossbows (500 Wood)",
             "Melt Weapons >",
+            "Weapon Repair (100 Metal)",
+            "Buy 100 Bolts for Crossbows (500 Wood)",
             "Exit"
         ]
     def production(self, multiplier = 1.0):
         if self.b_enemy: return 
         self.villagers = min( (1.0+0.005*multiplier)*self.villagers, self.villagers_max )
-        self.wood += multiplier*d(0,2*self.villagers/PROD_INV_FACTOR)
+        self.metal += multiplier*d(0,2*self.villagers/PROD_INV_FACTOR)
 
 # GuardTower.action() || { GuardTower.update_menu_list() | GuardTower.new_swordman() | GuardTower.new_mounted_knight() | TileBuilding.menu_garrison() | TileBuilding.menu_resources() } || { Character.add_item(), TileBuilding.update_inv_window(), Character.remove_item() }
 class GuardTower(TileBuilding):
@@ -2058,22 +2150,22 @@ class GuardTower(TileBuilding):
         if self.villagers <= 2:
             game_instance.add_message("There are no villagers to recruit ...")
             return False 
-        dx, dy = game_instance.player.get_forward_direction()
-        player = game_instance.player 
-        spawn_tile = game_instance.map.get_tile(player.x+dx, player.y + dy)
+        # dx, dy = game_instance.player.get_forward_direction()
+        # player = game_instance.player 
+        spawn_tile = game_instance.map.get_tile( *self.get_free_spawn_position(game_instance) ) # player.x+dx, player.y + dy)
         if not spawn_tile:
             game_instance.add_message("Can't generate player at this position, please rotate the current character")
             return False
-        if spawn_tile.current_char:
-            game_instance.add_message("Can't generate player at this position, please rotate the current character")
-            return False
+        # if spawn_tile.current_char:
+            # game_instance.add_message("Can't generate player at this position, please rotate the current character")
+            # return False
         npc_name = "Swordman_"+rn(7)
         npc_obj = game_instance.add_player(
             key = npc_name, 
             name = npc_name, 
             hp = 45,
-            x = game_instance.player.x+dx, 
-            y = game_instance.player.y+dy, 
+            x = spawn_tile.x, 
+            y = spawn_tile.y, 
             b_generate_items = False, 
             current_map = game_instance.current_map,
             sprite = "swordman"
@@ -2081,65 +2173,66 @@ class GuardTower(TileBuilding):
         npc_obj.equip_item( Sword(name="Long_Sword", damage=7, durability_factor=0.9995), "primary_hand" )
         npc_obj.hunger = npc_obj.max_hunger
         npc_obj.can_use_thrust_skill = True 
-        self.refresh_game_instance(game_instance.player.x+dx, game_instance.player.y+dy, game_instance)
+        self.refresh_game_instance(spawn_tile.x, spawn_tile.y, game_instance)
         return True
     def new_mounted_knight(self, game_instance): # not used yet 
         if self.villagers <= 5:
             game_instance.add_message("There are no villagers to recruit ...")
             return False 
-        dx, dy = game_instance.player.get_forward_direction()
-        player = game_instance.player 
-        spawn_tile = game_instance.map.get_tile(player.x+dx, player.y + dy)
+        # dx, dy = game_instance.player.get_forward_direction()
+        # player = game_instance.player 
+        spawn_tile = game_instance.map.get_tile( *self.get_free_spawn_position(game_instance) ) # player.x+dx, player.y + dy)
         if not spawn_tile:
             game_instance.add_message("Can't generate player at this position, please rotate the current character")
             return False
-        if spawn_tile.current_char:
-            game_instance.add_message("Can't generate player at this position, please rotate the current character")
-            return False
+        # if spawn_tile.current_char:
+            # game_instance.add_message("Can't generate player at this position, please rotate the current character")
+            # return False
         npc_name = "Knight_"+rn(7)
         npc_obj = game_instance.add_player(
             key = npc_name, 
             name = npc_name, 
-            hp = 80,
-            x = game_instance.player.x+dx, 
-            y = game_instance.player.y+dy, 
+            hp = 120,
+            x = spawn_tile.x, 
+            y = spawn_tile.y, 
             b_generate_items = False, 
             current_map = game_instance.current_map,
             sprite = "mounted_knight"
         )
-        npc_obj.equip_item( Sword(name="Long_Sword", damage=8.5, durability_factor=0.9995), "primary_hand" )
+        npc_obj.equip_item( Sword(name="Long_Sword", damage=10, durability_factor=0.9995), "primary_hand" )
+        npc_obj.equip_item( Mace(damage=10, durability_factor=0.9995), "secondary_hand" )
         npc_obj.hunger = npc_obj.max_hunger
         npc_obj.can_use_thrust_skill = True 
         npc_obj.can_use_knight_skill = True 
-        self.refresh_game_instance(game_instance.player.x+dx, game_instance.player.y+dy, game_instance)
+        self.refresh_game_instance(spawn_tile.x, spawn_tile.y, game_instance)
         return True    
     def new_crossbowman(self, game_instance):
         if self.villagers <= 3:
             game_instance.add_message("There are no villagers to recruit ...")
             return False 
-        dx, dy = game_instance.player.get_forward_direction()
-        player = game_instance.player 
-        spawn_tile = game_instance.map.get_tile(player.x+dx, player.y + dy)
+        # dx, dy = game_instance.player.get_forward_direction()
+        # player = game_instance.player 
+        spawn_tile = game_instance.map.get_tile( *self.get_free_spawn_position(game_instance) ) # player.x+dx, player.y + dy)
         if not spawn_tile:
             game_instance.add_message("Can't generate player at this position, please rotate the current character")
             return False
-        if spawn_tile.current_char:
-            game_instance.add_message("Can't generate player at this position, please rotate the current character")
-            return False
+        # if spawn_tile.current_char:
+            # game_instance.add_message("Can't generate player at this position, please rotate the current character")
+            # return False
         npc_name = "Crossbowman_"+rn(7)
         npc_obj = game_instance.add_player(
             key = npc_name, 
             name = npc_name, 
             hp = 45,
-            x = game_instance.player.x+dx, 
-            y = game_instance.player.y+dy, 
+            x = spawn_tile.x, 
+            y = spawn_tile.y, 
             b_generate_items = False, 
             current_map = game_instance.current_map,
             sprite = "crossbowman"
         )
         npc_obj.equip_item(Fireweapon(name = "Crossbow", damage = 5, ammo=70, range=7, projectile_sprite='bolt', ammo_type='bolt'), "primary_hand")
         npc_obj.hunger = npc_obj.max_hunger
-        self.refresh_game_instance(game_instance.player.x+dx, game_instance.player.y+dy, game_instance)
+        self.refresh_game_instance(spawn_tile.x, spawn_tile.y, game_instance)
         return True
     def production(self, multiplier = 1.0):
         if self.b_enemy: return 
@@ -2199,27 +2292,27 @@ class MagicTower(TileBuilding):
         if self.villagers <= 15:
             game_instance.add_message("There are no villagers to recruit ...")
             return False 
-        dx, dy = game_instance.player.get_forward_direction()
-        player = game_instance.player 
-        spawn_tile = game_instance.map.get_tile(player.x+dx, player.y + dy)
+        # dx, dy = game_instance.player.get_forward_direction()
+        # player = game_instance.player 
+        spawn_tile = game_instance.map.get_tile( *self.get_free_spawn_position(game_instance) ) # player.x+dx, player.y + dy)
         if not spawn_tile:
             game_instance.add_message("Can't generate player at this position, please rotate the current character")
             return False
-        if spawn_tile.current_char:
-            game_instance.add_message("Can't generate player at this position, please rotate the current character")
-            return False
+        # if spawn_tile.current_char:
+            # game_instance.add_message("Can't generate player at this position, please rotate the current character")
+            # return False
         npc_name = "Healer_"+rn(7)
         npc_obj = game_instance.add_player(
             key = npc_name, 
             cls_constructor = Healer,
             name = npc_name, 
-            x = game_instance.player.x+dx, 
-            y = game_instance.player.y+dy, 
+            x = spawn_tile.x, 
+            y = spawn_tile.y, 
             b_generate_items = False, 
             current_map = game_instance.current_map
         )
         npc_obj.hunger = npc_obj.max_hunger
-        self.refresh_game_instance(game_instance.player.x+dx, game_instance.player.y+dy, game_instance)
+        self.refresh_game_instance(spawn_tile.x, spawn_tile.y, game_instance)
         return True
     def production(self, multiplier = 1.0):
         if self.b_enemy: return 

@@ -6,6 +6,7 @@ import math
 import os 
 from heapq import heappush, heappop
 from itertools import product
+from collections import deque
 
 # third-party 
 from PyQt5.QtCore import Qt
@@ -69,6 +70,11 @@ def GetRandomTiles_Reservoir_Sampling(tile_container=None, foreach_tiles=None, k
     state = {'count': 0, 'k': k, 'reservoir': []}
     foreach_tiles(tile_container, sampler, state)
     return state['reservoir']
+
+def Get_Map_File_From_Coords(coords = (0,0,0), save_slot=1):
+    saves_dir = "./saves"
+    map_file = os.path.join(saves_dir, f"map_{'_'.join( map(str, coords) )}_{save_slot}.json")
+    return map_file 
 
 # --- mapping
 class Room:
@@ -390,6 +396,28 @@ class Map_CHARACTERS:
     def __init__(self):
         self.enemy_type = "default" # used for fill_enemies to know which type of enemies should spawn. 
         self.enemies = []
+        self.enemy_counters = {} 
+    def get_enemy_count(self, name):
+        if name in self.enemy_counters: return self.enemy_counters[name]
+        return 0 
+    def reset_enemy_counters(self):
+        for k in self.enemy_counters:
+            self.enemy_counters[k] = 0 
+    def update_enemy_counters_by_iteration(self, enemy):
+        def _update_dict(name):
+            if name in self.enemy_counters: 
+                self.enemy_counters[name] += 1 
+            else:
+                self.enemy_counters.update({name:1})
+        if isinstance(enemy, Raider): _update_dict("Raider")
+        if isinstance(enemy, RangedRaider): _update_dict("RangedRaider")
+        if isinstance(enemy, Zombie): _update_dict("Zombie") 
+        if isinstance(enemy, Rogue): _update_dict("Rogue") 
+        if isinstance(enemy, Mercenary): _update_dict("Mercenary") 
+        if isinstance(enemy, Bear): _update_dict("Bear") 
+    def print_enemy_counters(self):
+        for k, v in self.enemy_counters.items():
+            print(k+"s :",v)
     def generate_raiders_spawn(self, game_instance, probability = 1.0/12.0):
         if d() >= probability: return False 
         if len(self.enemies)>120: return False 
@@ -560,7 +588,9 @@ class Map_CHARACTERS:
         player = game_instance.player 
         game_instance.flag_performance_enemies = False 
         flag_performance = game_instance.flag_performance_players or game_instance.flag_performance_enemies or game_instance.flag_performance_buldings
+        self.reset_enemy_counters()
         for enemy in self.enemies:
+            self.update_enemy_counters_by_iteration(enemy)
             if T>PERFORMANCE_TIME or flag_performance: 
                 if T>PERFORMANCE_TIME: game_instance.flag_performance_enemies = True  
                 if player.distance(enemy) > PERFORMANCE_DISTANCE: continue 
@@ -568,7 +598,7 @@ class Map_CHARACTERS:
             dt = toc(t)[0] 
             t += dt 
             T += dt 
-        if game_instance.flag_performance_enemies: print("performance mode: update_enemies()")    
+        if game_instance.flag_performance_enemies: print("performance mode: update_enemies()")
         toc(t_1, "map.update_enemies() ||")
     def can_place_character(self, char):
         tile = self.get_tile(char.x, char.y)
@@ -627,50 +657,39 @@ class Map_CHARACTERS:
         return self.find_path( entity_1.x, entity_1.y, entity_2.x, entity_2.y )
     def find_path(self, start_x: int, start_y: int, goal_x: int, goal_y: int) -> list[tuple[int, int]]:
         """A* pathfinding to find shortest path from (start_x, start_y) to (goal_x, goal_y)."""
-        # Validate coordinates
-        if not (0 <= start_x < self.width and 0 <= start_y < self.height and 0 <= goal_x < self.width and 0 <= goal_y < self.height):
-            #print(f"Invalid coordinates: start=({start_x}, {start_y}), goal=({goal_x}, {goal_y})")
-            return []
-
+        if not self.in_grid(start_x, start_y) or not self.in_grid(goal_x, goal_y): return []
+        def manhattan(x1, y1, x2, y2):
+            return abs(x1 - x2) + abs(y1 - y2)
         open_set = []
         heappush(open_set, (0, (start_x, start_y)))
         came_from = {}
         g_score = {(start_x, start_y): 0}
-        f_score = {(start_x, start_y): abs(goal_x - start_x) + abs(goal_y - start_y)}  # Manhattan distance
-
+        f_score = {(start_x, start_y): manhattan(start_x, start_y, goal_x, goal_y)}
         while open_set:
             _, current = heappop(open_set)
             x, y = current
-
             # Reached the goal
             if (x, y) == (goal_x, goal_y):
-                path = []
+                path = deque()
                 while (x, y) in came_from:
-                    path.append((x, y))
+                    path.appendleft((x, y))
                     x, y = came_from[(x, y)]
-                #print(f"Path found from ({start_x}, {start_y}) to ({goal_x}, {goal_y}): {path}")
-                return path[::-1]  # Reverse path
-
+                return list(path)
             for dx, dy in [(0, 1), (0, -1), (1, 0), (-1, 0)]:
                 next_x, next_y = x + dx, y + dy
-                if not (0 <= next_x < self.width and 0 <= next_y < self.height):
-                    continue  # Skip out-of-bounds tiles
+                # if not self.in_grid(next_x, next_y): continue 
                 tile = self.get_tile(next_x, next_y)
-                if tile:
-                    # Allow the goal tile (player's position) even if occupied
-                    is_goal = (next_x == goal_x and next_y == goal_y)
-                    if tile.walkable and (is_goal or not tile.current_char):
-                        tentative_g_score = g_score[(x, y)] + 1
-                        if (next_x, next_y) not in g_score or tentative_g_score < g_score[(next_x, next_y)]:
-                            came_from[(next_x, next_y)] = (x, y)
-                            g_score[(next_x, next_y)] = tentative_g_score
-                            f_score[(next_x, next_y)] = tentative_g_score + abs(goal_x - next_x) + abs(goal_y - next_y)
-                            heappush(open_set, (f_score[(next_x, next_y)], (next_x, next_y)))
-                else:
-                    print(f"Invalid tile at ({next_x}, {next_y})")
-
-        #print(f"No path found from ({start_x}, {start_y}) to ({goal_x}, {goal_y}): likely blocked by obstacles")
-        return []  # No path found
+                if tile is None: continue 
+                # Allow the goal tile (player's position) even if occupied
+                is_goal = (next_x == goal_x and next_y == goal_y)
+                if tile.walkable and (is_goal or not tile.current_char):
+                    tentative_g_score = g_score[(x, y)] + 1
+                    if (next_x, next_y) not in g_score or tentative_g_score < g_score[(next_x, next_y)]:
+                        came_from[(next_x, next_y)] = (x, y)
+                        g_score[(next_x, next_y)] = tentative_g_score
+                        f_score[(next_x, next_y)] = tentative_g_score + manhattan(next_x, next_y, goal_x, goal_y)
+                        heappush(open_set, (f_score[(next_x, next_y)], (next_x, next_y)))
+        return [] # No path found
     def line_of_sight(self, x1, y1, x2, y2):
         """
         Determines whether there is a clear line of sight between two points on a grid.
@@ -727,6 +746,8 @@ class Map_CHARACTERS:
             if tile and tile.blocks_sight:
                 return False
         return True    
+    def in_grid(self,x,y):
+        return (0 <= x < self.width and 0 <= y < self.height)
 class Map_TILES:
     def __init__(self):
         pass 

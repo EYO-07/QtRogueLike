@@ -197,7 +197,11 @@ class Game_VIEWPORT:
         self.animation_sprite_key = sprite_key
         self.animation_timer = QTimer()
         self.animation_timer.timeout.connect(self.draw_next_frame)
-        self.animation_timer.start(15)  # 1000ms = 1s per frame
+        flag_performance = self.flag_performance_players or self.flag_performance_enemies or self.flag_performance_buldings
+        if flag_performance:
+            self.animation_timer.start(1)
+        else:
+            self.animation_timer.start(15)  # 1000ms = 1s per frame
     def draw_grid(self):
         self.scene.clear()
         tiles_to_draw = self.get_tiles_to_draw()
@@ -465,11 +469,64 @@ class Game_PLAYERS:
         return S
     def can_select_player(self, player_obj):
         return player_obj.current_map == self.player.current_map and not player_obj.party 
+    def update_days_survived(self):
+        for k,v in self.players.items():
+            if not v: continue 
+            if not v.is_placed_on_map(self.map): continue 
+            if not self.can_select_player(v): continue 
+            v.days_survived += 1
+    def update_skill_unlock_notes(self):
+        if self.player.days_survived == 5:
+            self.journal_window.append_text("(Skill - 5 days) I'm in full shape now, I'm feeling agile, use Ctrl to dodge and move two tiles backward ...") 
+        if self.player.days_survived == 20:
+            self.journal_window.append_text("(Skill - 20 days) My body remembered how to use a sword properly, now I can perform deadly blows with END key. Whenever the enemy stays in front one-tile away I can trust swords toward him ...") 
+        if self.player.days_survived == 30:
+            self.journal_window.append_text("(Skill - 30 days) Now I'm proficient with many weapons, I can use special moves using F key ...") 
 class Game_MAPTRANSITION:
     def __init__(self):
         self.current_map = (0,0,0) # Current map coordinates
         self.map = Map()
         self.maps = {(0,0,0):self.map}  # Store Map objects with coordinate keys
+        self.flag_event_prevent_map_transition = False 
+    def load_map_from_coords_to_cache_if_visited(self, coords = (0,0,0)):
+        if coords in self.maps: 
+            if not self.maps[coords] is None:
+                print(f"Map {coords} Already on Cache")
+                return True 
+        M = Map(coords=coords)
+        if M.Load_JSON( self.get_map_file(coords=coords, slot=self.current_slot) ):
+            print(f"Map {coords} Sucessfully Loaded")
+            self.maps.update( { coords: M } )
+            return True 
+        else:
+            print(f"Map {coords} Not Visited Yet") 
+            return False 
+    def teleport_to_map(self, x=0, y=0, map_coords = (0,0,0)): 
+        self.load_random_music()
+        def teleport_subroutine():
+            self.map.remove_character(char=self.player)
+            self.map.Save_JSON( self.get_map_file(coords=self.current_map) )
+            self.player.current_map = map_coords
+            self.current_map = map_coords 
+            self.player.x = x 
+            self.player.y = y 
+            self.move_party() 
+            self.map = self.maps[map_coords] 
+            # placing character to the new map 
+            self.safely_place_character_to_new_map() 
+            self.place_players() 
+            self.scene.clear() 
+            self.dirty_tiles.clear() 
+            self.draw_grid() 
+            self.draw_hud() 
+        if (map_coords in self.maps) and (not self.maps[map_coords] is None): 
+            teleport_subroutine() 
+            return True 
+        else:
+            if self.load_map_from_coords_to_cache_if_visited( coords = map_coords ):
+                teleport_subroutine()
+                return True 
+        return False 
     def player_new_x_y_horizontal(self, out_of_bounds_x, out_of_bounds_y):
         new_map_coord = None
         new_x = out_of_bounds_x
@@ -538,34 +595,36 @@ class Game_MAPTRANSITION:
         return None, None
     def safely_place_character_to_new_map(self,char=None):
         if not char: char = self.player 
-        if not char: return 
-        if not self.map.place_character(char):
-            print(f"Error: Failed to place player at ({char.x}, {char.y})")
-            old_x = char.x
-            old_y = char.y
-            b_placed = False
-            for dx,dy in SQUARE_DIFF_MOVES_5x5:
-                tile = self.map.get_tile(old_x+dx , old_y+dy)
-                if not tile: continue
-                if self.map.is_adjacent_walkable(tile, old_x+dx, old_y+dy):
-                    char.x = old_x+dx 
-                    char.y = old_y+dy
-                    if self.map.place_character(char): 
-                        b_placed = True
-                        break 
-            if not b_placed:
-                char.x, char.y = self.map.width // 2, self.map.height // 2
-                self.map.place_character(char)
+        if not char: return False 
+        if char is self.map.get_char(char.x, char.y): return True # is already placed 
+        if self.map.place_character(char): return True 
+        print(f"Error: Failed to place player at ({char.x}, {char.y})")
+        old_x = char.x
+        old_y = char.y
+        for dx,dy in SQUARE_DIFF_SPIRAL_MOVES_15:
+            tile = self.map.get_tile(old_x+dx , old_y+dy)
+            if not tile: continue
+            if not self.map.is_adjacent_walkable(tile, old_x+dx, old_y+dy): continue 
+            char.x = old_x+dx 
+            char.y = old_y+dy
+            if self.map.place_character(char): return True         
+        char.x, char.y = self.map.get_random_walkable_tile() #self.map.width // 2, self.map.height // 2
+        return self.map.place_character(char)
     def horizontal_map_transition(self,x,y):
+        if self.flag_event_prevent_map_transition: 
+            self.add_message("Can't change map during this event ...")
+            return 
         T1 = tic()
         self.events.clear()
         self.save_current_game(slot=self.current_slot)
         # print(">>> ", self.map, self.current_map)
         new_x, new_y, new_map_coord = self.player_new_x_y_horizontal(x,y)
         if not new_map_coord: return 
-        saves_dir = "./saves"
-        previous_map_file = os.path.join(saves_dir, f"map_{'_'.join(map(str, self.current_map))}_1.json")
-        new_map_file = os.path.join(saves_dir, f"map_{'_'.join(map(str, new_map_coord))}_1.json")
+        # saves_dir = "./saves"
+        # previous_map_file = os.path.join(saves_dir, f"map_{'_'.join(map(str, self.current_map))}_1.json")
+        # new_map_file = os.path.join(saves_dir, f"map_{'_'.join(map(str, new_map_coord))}_1.json")
+        previous_map_file = self.get_map_file(coords=self.current_map)
+        new_map_file = self.get_map_file(coords=new_map_coord)
         # removes the character from previous map
         self.map.remove_character(self.player)
         # save the previous map 
@@ -587,16 +646,21 @@ class Game_MAPTRANSITION:
         toc(T1,"Game.horizontal_map_transition() ||")
     def vertical_map_transition(self, target_map_coords, up):
         """Handle vertical map transition via stairs."""
+        if self.flag_event_prevent_map_transition: 
+            self.add_message("Can't change map during this event ...")
+            return 
         T1 = tic()
         self.events.clear()
         self.save_current_game(slot=self.current_slot)
         if not self.player.current_tile:
             print("please update the current_tile on char")
         # Variables
-        saves_dir = "./saves"
+        # saves_dir = "./saves"
         new_map_coord = target_map_coords
-        previous_map_file = os.path.join(saves_dir, f"map_{'_'.join(map(str, self.current_map))}_1.json")
-        new_map_file = os.path.join(saves_dir, f"map_{'_'.join(map(str, new_map_coord))}_1.json")
+        # previous_map_file = os.path.join(saves_dir, f"map_{'_'.join(map(str, self.current_map))}_1.json")
+        # new_map_file = os.path.join(saves_dir, f"map_{'_'.join(map(str, new_map_coord))}_1.json")
+        previous_map_file = self.get_map_file(coords=self.current_map)
+        new_map_file = self.get_map_file(coords=new_map_coord)
         prev_x = self.player.x 
         prev_y = self.player.y 
         new_x = self.player.current_tile.stair_x
@@ -632,6 +696,7 @@ class Game_MAPTRANSITION:
             if not self.map.place_character(self.player):
                 print(">>> Failed to Place Character")
         # -- 
+        self.safely_place_character_to_new_map()
         self.place_players() # testing
         # Update of Game Scene 
         self.scene.clear()
@@ -661,7 +726,9 @@ class Game_DATA:
         if not xy: xy = (50,50)
         self.add_hero(new_character_name, name = new_character_name, hp = 100, x=xy[0], y=xy[1], b_generate_items=True)
         self.set_player(new_character_name)
-        if b_is_new: Castle.new(self)
+        if b_is_new: 
+            Castle.new(self)
+            self.home_castle_location = xy 
         self.player.hunger = 200
         self.player.max_hunger = 1000
         self.events = []
@@ -679,7 +746,7 @@ class Game_DATA:
             self.journal_window.show()
             self.journal_window.update_position()
         # self.journal_window.clear_text()
-        self.journal_window.append_text("Day 0 - The world was affected by the plague, why? Maybe I should've prayed more instead of living with mercenaries and whores, God don't look to us now, and there is no church to pray anymore. Almost every one has transformed to walking deads, their flesh is putrid and their hunger insatiable, strange enough, before they lose their minds, they try desesperately to find food to satiate the hunger, so it's almost certain that I will find some with them, I'm starving. \n\nI should check myself, I'm almost losing my mind too. If I'm right, to move use A,W,S,D, Left, Right, to attack moves forward (only), to enter or use stairs press C, to open inventory press I, to open journal press J. I should take notes often, press N to write a quick note. \n\nI need to find food ...")
+        self.journal_window.append_text("Day 0 - The world was affected by the plague, why? Maybe I should've prayed more instead of living with mercenaries and whores, God don't look to us now, and there is no church to pray anymore. Almost every one has transformed to walking deads, their flesh is putrid and their hunger insatiable, strange enough, before they lose their minds, they try desesperately to find food to satiate the hunger, so it's almost certain that I will find some with them, I'm starving. \n\nI should check myself, I'm almost losing my mind too. If I'm right, to move use A,W,S,D, Left, Right, to attack moves forward (only), to interact or use stairs press C, to open inventory press I, to open journal press J, to open build menu press B, to open party press P and to open behaviour controller press Z. I should take notes often, press N to write a quick note. \n\nI need to find food ...")
         self.setFocus()
         # Trigger music playback if not muted
         if not self.is_music_muted:
@@ -694,23 +761,41 @@ class Game_DATA:
         self.draw_grid()
         self.draw_hud()
         self.dirty_tiles.clear()    
+    def check_or_create_dir(self, relative_path):
+        if not relative_path: return False 
+        path_ = os.path.join(".", relative_path)
+        if os.path.isdir(path_): return True 
+        try:
+            os.makedirs(path_, exist_ok=True)
+        except Exception as e:
+            print(f"Error creating directory '{path_}': {e}")
+            return False
+        return True 
+    def get_map_file(self, coords = (0,0,0), slot=1):
+        return Get_Map_File_From_Coords(coords=coords, save_slot=slot)
+    def get_player_file(self, slot=1):
+        saves_dir = "./saves"
+        return os.path.join(saves_dir, f"player_state_{slot}.json")
     def save_current_game(self, slot=1):
         """Save the current map to its JSON file and player state to a central file."""
         self.check_player_dict()
+        saves_dir = "./saves"
         T1 = tic()
         # Delay the save operation slightly to allow fade-in
         try:
             # Ensure ./saves directory exists
             self.current_slot = slot  # Update current slot
-            saves_dir = "./saves"
-            if not os.path.exists(saves_dir): os.makedirs(saves_dir)
+            self.check_or_create_dir("saves")
+            # saves_dir = "./saves"
+            # if not os.path.exists(saves_dir): os.makedirs(saves_dir)
             # Save current map state
-            map_file = os.path.join(saves_dir, f"map_{'_'.join(map(str, self.current_map))}_{slot}.json")
+            # os.path.join(saves_dir, f"map_{'_'.join(map(str, self.current_map))}_{slot}.json")
+            map_file = self.get_map_file(coords=self.current_map, slot=slot) 
             #T2 = tic()
             self.map.Save_JSON(map_file)
             #toc(T2,"Game.save_current_game() || map.Save_JSON() ||")
             # save the player_file 
-            player_file = os.path.join(saves_dir, f"player_state_{slot}.json")
+            player_file = self.get_player_file(slot=self.current_slot) # os.path.join(saves_dir, f"player_state_{slot}.json")
             #T3 = tic()
             self.Save_JSON( player_file )
             #toc(T3,"Game.save_current_game() || Game.Save_JSON() ||")
@@ -732,8 +817,9 @@ class Game_DATA:
     def try_load_map_or_create_new(self):
         """ return True if create a new map, return False otherwise """
         b_result = False
-        saves_dir = "./saves"
-        map_file = os.path.join(saves_dir, f"map_{'_'.join(map(str, self.current_map))}_{self.current_slot}.json")
+        # saves_dir = "./saves"
+        # os.path.join(saves_dir, f"map_{'_'.join(map(str, self.current_map))}_{self.current_slot}.json")
+        map_file = self.get_map_file(coords=self.current_map, slot=self.current_slot) 
         self.map = Map("default", coords=self.current_map)
         if not self.map.Load_JSON(map_file):
             self.add_message(f"No map save file found for slot {self.current_slot}")
@@ -745,8 +831,7 @@ class Game_DATA:
     def load_current_game(self, slot=1):
         """Load player state and current map from their respective JSON files."""
         #T1 = tic()
-        saves_dir = "./saves"
-        player_file = os.path.join(saves_dir, f"player_state_{slot}.json")
+        player_file = self.get_player_file(slot=slot) # os.path.join(saves_dir, f"player_state_{slot}.json")
         if not self.Load_JSON(player_file):
             print(f"Failed to Load or no File Found: {player_file}")
             self.start_new_game()
@@ -865,111 +950,75 @@ class Game_ITERATION:
         self.flag_performance_players = False 
         self.flag_performance_enemies = False 
         self.flag_performance_buldings = False 
-    def game_iteration_not_draw(self):
-        prev_hp = self.player.hp 
-        # -- 
+        self._to_remove_event_set = set()
+    def subroutine_game_iteration(self):
         self.turn += 1
-        
-        largest_dt = 0
-        culprit = ""
-        t = 0
-        
-        t1 = tic()
         self.Event_NewTurn()
-        dt1, txt1 = toc(t1, "Game.Event_NewTurn()")
-        t += dt1
-        
-        if dt1 > largest_dt:
-            largest_dt = dt1
-            culprit = txt1
-        
-        t2 = tic()
         self.process_events() 
-        dt2, txt2 = toc(t2, "Game.process_events()")
-        t += dt2
-        
-        if dt2 > largest_dt:
-            largest_dt = dt2
-            culprit = txt2
-        
-        t3 = tic()
-        self.update_players() # which include player and allies 
-        dt3, txt3 = toc(t3, "Game.update_players()")
-        t += dt3
-        
-        if dt3 > largest_dt:
-            largest_dt = dt3
-            culprit = txt3
-        
-        t4 = tic()
+        self.update_players() 
         self.update_enemies()
-        dt4, txt4 = toc(t4, "Game.update_enemies()")
-        t += dt4
-        
-        if dt4 > largest_dt:
-            largest_dt = dt4
-            culprit = txt4
-        
-        t5 = tic()
         self.update_buildings()
-        dt5, txt5 = toc(t5, "Game.update_buildings()")
-        t += dt5
-        
-        if dt5 > largest_dt:
-            largest_dt = dt5
-            culprit = txt5
-        
-        t6 = tic()
-        self.update_messages() # Critical: Update message window 
-        dt6, txt6 = toc(t6, "Game.update_messages()")
-        t += dt6
-        
-        if dt6 > largest_dt:
-            largest_dt = dt6
-            culprit = txt6
-        
-        # print(f"{culprit} : {100.0*largest_dt/t:.1f} %")
-        
+        self.update_messages()
+    def game_iteration_not_draw(self):
+        """ return True if losing hp """
+        prev_hp = self.player.hp 
+        self.subroutine_game_iteration()
         return ( self.player.hp < prev_hp )
     def game_iteration(self):
         """ return True if losing hp """
         prev_hp = self.player.hp 
-        # -- 
-        self.turn += 1
-        self.Event_NewTurn()
-        self.process_events() 
-        self.update_players() # which include player and allies 
-        self.update_enemies()
-        self.update_buildings()
-        self.update_messages() # Critical: Update message window 
+        self.subroutine_game_iteration()
         self.draw()
         return ( self.player.hp < prev_hp )
+    def update_event_list(self):
+        if not self._to_remove_event_set: return 
+        if len(self._to_remove_event_set)==0: return 
+        for e in self._to_remove_event_set:
+            if e in self.events: 
+                self.events.remove(e) 
+        if not self.events or len(self.events)==0:
+            self.flag_event_prevent_map_transition = False         
     def process_events(self): # delayed events 
-        """Process events and trigger autosave for significant changes."""
-        for event in sorted(self.events, key=lambda e: getattr(e, 'priority', 0)):
-            if isinstance(event, AttackEvent):
-                self.Event_DoAttack(event)
-            elif isinstance(event, MoveEvent):
-                self.dirty_tiles.add((event.old_x, event.old_y))
-            elif isinstance(event, PickupEvent):
-                for item in event.tile.items[:]:
-                    if event.character.pickup_item(item):
-                        event.tile.remove_item(item)
-                        self.add_message(f"{event.character.name} picked up {item.name}")
-                        self.dirty_tiles.add((event.character.x, event.character.y))
-            elif isinstance(event, UseItemEvent):
-                if event.item.use(event.character):
-                    if hasattr(event.item,"uses"):
-                        self.add_message(f"{event.item.name} used")
-                        if event.item.uses <= 0:
+        event_count = 0 
+        max_events_per_it = 20 
+        self._to_remove_event_set.clear()
+        for event in sorted(self.events, key=lambda e: getattr(e, 'priority', 0)): 
+            if event_count > max_events_per_it: break 
+            event_count += 1 
+            match event.type:
+                case "AttackEvent":
+                    self._to_remove_event_set.add(event) 
+                    self.Event_DoAttack(event) 
+                case "MoveEvent":
+                    self._to_remove_event_set.add(event) 
+                    self.dirty_tiles.add((event.old_x, event.old_y))
+                case "PickupEvent":
+                    self._to_remove_event_set.add(event) 
+                    for item in event.tile.items[:]:
+                        if event.character.pickup_item(item):
+                            event.tile.remove_item(item)
+                            self.add_message(f"{event.character.name} picked up {item.name}")
+                            self.dirty_tiles.add((event.character.x, event.character.y))
+                case "UseItemEvent":
+                    self._to_remove_event_set.add(event) 
+                    if event.item.use(event.character):
+                        if hasattr(event.item,"uses"):
+                            self.add_message(f"{event.item.name} used")
+                            if event.item.uses <= 0:
+                                event.character.remove_item(event.item)
+                        else:
                             event.character.remove_item(event.item)
+                            self.add_message(f"{event.item.name} used")
+                        self.draw_hud()
                     else:
-                        event.character.remove_item(event.item)
-                        self.add_message(f"{event.item.name} used")
-                    self.draw_hud()
-                else:
-                    self.add_message("Nevermind ...")
-        self.events.clear()
+                        self.add_message("Nevermind ...") 
+                case "TimeSpanEvent":
+                    if not event.is_active(): 
+                        if event.prevent_map_transition: self.flag_event_prevent_map_transition = False 
+                        self._to_remove_event_set.add(event) 
+                    if event.prevent_map_transition: self.flag_event_prevent_map_transition = True 
+                    event.update()
+        self.update_event_list()
     def update_players(self):
         self.player.update(self)
         t_1 = tic()
@@ -1027,23 +1076,45 @@ class Game_ITERATION:
             self.add_message(f"I'm close to a village ... I should check it out")
             self.flag_near_to_village = False 
         self.player.update_available_skills()
+    def new_siege_event(self):
+        if self.flag_event_prevent_map_transition: return # should prevent two siege events at same time 
+        xy = self.home_castle_location
+        if xy is None: xy = (50,50)
+        self.teleport_to_map(x=xy[0], y=xy[1], map_coords=(0, 0, 0))
+        def siege_event_iteration(count, game = None, instance=None):
+            map = game.map 
+            if count == 1: map.generate_raiders_spawn(game, probability = 1)
+            if count == 25: map.generate_raiders_spawn(game, probability = 1)
+            ec = map.get_enemy_count("Raider")+map.get_enemy_count("RangedRaider")
+            if ec == 0 and count > 25: 
+                print("The siege has ended")
+                self.add_message("The siege has ended") 
+                instance.set_inactive() 
+                return 
+            if count == instance.duration-1:
+                if ec > 0: 
+                    instance.extend_duration(50)
+                    return 
+        siege_event = TimeSpanEvent(
+            duration=50, 
+            prevent_map_transition=True, 
+            message="You can't run away, it's your home, defend or die !!!", 
+            iteration=siege_event_iteration, 
+            game = self 
+        )
+        self.events.append( siege_event )
+        self.add_message("Prepare to fight, your home town is under siege ...")
     def Event_NewDay(self):
         print(f"Day {self.current_day}")
         if len(self.players)>7:
-            if self.map.generate_raiders_spawn(self, probability = 1.0): self.add_message("beware, I feel a bad omen ...")
+            if self.map.generate_raiders_spawn(self, probability = 0.8): 
+                self.add_message("beware, I feel a bad omen ...")
+            else: 
+                self.new_siege_event() 
         else:
             if self.map.generate_raiders_spawn(self, probability = RAIDER_SPAWN_PROBABILITY): self.add_message("beware, I feel a bad omen ...")
-        for k,v in self.players.items():
-            if not v: continue 
-            if not v.is_placed_on_map(self.map): continue 
-            if not self.can_select_player(v): continue 
-            v.days_survived += 1
-        if self.current_day == 5:
-            self.journal_window.append_text("(Skill - 5 days) I'm in full shape now, I'm feeling agile, use Ctrl to dodge and move two tiles backward ...") 
-        if self.current_day == 20:
-            self.journal_window.append_text("(Skill - 20 days) My body remembered how to use a sword properly, now I can perform deadly blows with F key. Whenever the enemy stay in L position like a knight chess I can swing my sword hit taking him off-guard ...") 
-        if self.current_day == 30:
-            self.journal_window.append_text("(Skill - 30 days) Now I'm proficient with many weapons, I can use special moves ...") 
+        self.update_days_survived()
+        self.update_skill_unlock_notes()
     def Event_PlayerDeath(self):
         # SANITY COMMENTS
         # 1. If there is other characters on the map or on the party you still can load the save if you don't change the map. 
@@ -1168,7 +1239,9 @@ class Game(DraggableView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_P
         "current_player",
         "certificates",
         "window_x",
-        "window_y"
+        "window_y",
+        "home_castle_location",
+        "flag_event_prevent_map_transition"
     ]
     def __init__(self):
         DraggableView.__init__(self)
@@ -1182,6 +1255,7 @@ class Game(DraggableView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_P
         Game_DATA.__init__(self)
         Game_GUI.__init__(self)
         Game_ITERATION.__init__(self)
+        self.home_castle_location = None 
         self.window_x = 0
         self.window_y = 0
         self.alt_pressed = False
@@ -1435,6 +1509,7 @@ class Game(DraggableView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_P
                         return False 
                     elif isinstance(tile, TileBuilding):
                         if tile.b_enemy: return False 
+                        if isinstance(tile, Castle): self.home_castle_location = (tile.x, tile.y)
                         SB = SelectionBox( tile.menu_list, action = tile.action(), parent = self, game_instance = self )
                         tile.update_menu_list(SB)
                         SB.show()
@@ -1602,6 +1677,10 @@ class Game(DraggableView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_P
             case Qt.Key_F12: # debug menu
                 SelectionBox(parent=self, item_list = [
                     "[ DEBUG MENU ]",
+                    "Siege Event",
+                    "Enemy List",
+                    "Time Span Event Test", 
+                    "Teleport to Home Map", 
                     "Test Animation", 
                     "Display Players Info >",
                     "Set Day 100", 

@@ -1071,6 +1071,14 @@ def build_menu(menu, item, instance, game_instance):
     x = game_instance.player.x 
     y = game_instance.player.y    
     match item:
+        case "Blacksmith":
+            game_instance.certificates.remove("Blacksmith") 
+            game_instance.map.set_tile(x, y, Blacksmith(x=x,y=y))
+            game_instance.map.update_buildings_list()
+            game_instance.map.place_character(game_instance.player)
+            game_instance.draw() 
+            instance.close()
+            return 
         case "Guard Tower":
             game_instance.certificates.remove("Guard Tower") 
             game_instance.map.set_tile(x, y, GuardTower(x=x,y=y))
@@ -1173,6 +1181,25 @@ def debugging_menu(menu, item, instance, game_instance):
     player = game_instance.player 
     if menu == "main":
         match item:
+            case "Siege Event":
+                game_instance.new_siege_event()
+                instance.close()
+                return 
+            case "Enemy List":
+                game_instance.map.print_enemy_counters()
+                instance.close()
+                return 
+            case "Time Span Event Test":
+                def ts_it(it): 
+                    print("Time Span Event Test :", it)
+                game_instance.events.append( TimeSpanEvent(duration=15, prevent_map_transition=True, iteration = ts_it) )
+                instance.close() 
+                return 
+            case "Teleport to Home Map":
+                if game_instance.home_castle_location:
+                    xy = game_instance.home_castle_location 
+                    game_instance.teleport_to_map(x=xy[0], y=xy[1], map_coords=(0, 0, 0))
+                    return 
             case "Test Animation":
                 print("Test Animation")
                 x = game_instance.player.x
@@ -1228,10 +1255,10 @@ def debugging_menu(menu, item, instance, game_instance):
                 instance.close()
                 return 
             case "Resources":
-                player.add_item(Wood(3000))
-                player.add_item(Stone(3000))
-                player.add_item(Metal(3000))
-                player.add_item(Food(3000))
+                player.add_item(Wood(300000))
+                player.add_item(Stone(300000))
+                player.add_item(Metal(300000))
+                player.add_item(Food(300000))
                 instance.close()
                 return 
             case "Whetstone":

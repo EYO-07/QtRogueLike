@@ -280,7 +280,6 @@ def AB_pillage_current_target(char = None, game_instance = None):
         target.villagers = 10
         if isinstance(target, GuardTower): target.add_enemy_turret()
     return True 
-    
 def AB_adjacent_melee_attack(char = None, game_instance = None):
     if char is None: return False 
     if game_instance is None: return False 
@@ -302,6 +301,10 @@ def AB_adjacent_melee_attack(char = None, game_instance = None):
     damage = char.do_damage()
     game_instance.events.append( AttackEvent(char, target, damage) )
     return True
+
+def AB_flee_from_melee(char=None, game_instance=None): pass
+def AB_dodge_from_melee(char=None, game_instance=None): pass
+def AB_teleport_adjacent(char=None, game_instance=None): pass 
 
 # 1. AB_melee_attack() || % AB_ready_melee_current_target() || Attack 
 # 2. AB_melee_attack() || % AB_ready_melee_current_target() | & Search Adjacent     
