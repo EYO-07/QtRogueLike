@@ -182,3 +182,7 @@ class DraggableWidget(Widget):
         super().mouseReleaseEvent(event)
 
 # -- END
+
+# Wizardry Paradigm : Guides de Creation of Functions by analogy 
+# 1. Function as a Spell : Is a short name for something someone desire to be as easy as casting a spell.
+# 2. 

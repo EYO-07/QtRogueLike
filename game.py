@@ -1040,7 +1040,7 @@ class Game_ITERATION:
             dt = toc(t)[0] 
             t += dt 
             T += dt 
-        if self.flag_performance_players: print("performance mode: update_players()")     
+        # if self.flag_performance_players: print("performance mode: update_players()")     
         toc(t_1, "game.update_players() ||")
     def update_enemies(self): # maybe more maps could be updated, like maps with alive players 
         self.map.update_enemies(self)
@@ -1051,15 +1051,19 @@ class Game_ITERATION:
         player = self.player 
         self.flag_performance_buldings = False 
         flag_performance = self.flag_performance_players or self.flag_performance_enemies or self.flag_performance_buldings
-        for b in self.map.buildings:
+        map = self.map
+        for b in map.buildings:
             if T>PERFORMANCE_TIME or flag_performance: 
                 if T>PERFORMANCE_TIME: self.flag_performance_buldings = True 
-                if player.distance(b) > PERFORMANCE_DISTANCE: continue 
+                if player.distance(b) > PERFORMANCE_DISTANCE: 
+                    map.update_buildings_sets_iteration(b)
+                    continue     
             b.update(self)
+            map.update_buildings_sets_iteration(b)
             dt = toc(t)[0] 
             t += dt 
             T += dt 
-        if self.flag_performance_buldings: print("performance mode: update_buildings()") 
+        # if self.flag_performance_buldings: print("performance mode: update_buildings()") 
         toc(t_1, "game.update_buildings() ||")    
     def Event_NewTurn(self):
         if self.turn // self.turns_per_day + 1 > self.current_day:
@@ -1490,6 +1494,19 @@ class Game(DraggableView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_P
                     self.dirty_tiles.add((self.player.x, self.player.y))
             return True
         return False 
+    def get_facing_player(self):
+        px, py = self.player.get_forward_direction()
+        char = self.map.get_char(self.player.x+px, self.player.y+py)
+        if not char: return None 
+        if not isinstance(char, Player): return None 
+        return char 
+    def get_building(self):
+        tile = self.map.get_tile(self.player.x, self.player.y)
+        if not tile: return None 
+        if not isinstance(tile, TileBuilding): return None 
+        if isinstance(tile, Castle): self.home_castle_location = (tile.x, tile.y)
+        if tile.b_enemy: return None 
+        return tile 
     def key_press_movement(self, key):
         """ return True if the key press should trigger game_iteration """
         dx, dy = 0, 0
@@ -1514,20 +1531,31 @@ class Game(DraggableView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_P
                         tile.update_menu_list(SB)
                         SB.show()
                         return False 
-                px, py = self.player.get_forward_direction()
-                tile2 = self.map.get_tile(self.player.x+px, self.player.y+py)
-                if tile2:
-                    char = tile2.current_char
-                    if char and isinstance(char, Player):
-                        SB = SelectionBox( [
-                            f"[ {char.name} ]",
-                            "Add to Party",
-                            "items+",
-                            "items-",
-                            "Exit"
-                        ], action = player_menu, parent = self, game_instance = self, npc = char )
-                        SB.show()
-                        return False 
+                char = self.get_facing_player()
+                if char:
+                    SB = SelectionBox( [
+                        f"[ {char.name} ]",
+                        "Add to Party",
+                        "items+",
+                        "items-",
+                        "Exit"
+                    ], action = player_menu, parent = self, game_instance = self, npc = char )
+                    SB.show()
+                    return False 
+                # px, py = self.player.get_forward_direction()
+                # tile2 = self.map.get_tile(self.player.x+px, self.player.y+py)
+                # if tile2:
+                    # char = tile2.current_char
+                    # if char and isinstance(char, Player):
+                        # SB = SelectionBox( [
+                            # f"[ {char.name} ]",
+                            # "Add to Party",
+                            # "items+",
+                            # "items-",
+                            # "Exit"
+                        # ], action = player_menu, parent = self, game_instance = self, npc = char )
+                        # SB.show()
+                        # return False 
                 return False 
             case Qt.Key_E: # Use first food item
                 self.player.use_first_item_of(Food, self)
@@ -1540,6 +1568,14 @@ class Game(DraggableView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_P
                     self.game_iteration()
                 self.update_inv_window()
                 return False 
+            case Qt.Key_Delete:
+                bdn = self.get_building()
+                if bdn: bdn.collect_all_resources(self) 
+                return False     
+            case Qt.Key_Insert:
+                bdn = self.get_building()
+                if bdn: bdn.store_all_resources(self) 
+                return False     
         match key: # rotation
             case Qt.Key_Left:
                 self.rotation = (self.rotation - 90) % 360

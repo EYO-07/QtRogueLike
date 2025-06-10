@@ -142,12 +142,36 @@ def get_closest_visible(origin = None, default_target = None, entities = None, g
         distance = origin.distance(entity)
     if len(entities) == 0: 
         return entity, distance 
-    if type(entities) == list: 
+    if type(entities) == set:
+        if len(entities) == 1: return entity, distance 
+        b_first_element = False 
+        for v in entities:
+            if not v: continue # possibly unnecessary 
+            if v is origin: continue 
+            if not b_first_element and not default_target:
+                b_first_element = True 
+                entity = v
+                distance = origin.distance(entity)
+                continue 
+            if isinstance(v, TileBuilding): # if is a TileBuilding
+                new_distance = origin.distance(v)
+                if new_distance < distance:
+                    entity = v
+                    distance = new_distance 
+            else:
+                if not v.current_tile: continue 
+                tile = game_instance.map.get_tile(v.x,v.y)
+                if not tile: continue
+                if not tile.current_char is v: continue 
+                new_distance = origin.distance(v)
+                if new_distance < distance:
+                    entity = v
+                    distance = new_distance 
+    elif type(entities) == list: 
         if not default_target:
             entity = entities[0]
             distance = origin.distance(entity)
-        if len(entities) == 1: 
-            return entity, distance 
+        if len(entities) == 1: return entity, distance 
         for v in entities:
             if not v: continue # possibly unnecessary 
             if v is origin: continue 
@@ -539,6 +563,19 @@ def AB_find_healing_target(char = None, game_instance = None): # forker
     if char.current_target_healing is None: return False 
     if distance is None: return False 
     return True 
+
+def check_target_building(char, target):
+    from reality import Player, Enemy, TileBuilding
+    if target is None: return None, None 
+    distance = None
+    if target: distance = char.distance(target)
+    if distance is None: return None, None  
+    if not isinstance(target, TileBuilding): return None, None  
+    if not hasattr(target, "b_enemy"): return None, None 
+    if isinstance(char, Player) and not target.b_enemy: return None, None 
+    if isinstance(char, Enemy) and target.b_enemy: return None, None 
+    return target, distance 
+
 def AB_find_building_target(char = None, game_instance = None): # forker 
     """ True means a valid current_target at end of processing, False means that the function could not find a valid current_target. """
     if char is None: return False 
@@ -548,28 +585,39 @@ def AB_find_building_target(char = None, game_instance = None): # forker
     from reality import Player, Enemy, TileBuilding
     player = game_instance.player 
     if not player: return False 
-    target = None 
-    distance = None 
-    target = char.current_target_building 
-    if target: distance = char.distance(target)
-    flag_find_new = False 
-    if target is None: flag_find_new = True 
-    if not isinstance(target, TileBuilding): flag_find_new = True 
-    if not hasattr(target, "b_enemy"): 
-        flag_find_new = True
-    else:
-        if isinstance(char, Player) and not target.b_enemy: flag_find_new = True 
-        if isinstance(char, Enemy) and target.b_enemy: flag_find_new = True 
-    if flag_find_new: 
+    # target = None 
+    # distance = None 
+    # flag_find_new = False 
+    char.current_target_building, distance = check_target_building(char, char.current_target_building)
+    if not char.current_target_building: 
+        if isinstance(char, Player):
+            char.current_target_building, distance = check_target_building(char, map.last_enemy_building_target)
+        if isinstance(char, Enemy):
+            char.current_target_building, distance = check_target_building(char, map.last_building_target)
+    # if target: distance = char.distance(target)
+    # if target is None: flag_find_new = True 
+    # if not isinstance(target, TileBuilding): flag_find_new = True 
+    # if not hasattr(target, "b_enemy"): 
+        # flag_find_new = True
+    # else:
+        # if isinstance(char, Player) and not target.b_enemy: flag_find_new = True 
+        # if isinstance(char, Enemy) and target.b_enemy: flag_find_new = True     
+    if not char.current_target_building: 
         buildings = None 
-        if isinstance(char, Player): buildings = [ i for i in map.buildings if i.b_enemy ] 
-        if isinstance(char, Enemy): buildings = [ i for i in map.buildings if not i.b_enemy ] 
+        if isinstance(char, Player): buildings = map.enemy_buildings # [ i for i in map.buildings if i.b_enemy ] 
+        if isinstance(char, Enemy): buildings = map.friendly_buildings # [ i for i in map.buildings if not i.b_enemy ] 
         if not buildings: return False 
         if len(buildings)==0: return False 
         if len(buildings)==1: 
-            char.current_target_building = buildings[0] 
-            return True 
+            for v in buildings: 
+                char.current_target_building = v 
+                return True 
         char.current_target_building, distance = get_closest_visible(origin=char, entities=buildings, game_instance=game_instance)
+        if char.current_target_building:
+            if isinstance(char, Player):
+                map.last_enemy_building_target = char.current_target_building
+            if isinstance(char, Enemy):
+                map.last_building_target = char.current_target_building
     if char.current_target_building is None: return False 
     if distance is None: return False 
     return True 

@@ -1594,16 +1594,22 @@ class TileBuilding(ActionTile): # interface class
                 game_instance.draw()
                 return True
         return False
+    def collect_all_resources(self, game_instance):
+        if self.food>0.1: self.retrieve_food(game_instance, self.food)
+        if self.wood>0.1: self.retrieve_wood(game_instance, self.wood)
+        if self.metal>0.1: self.retrieve_metal(game_instance, self.metal)
+        if self.stone>0.1: self.retrieve_stone(game_instance, self.stone)
+    def store_all_resources(self, game_instance):
+        """ True means success """ 
+        resources = [ e for e in game_instance.player.items if isinstance(e, Food) or isinstance(e, Resource) ]
+        if not resources: return False 
+        if len(resources)<=0: return False 
+        for v in resources: self.store_resource(v, game_instance.player)
+        game_instance.update_inv_window()
+        return True 
     def menu_resources(self, current_menu, current_item, menu_instance, game_instance):
         """ return True means that the menu should close """
         from gui import info 
-        # counter = [0]
-        # def resource_counter(obj, counter):
-            # if isinstance(obj, Food) or isinstance(obj, Resource):
-                # counter[0] += 1
-                # return True
-            # else:
-                # return False
         resources = { e.info() : e for e in game_instance.player.items if isinstance(e, Food) or isinstance(e, Resource) }
         # -- 
         if current_item == "Resources >":
@@ -1630,15 +1636,13 @@ class TileBuilding(ActionTile): # interface class
                     return False
                 case "Resources+":
                     if self.update_resource_p_menu(menu_instance, resources): return False 
-                    # if len(resources) > 0:
-                        # menu_instance.set_list("Resources+", list(resources.keys()))
-                        # return False # necessary ? 
                 case "Resources++":
-                    if len(resources) > 0:
-                        for k,v in iter(resources.items()):
-                            self.store_resource(v, game_instance.player)
-                        game_instance.update_inv_window()
-                        return True 
+                    # if len(resources) > 0:
+                        # for k,v in iter(resources.items()):
+                            # self.store_resource(v, game_instance.player)
+                        # game_instance.update_inv_window()
+                        # return True 
+                    if self.store_all_resources(game_instance): return True 
                 case "Food-":
                     qtt, ok = QInputDialog.getDouble(
                         menu_instance, 
@@ -1676,10 +1680,7 @@ class TileBuilding(ActionTile): # interface class
                     if ok and qtt > 0 and self.retrieve_stone(game_instance, qtt):
                         return True 
                 case "Resources--":
-                    if self.food>0.1: self.retrieve_food(game_instance, self.food)
-                    if self.wood>0.1: self.retrieve_wood(game_instance, self.wood)
-                    if self.metal>0.1: self.retrieve_metal(game_instance, self.metal)
-                    if self.stone>0.1: self.retrieve_stone(game_instance, self.stone)
+                    self.collect_all_resources(game_instance) 
                     return True 
         if current_menu == "Resources+":
             if current_item in resources:
@@ -2163,7 +2164,7 @@ class GuardTower(TileBuilding):
         npc_obj = game_instance.add_player(
             key = npc_name, 
             name = npc_name, 
-            hp = 45,
+            hp = 80,
             x = spawn_tile.x, 
             y = spawn_tile.y, 
             b_generate_items = False, 
@@ -2223,7 +2224,7 @@ class GuardTower(TileBuilding):
         npc_obj = game_instance.add_player(
             key = npc_name, 
             name = npc_name, 
-            hp = 45,
+            hp = 80,
             x = spawn_tile.x, 
             y = spawn_tile.y, 
             b_generate_items = False, 

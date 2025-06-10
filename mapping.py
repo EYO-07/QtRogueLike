@@ -397,6 +397,8 @@ class Map_CHARACTERS:
         self.enemy_type = "default" # used for fill_enemies to know which type of enemies should spawn. 
         self.enemies = []
         self.enemy_counters = {} 
+        self.enemy_buildings = set()
+        self.friendly_buildings = set()
     def get_enemy_count(self, name):
         if name in self.enemy_counters: return self.enemy_counters[name]
         return 0 
@@ -750,7 +752,8 @@ class Map_CHARACTERS:
         return (0 <= x < self.width and 0 <= y < self.height)
 class Map_TILES:
     def __init__(self):
-        pass 
+        self.last_building_target = None # for performance improve in artificial behaviour 
+        self.last_enemy_building_target = None # for performance improve in artificial behaviour 
     def get_random_tile_from_rooms(self):
         return GetRandomTile_Reservoir_Sampling( self, Map.foreach_rooms_tiles )
     def get_random_tiles_from_rooms(self, k=20):
@@ -874,6 +877,25 @@ class Map(Serializable, Map_SPECIAL, Map_MODELLING, Map_CHARACTERS, Map_TILES):
     # -- 
     def update_buildings_list(self):
         self.buildings = [ self.grid[y][x] for y in range(self.height) for x in range(self.width) if isinstance(self.grid[y][x], TileBuilding) ]
+    def update_buildings_sets(self):
+        if not self.buildings or len(self.buildings)==0: 
+            self.enemy_buildings.clear()
+            self.friendly_buildings.clear() 
+            return 
+        for b in self.buildings:
+            if b.b_enemy:
+                self.enemy_buildings.add(b)
+            else:
+                self.friendly_buildings.add(b)
+    def update_buildings_sets_iteration(self, building):
+        if not building: return 
+        if not isinstance(building, TileBuilding): return 
+        if building.b_enemy:
+            self.enemy_buildings.add(building)
+            self.friendly_buildings.discard(building)
+        else:
+            self.friendly_buildings.add(building) 
+            self.enemy_buildings.discard(building)
     def generate(self):
         print("Map :", self.filename)
         if self.filename == "procedural_dungeon":

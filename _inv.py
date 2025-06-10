@@ -133,6 +133,29 @@
 36. math.nan ; Floating-point NaN (Not a Number).
 """
 
+""" Inventory [ random ] { Built-in Python library for generating pseudo-random numbers and performing random operations }
+1. random() ; Returns a float in the range [0.0, 1.0)
+2. randint(a, b) ; Returns a random integer N such that a ≤ N ≤ b
+3. randrange(start, stop[, step]) ; Returns a randomly selected element from range(start, stop, step)
+4. uniform(a, b) ; Returns a random float N such that a ≤ N ≤ b
+5. choice(seq) ; Returns a random element from a non-empty sequence
+6. choices(population, weights=None, *, cum_weights=None, k=1) ; Returns a list of k elements chosen with replacement
+7. sample(population, k) ; Returns a list of k unique elements chosen without replacement
+8. shuffle(x) ; Shuffles the sequence x in place
+9. seed(a=None, version=2) ; Initializes the random number generator with a seed value
+10. getstate() ; Returns an object capturing the current internal state of the generator
+11. setstate(state) ; Restores the generator’s internal state from an object returned by getstate()
+12. betavariate(alpha, beta) ; Returns a float from a Beta distribution with specified alpha and beta
+13. expovariate(lambd) ; Returns a float from an exponential distribution with rate lambd
+14. gammavariate(alpha, beta) ; Returns a float from a Gamma distribution
+15. gauss(mu, sigma) ; Returns a float from a Gaussian distribution with mean mu and standard deviation sigma
+16. lognormvariate(mu, sigma) ; Returns a float from a log-normal distribution
+17. normalvariate(mu, sigma) ; Returns a float from a normal (Gaussian) distribution
+18. triangular(low, high, mode) ; Returns a float from a triangular distribution
+19. vonmisesvariate(mu, kappa) ; Returns a float from a Von Mises distribution
+20. weibullvariate(alpha, beta) ; Returns a float from a Weibull distribution
+"""
+
 # -- pyqt5
 
 """ Inventory [ pyqt5 ] { Python, General Methods and Variables }
