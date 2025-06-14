@@ -1288,7 +1288,7 @@ class Zombie(Enemy):
     def __init__(self, name="", hp=40, x=50, y=50, b_generate_items = False):
         Enemy.__init__(self, name = name, hp = hp, x = x, y = y, b_generate_items = b_generate_items)
         self.type = "Zombie"
-        self.description = "Zombies, people affected by the plague, they are still alive but because of this strange disease their bodies smells like rotten flesh. Before they lose their minds, they try to acummulate food to satiate hunger, it's almost certain to find food with them ..."
+        self.description = ZOMBIE_DESC 
         self.sprite = Tile.get_random_sprite("zombie")
     def do_damage(self):
         return d(5, 25)
@@ -1303,7 +1303,7 @@ class Rogue(Enemy):
     def __init__(self, name="", hp=100 , x=50, y=50, b_generate_items = False):
         Enemy.__init__(self, name = name, hp = hp, x = x, y = y, b_generate_items = b_generate_items)
         self.type = "Rogue"
-        self.description = "Rogues and Bandits, they are just robbers, ambushing travellers on the road. Always carry a sword with you ..."
+        self.description = ROGUE_DESC
         self.sprite = "rogue"
         self.activity = 0.2 
         self.tolerance = 7 

@@ -67,8 +67,8 @@ PERFORMANCE_TIME = 0.02
 H_REST_TURNS = 15
 RAIDER_SPAWN_PROBABILITY = 0.1
 SPAWNER_COOLDOWN = 200
-FILL_ENEMIES_QT = 30 
-FILL_SPAWNERS_QT = 50 
+FILL_ENEMIES_QT = 20 
+FILL_SPAWNERS_QT = 40 
 
 # map configuration 
 MAP_WIDTH = 70
@@ -122,13 +122,11 @@ SPRITE_NAMES_WEAPONS = [
     "crossbow",
     "bolt"
 ]
-
 SPRITE_NAMES_PLAYABLES = [
     "player",
     "player_2",
     "player_3"    
 ]
-
 SPRITE_NAMES_CHARACTERS = SPRITE_NAMES_PLAYABLES + [
     "zombie", 
     "zombie_2",
@@ -165,13 +163,11 @@ SPRITE_NAMES_TILES = [
     "shallow_water",
     "rock"
 ]
-
 SPRITE_NAMES = Get_Sprite_Names_From("./assets")
 
 # loot
 HAND_SLOTS = ['primary_hand', 'secondary_hand' ]
 EQUIPMENT_SLOTS = HAND_SLOTS + ['head', 'neck', 'torso', 'waist', 'legs', 'foot']
-
 LOOT_TABLE = [
     { "item_name": "Food", "chance": 0.3, "name":"apple", "nutrition":10 },
     { "item_name": "Food", "chance": 0.2, "name":"fish", "nutrition":80 },
@@ -224,7 +220,6 @@ LAKE_ENEMY_TABLE = [
     {"enemy": "Rogue", "chance": 0.25, "b_generate_items": True},
     {"enemy": "Zombie", "chance": 0.75, "b_generate_items": True}
 ] 
-
 TILE_BUILDING_ENEMY_TABLE = [
     {"enemy": "Mercenary", "chance": 0.4, "b_generate_items": True, "extra_items": [
         {"item_name": "WeaponRepairTool", "name":"Whetstone", "uses": 5},
@@ -234,13 +229,11 @@ TILE_BUILDING_ENEMY_TABLE = [
         {"item_name": "WeaponRepairTool", "name":"Whetstone", "uses": 2}
     ]}
 ]
-
 ZOMBIE_SPAWNER_LIST = [
     {"enemy": "Zombie", "chance": 0.25, "b_generate_items": True, "hp": 70},
     {"enemy": "Zombie", "chance": 0.01, "b_generate_items": True, "hp": 100},
     {"enemy": "Zombie", "chance": 0.75, "b_generate_items": True}
 ]
-
 ROGUE_SPAWNER_LIST = [
     {"enemy": "Mercenary", "chance": 0.05, "b_generate_items": True, "extra_items": [
         {"item_name": "WeaponRepairTool", "name":"Whetstone", "uses": 5},
@@ -252,16 +245,13 @@ ROGUE_SPAWNER_LIST = [
         {"item_name": "WeaponRepairTool", "name":"Whetstone", "uses": 2}
     ]}
 ]
-
-# __init__(self, name='', hp=30, x=50, y=50, b_generate_items=False, sprite='enemy')
-# RangedRaider
-
 RAIDERS_TABLE = [
     {"enemy": "RangedRaider", "chance": 0.45, "b_generate_items": True, "sprite": "evil_crossbowman", "hp": 100},
     {"enemy": "Raider", "chance": 0.75, "b_generate_items": True, "sprite": "evil_swordman", "hp": 200}
 ]
 
-
-
+# descriptions
+ZOMBIE_DESC = "Zombies, people affected by the plague, they are still alive but because of this strange disease their bodies smells like rotten flesh. Before they lose their minds, they try to acummulate food to satiate hunger, it's almost certain to find food with them ..."
+ROGUE_DESC = "Rogues and Bandits, they are just robbers, ambushing travellers on the road. Always carry a sword with you ..."
 
 

@@ -18,14 +18,22 @@ class ActionTile(Tile): # tile which the player can interact - interface class
     def __init__(self, x =0,y=0,front_sprite = "stair_up", walkable=True, sprite_key="grass"):
         Tile.__init__(self, x=x, y=y, walkable=walkable, sprite_key=sprite_key)
         self.add_layer( front_sprite )
+        self.description = "" 
+    def set_description(self,text):
+        self.description = text 
+    def write_quest_note(self, game_instance):
+        map = game_instance.map 
+        if not map: return 
+        text = "Quest : "+self.description+"\n"+f"- Location : {self.x}, {map.height-self.y}\n- Destroy : press C to destroy the spawner"
+        game_instance.take_note_on_diary(text = text)
         
 class Spawner(ActionTile):
-    __serialize_only__ = Tile.__serialize_only__ 
-    def __init__(self, x=0, y=0, front_sprite = "abandoned_house", sprite_key="grass", spawn_list = FOREST_ENEMY_TABLE, spawn_distance = 7):
+    __serialize_only__ = Tile.__serialize_only__ + ["spawn_list"]
+    def __init__(self, x=0, y=0, front_sprite = "abandoned_house", sprite_key="grass", spawn_list = "FOREST_ENEMY_TABLE", spawn_distance = 7):
         ActionTile.__init__(self, x=x,y=y,front_sprite=front_sprite, walkable=True, sprite_key=sprite_key)
         self.spawn_list = spawn_list 
         self.spawn_distance = spawn_distance 
-        self.spawn_cooldown = 0
+        self.spawn_cooldown = 0    
     def update(self, game_instance):
         # turn based update 
         if self.spawn_cooldown > 0: 
@@ -40,7 +48,7 @@ class Spawner(ActionTile):
             x = self.x + dx 
             y = self.y + dy 
             if not map.can_place_character_at(x,y): continue 
-            if map.generate_and_place_enemy_by_list_at(x=x,y=y, enemy_list=self.spawn_list): count += 1
+            if map.generate_and_place_enemy_by_list_at(x=x,y=y, enemy_list=globals()[self.spawn_list]): count += 1
         if count: 
             self.spawn_cooldown = SPAWNER_COOLDOWN 
             return True 
@@ -73,14 +81,16 @@ def new_zombie_spawner(x,y,map):
     tile = map.get_tile(x,y)
     if not tile: return None 
     floor_sprite = tile.default_sprite_key 
-    SP = Spawner(x=x, y=y, front_sprite = "abandoned_house", sprite_key = floor_sprite, spawn_list = ZOMBIE_SPAWNER_LIST)
+    SP = Spawner(x=x, y=y, front_sprite = "abandoned_house", sprite_key = floor_sprite, spawn_list = "ZOMBIE_SPAWNER_LIST")
+    SP.set_description(text=ZOMBIE_DESC)
     SP.set_spawner_at(x=x,y=y, map=map)
     return SP 
 def new_rogue_spawner(x,y,map):
     tile = map.get_tile(x,y)
     if not tile: return None 
     floor_sprite = tile.default_sprite_key 
-    SP = Spawner(x=x, y=y, front_sprite = "abandoned_house", sprite_key = floor_sprite, spawn_list = ROGUE_SPAWNER_LIST)
+    SP = Spawner(x=x, y=y, front_sprite = "abandoned_house", sprite_key = floor_sprite, spawn_list = "ROGUE_SPAWNER_LIST")
+    SP.set_description(text=ROGUE_DESC)
     SP.set_spawner_at(x=x,y=y, map=map)
     return SP 
 
@@ -443,6 +453,16 @@ class Castle(TileBuilding):
                     menu_instance.close()
                     return 
             
+            if "Quest" in current_item:
+                if self.food >=50:
+                    self.food -= 50 
+                    map = game_instance.map 
+                    if len(map.spawners)>0:
+                        SP = random.choice(map.spawners) 
+                        SP.write_quest_note(game_instance)
+                        menu_instance.close()
+                        return 
+                
             if "New Hero" in current_item:
                 if self.food >= 2000:
                     if self.new_hero(game_instance):
@@ -472,6 +492,7 @@ class Castle(TileBuilding):
             "Garrison >",
             "Resources >",
             "Certificates >",
+            "Quest (50 Food)",
             "Exit"
         ]
         # "Weapon Repair (100 Metal)",

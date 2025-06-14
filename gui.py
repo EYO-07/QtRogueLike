@@ -446,9 +446,14 @@ class JournalWindow(Dialog):
             special_texts.append(self.parent().last_encounter_description)
             self.parent().last_encounter_description = ""    
         return "\n".join(special_texts) if special_texts else "All is calm for now."
+    def gen_position_text(self, x = None, y = None):
+        if x is None: x = self.parent().player.x 
+        if y is None: y = self.parent().player.y 
+        return f"Position ({x},{self.parent().grid_height - y})"
     def generate_quick_entry(self):
         if not self.parent(): return ""
-        return f"Position ({self.parent().player.x},{(self.parent().grid_height) - (self.parent().player.y)}) {self.collect_special_text()} {self.whereAmI()}"
+        # return f"Position ({self.parent().player.x},{(self.parent().grid_height) - (self.parent().player.y)}) {self.collect_special_text()} {self.whereAmI()}"
+        return self.gen_position_text()+f" {self.collect_special_text()} {self.whereAmI()}"
     def log_quick_diary_entry(self):
         """Create a formatted diary entry with day, map coordinates, and special event text."""
         if not self.parent(): return 
@@ -474,7 +479,7 @@ class JournalWindow(Dialog):
         new_text = f"{text}\n" if current_text else f"{text}"
         self.text_edit.setPlainText(current_text.rstrip("\n") +2*"\n" + new_text)
         set_text_cursor_to(self.text_edit)
-        self.save_journal()  # Autosave after appending
+        # self.save_journal()  # Autosave after appending
     def clear_text(self):
         self.text_edit.setPlainText("")
     def keyPressEvent(self, event):

@@ -935,14 +935,19 @@ class Game_GUI:
         if self.behaviour_controller_window:
             if self.behaviour_controller_window.isVisible():
                 self.behaviour_controller_window.update()
-    def take_note_on_diary(self):
+    def take_note_on_diary(self, text = None):
+        def write():
+            if not text:
+                self.journal_window.log_quick_diary_entry()
+            else:
+                self.journal_window.append_text(text)
         if not self.journal_window:
             self.journal_window = JournalWindow(self) 
         if self.journal_window.isVisible():
-            self.journal_window.log_quick_diary_entry()
+            write() # self.journal_window.log_quick_diary_entry()
         else:
             self.journal_window.load_journal(self.current_slot)  # Refresh contents
-            self.journal_window.log_quick_diary_entry()
+            write() # self.journal_window.log_quick_diary_entry()
             self.journal_window.show()
             # self.journal_window.update_position()
         self.journal_window.save_journal()
