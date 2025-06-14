@@ -5,7 +5,7 @@ import random
 import math
 import os 
 from heapq import heappush, heappop
-from itertools import product
+from itertools import product, count
 from collections import deque
 
 # third-party 
@@ -20,6 +20,7 @@ from events import *
 from serialization import * 
 from globals_variables import *
 from reality import *
+from special_tiles import * 
 
 # --- Utilities
 def GetRandomTile_Reservoir_Sampling(tile_container = None, foreach_tiles = None ):
@@ -399,7 +400,12 @@ class Map_CHARACTERS:
         self.enemy_counters = {} 
         self.enemy_buildings = set()
         self.friendly_buildings = set()
-    def get_enemy_count(self, name):
+    def get_enemy_count(self, name = None):
+        if name is None:
+            S = 0
+            for k,v in self.enemy_counters.items():
+                if k and v: S += v
+            return S 
         if name in self.enemy_counters: return self.enemy_counters[name]
         return 0 
     def reset_enemy_counters(self):
@@ -426,7 +432,7 @@ class Map_CHARACTERS:
         center_x, center_y = self.get_random_walkable_tile() 
         if center_x is None or center_y is None: return False 
         b_at_least_one = False 
-        spawn_size = int( d(3, min( game_instance.player.days_survived,30 ) ) )
+        spawn_size = int( d(3, min( game_instance.player.days_survived,15 ) ) )
         print("Raider Spawn Size :", spawn_size)
         for i in range(spawn_size): 
             dx = 0
@@ -529,6 +535,11 @@ class Map_CHARACTERS:
         fallback_config = enemy_list[-1].copy()
         fallback_config["chance"] = 1.0  # force spawn
         return self.generate_enemy_by_chance_at(x, y, **fallback_config)
+    def generate_and_place_enemy_by_list_at(self, x,y, enemy_list):
+        enemy = self.generate_enemy_by_chance_by_list_at(x=x,y=y, enemy_list=enemy_list)
+        if not enemy: return False 
+        self.enemies.append(enemy)
+        return self.place_character(enemy)
     def generate_enemy_at(self, x,y, enemy_class=None, *args, **kwargs):
         if enemy_class:
             enemy = enemy_class(x=x,y=y,*args, **kwargs)
@@ -555,7 +566,6 @@ class Map_CHARACTERS:
         self.enemies.append(enemy)
         return self.place_character(enemy)
     def fill_enemies(self, num_enemies=100):
-        #print(f"Filling enemies for map {self.current_map}")
         placed = 0
         attempts = 0
         max_attempts = num_enemies * 5
@@ -566,15 +576,73 @@ class Map_CHARACTERS:
             if not tile:
                 attempts += 1
                 continue
-            if tile.current_char or not tile.walkable: 
+            if not tile.can_place_character(): 
                 attempts += 1
                 continue
             if self.generate_enemy_at(x,y): placed += 1
             attempts += 1
-        if placed < num_enemies:
-            print(f"Warning: Only placed {placed} of {num_enemies} enemies due to limited valid tiles")
+        if placed < num_enemies: print(f"Warning: Only placed {placed} of {num_enemies} enemies due to limited valid tiles")
         print(f"Added {len(self.enemies)} enemies for map {self.coords}")
-        return self.enemies 
+        return self.enemies
+    def get_random_spawner(self):
+        match self.enemy_type:    
+            case "dungeon":
+                return random.choice( [
+                    new_zombie_spawner,
+                    new_rogue_spawner
+                ] )
+            case "deep_forest":
+                return random.choice( [
+                    new_zombie_spawner,
+                    new_rogue_spawner
+                ] )
+            case "field":
+                return random.choice( [
+                    new_zombie_spawner,
+                    new_rogue_spawner
+                ] )
+            case "default":
+                return random.choice( [
+                    new_zombie_spawner,
+                    new_rogue_spawner
+                ] )
+            case "road":
+                return random.choice( [
+                    new_zombie_spawner,
+                    new_rogue_spawner
+                ] )
+            case "lake":
+                return random.choice( [
+                    new_zombie_spawner,
+                    new_rogue_spawner
+                ] )
+            case _:
+                return random.choice( [
+                    new_zombie_spawner,
+                    new_rogue_spawner
+                ] )
+    def fill_spawners(self, num_spawners=20):
+        if len(self.spawners) > 20: return 
+        placed = 0
+        attempts = 0
+        max_attempts = num_spawners * 5
+        while placed < num_spawners and attempts < max_attempts:
+            x = random.randint(1, self.width - 1)
+            y = random.randint(1, self.height - 1)
+            tile = self.get_tile(x, y)
+            if not self.has_adjacent_walkable_can_place_character(tile=tile, x=x, y=y): 
+                attempts += 1
+                continue 
+            if self.is_xy_special(x=x,y=y): 
+                attempts += 1
+                continue 
+            f = self.get_random_spawner() 
+            spawner_ = f(x=x,y=y,map=self)
+            if spawner_: 
+                self.spawners.append(spawner_)
+                placed += 1 
+            attempts += 1 
+        return self.spawners 
     def has_adjacent_walkable_can_place_character(self, tile, x, y):
         if not tile: return False 
         if not self.has_adjacent_walkable(tile, x, y): return False 
@@ -679,7 +747,7 @@ class Map_CHARACTERS:
                 return list(path)
             for dx, dy in [(0, 1), (0, -1), (1, 0), (-1, 0)]:
                 next_x, next_y = x + dx, y + dy
-                # if not self.in_grid(next_x, next_y): continue 
+                if not self.in_grid(next_x, next_y): continue 
                 tile = self.get_tile(next_x, next_y)
                 if tile is None: continue 
                 # Allow the goal tile (player's position) even if occupied
@@ -691,6 +759,44 @@ class Map_CHARACTERS:
                         g_score[(next_x, next_y)] = tentative_g_score
                         f_score[(next_x, next_y)] = tentative_g_score + manhattan(next_x, next_y, goal_x, goal_y)
                         heappush(open_set, (f_score[(next_x, next_y)], (next_x, next_y)))
+        # open_set = []
+        # counter = count()  # For tie-breaking in heap
+        # start = (start_x, start_y)
+        # goal = (goal_x, goal_y)
+
+        # heappush(open_set, (0, next(counter), start))
+        # came_from = {}
+        # g_score = {start: 0}
+        # f_score = {start: manhattan(*start, *goal)}
+
+        # while open_set:
+            # _, _, current = heappop(open_set)
+            # if current == goal:
+                # path = deque()
+                # while current in came_from:
+                    # path.appendleft(current)
+                    # current = came_from[current]
+                # path.appendleft(start)
+                # return list(path)
+
+            # x, y = current
+            # for dx, dy in [(0, 1), (0, -1), (1, 0), (-1, 0)]:
+                # neighbor = (x + dx, y + dy)
+                # nx, ny = neighbor
+
+                # tile = self.get_tile(nx, ny)
+                # if tile is None:
+                    # continue
+
+                # is_goal = neighbor == goal
+                # if tile.walkable and (is_goal or not tile.current_char):
+                    # tentative_g = g_score[current] + 1
+                    # if tentative_g < g_score.get(neighbor, float('inf')):
+                        # came_from[neighbor] = current
+                        # g_score[neighbor] = tentative_g
+                        # f = tentative_g + manhattan(nx, ny, *goal)
+                        # f_score[neighbor] = f
+                        # heappush(open_set, (f, next(counter), neighbor))
         return [] # No path found
     def line_of_sight(self, x1, y1, x2, y2):
         """
@@ -752,8 +858,33 @@ class Map_CHARACTERS:
         return (0 <= x < self.width and 0 <= y < self.height)
 class Map_TILES:
     def __init__(self):
+        self.buildings = []
         self.last_building_target = None # for performance improve in artificial behaviour 
         self.last_enemy_building_target = None # for performance improve in artificial behaviour 
+        self.spawners = []
+    def update_spawners_list(self):
+        self.spawners = [ self.grid[y][x] for y in range(self.height) for x in range(self.width) if isinstance(self.grid[y][x], Spawner) ]
+    def update_buildings_list(self):
+        self.buildings = [ self.grid[y][x] for y in range(self.height) for x in range(self.width) if isinstance(self.grid[y][x], TileBuilding) ]
+    def update_buildings_sets(self):
+        if not self.buildings or len(self.buildings)==0: 
+            self.enemy_buildings.clear()
+            self.friendly_buildings.clear() 
+            return 
+        for b in self.buildings:
+            if b.b_enemy:
+                self.enemy_buildings.add(b)
+            else:
+                self.friendly_buildings.add(b)
+    def update_buildings_sets_iteration(self, building):
+        if not building: return 
+        if not isinstance(building, TileBuilding): return 
+        if building.b_enemy:
+            self.enemy_buildings.add(building)
+            self.friendly_buildings.discard(building)
+        else:
+            self.friendly_buildings.add(building) 
+            self.enemy_buildings.discard(building)    
     def get_random_tile_from_rooms(self):
         return GetRandomTile_Reservoir_Sampling( self, Map.foreach_rooms_tiles )
     def get_random_tiles_from_rooms(self, k=20):
@@ -860,7 +991,6 @@ class Map(Serializable, Map_SPECIAL, Map_MODELLING, Map_CHARACTERS, Map_TILES):
         self.starting_x = None
         self.starting_y = None
         self.rooms = None # could be tuple (x,y,w,h) of rectangular room of could be a Room instance 
-        self.buildings = []
         if b_generate: 
             self.generate()
         # else:
@@ -869,33 +999,15 @@ class Map(Serializable, Map_SPECIAL, Map_MODELLING, Map_CHARACTERS, Map_TILES):
         if not super().from_dict(dictionary):
             return False
         # Place characters after loading grid
+        T1 = tic()
         for enemy in self.enemies:
             self.place_character(enemy)
         self.buildings = [ self.grid[y][x] for y in range(self.height) for x in range(self.width) if isinstance(self.grid[y][x], TileBuilding) ]
-        print("Buildings :", len(self.buildings))
+        self.spawners = [ self.grid[y][x] for y in range(self.height) for x in range(self.width) if isinstance(self.grid[y][x], Spawner) ]
+        toc(T1, "Loading Buildings and Spawners ||")
+        print("Buildings :", len(self.buildings), "Spawners :", len(self.spawners))
         return True
     # -- 
-    def update_buildings_list(self):
-        self.buildings = [ self.grid[y][x] for y in range(self.height) for x in range(self.width) if isinstance(self.grid[y][x], TileBuilding) ]
-    def update_buildings_sets(self):
-        if not self.buildings or len(self.buildings)==0: 
-            self.enemy_buildings.clear()
-            self.friendly_buildings.clear() 
-            return 
-        for b in self.buildings:
-            if b.b_enemy:
-                self.enemy_buildings.add(b)
-            else:
-                self.friendly_buildings.add(b)
-    def update_buildings_sets_iteration(self, building):
-        if not building: return 
-        if not isinstance(building, TileBuilding): return 
-        if building.b_enemy:
-            self.enemy_buildings.add(building)
-            self.friendly_buildings.discard(building)
-        else:
-            self.friendly_buildings.add(building) 
-            self.enemy_buildings.discard(building)
     def generate(self):
         print("Map :", self.filename)
         if self.filename == "procedural_dungeon":

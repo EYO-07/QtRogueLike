@@ -222,6 +222,7 @@ extract_function_signatures_from_list([
     folder+"start.pyw",
     folder+"serialization.py",
     folder+"performance.py",
-    folder+"artificial_behavior.py"
+    folder+"artificial_behavior.py",
+    folder+"special_tiles.py"
 ], "_sign.py")
 

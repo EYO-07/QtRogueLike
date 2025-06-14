@@ -131,7 +131,8 @@ def is_enemy_of(char1, char2):
     if isinstance(char1, Enemy) and isinstance(char2, Player): return True 
     return False 
 def get_closest_visible(origin = None, default_target = None, entities = None, game_instance = None):
-    from reality import TileBuilding, Player, Enemy, Healer
+    from reality import Player, Enemy, Healer
+    from special_tiles import TileBuilding 
     if not origin: return None, None 
     if not game_instance: return None, None 
     if default_target is None and entities is None: return None, None 
@@ -286,7 +287,7 @@ def AB_pillage_current_target(char = None, game_instance = None):
     if not target: 
         char.current_target_building = None 
         return False 
-    from reality import TileBuilding, GuardTower
+    from special_tiles import TileBuilding, GuardTower
     if not isinstance(target, TileBuilding): return False 
     if target.b_enemy: 
         char.current_target_building = None 
@@ -365,7 +366,7 @@ def AB_healing(char = None, game_instance = None):
     target.hp = min( target.max_hp, target.hp + cure )
     return True 
 def AB_pillage(char = None, game_instance = None):
-    from reality import TileBuilding
+    from special_tiles import TileBuilding
     if char is None: return False 
     if game_instance is None: return False 
     map = game_instance.map 
@@ -565,7 +566,8 @@ def AB_find_healing_target(char = None, game_instance = None): # forker
     return True 
 
 def check_target_building(char, target):
-    from reality import Player, Enemy, TileBuilding
+    from reality import Player, Enemy 
+    from special_tiles import TileBuilding
     if target is None: return None, None 
     distance = None
     if target: distance = char.distance(target)
@@ -582,7 +584,8 @@ def AB_find_building_target(char = None, game_instance = None): # forker
     if game_instance is None: return False 
     map = game_instance.map 
     if not map: return False 
-    from reality import Player, Enemy, TileBuilding
+    from reality import Player, Enemy
+    from special_tiles import TileBuilding
     player = game_instance.player 
     if not player: return False 
     # target = None 

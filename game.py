@@ -11,6 +11,7 @@
 from performance import *
 from serialization import *
 from reality import *
+from special_tiles import * 
 from gui import *
 from events import * 
 from globals_variables import *
@@ -544,6 +545,10 @@ class Game_MAPTRANSITION:
             new_map_coord = (self.current_map[0], self.current_map[1] + 1, self.current_map[2])
             new_y = 0
         return new_x, new_y, new_map_coord
+    def fill(self):
+        if len(self.map.enemies) < 10: self.map.fill_enemies(num_enemies=FILL_ENEMIES_QT)
+        if len(self.map.spawners) < 15: self.map.fill_spawners(num_spawners=FILL_SPAWNERS_QT)
+        print("Enemies :", len(self.map.enemies), "Spawners :", len(self.map.spawners))
     def new_map_from_current_coords(
             self, 
             filename = "default", 
@@ -561,7 +566,7 @@ class Game_MAPTRANSITION:
             b_generate = True
         )
         self.maps[self.current_map] = self.map # update the cached maps 
-        self.map.fill_enemies()
+        self.fill()
         return self.map.starting_x, self.map.starting_y 
     def map_transition(
             self, 
@@ -591,7 +596,7 @@ class Game_MAPTRANSITION:
             if self.current_map:
                 self.add_message(f"Loading Map from Cache ({self.current_map[0]}, {-self.current_map[1]}, {self.current_map[2]})")
             self.map = self.maps[self.current_map]
-        if len(self.map.enemies) < 10: self.map.fill_enemies(num_enemies=50)
+        self.fill()
         return None, None
     def safely_place_character_to_new_map(self,char=None):
         if not char: char = self.player 
@@ -958,6 +963,7 @@ class Game_ITERATION:
         self.update_players() 
         self.update_enemies()
         self.update_buildings()
+        self.update_spawners()
         self.update_messages()
     def game_iteration_not_draw(self):
         """ return True if losing hp """
@@ -1065,6 +1071,10 @@ class Game_ITERATION:
             T += dt 
         # if self.flag_performance_buldings: print("performance mode: update_buildings()") 
         toc(t_1, "game.update_buildings() ||")    
+    def update_spawners(self):
+        map = self.map
+        for sp in map.spawners:
+            sp.update(self) 
     def Event_NewTurn(self):
         if self.turn // self.turns_per_day + 1 > self.current_day:
             self.current_day += 1
@@ -1080,12 +1090,14 @@ class Game_ITERATION:
             self.add_message(f"I'm close to a village ... I should check it out")
             self.flag_near_to_village = False 
         self.player.update_available_skills()
-    def new_siege_event(self):
-        if self.flag_event_prevent_map_transition: return # should prevent two siege events at same time 
-        xy = self.home_castle_location
-        if xy is None: xy = (50,50)
-        self.teleport_to_map(x=xy[0], y=xy[1], map_coords=(0, 0, 0))
-        def siege_event_iteration(count, game = None, instance=None):
+    def new_siege_event(self, probability = 0.8): 
+        if self.flag_event_prevent_map_transition: return False # should prevent two siege events at same time 
+        if len(self.players)<8: return False 
+        if d() >= probability: return False 
+        xy = self.home_castle_location 
+        if xy is None: xy = (50,50) 
+        self.teleport_to_map(x=xy[0], y=xy[1], map_coords=(0, 0, 0)) 
+        def siege_event_iteration(count, game = None, instance=None): 
             map = game.map 
             if count == 1: map.generate_raiders_spawn(game, probability = 1)
             if count == 25: map.generate_raiders_spawn(game, probability = 1)
@@ -1096,7 +1108,7 @@ class Game_ITERATION:
                 instance.set_inactive() 
                 return 
             if count == instance.duration-1:
-                if ec > 0: 
+                if ec > 5: 
                     instance.extend_duration(50)
                     return 
         siege_event = TimeSpanEvent(
@@ -1106,17 +1118,17 @@ class Game_ITERATION:
             iteration=siege_event_iteration, 
             game = self 
         )
-        self.events.append( siege_event )
-        self.add_message("Prepare to fight, your home town is under siege ...")
+        self.events.append( siege_event ) 
+        return True 
+    def update_special_daily_events(self):
+        # -- siege or raiders 
+        if self.new_siege_event(probability=RAIDER_SPAWN_PROBABILITY):
+            self.add_message("Prepare to fight, your home town is under siege ...")
+        elif self.map.generate_raiders_spawn(self, probability = RAIDER_SPAWN_PROBABILITY): 
+            self.add_message("Beware, I feel a bad omen ...")
     def Event_NewDay(self):
         print(f"Day {self.current_day}")
-        if len(self.players)>7:
-            if self.map.generate_raiders_spawn(self, probability = 0.8): 
-                self.add_message("beware, I feel a bad omen ...")
-            else: 
-                self.new_siege_event() 
-        else:
-            if self.map.generate_raiders_spawn(self, probability = RAIDER_SPAWN_PROBABILITY): self.add_message("beware, I feel a bad omen ...")
+        self.update_special_daily_events()
         self.update_days_survived()
         self.update_skill_unlock_notes()
     def Event_PlayerDeath(self):
@@ -1531,6 +1543,10 @@ class Game(DraggableView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_P
                         tile.update_menu_list(SB)
                         SB.show()
                         return False 
+                    elif isinstance(tile, Spawner):
+                        tile.destroy_spawner(self)
+                        self.draw()
+                        return True 
                 char = self.get_facing_player()
                 if char:
                     SB = SelectionBox( [
@@ -1542,20 +1558,6 @@ class Game(DraggableView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_P
                     ], action = player_menu, parent = self, game_instance = self, npc = char )
                     SB.show()
                     return False 
-                # px, py = self.player.get_forward_direction()
-                # tile2 = self.map.get_tile(self.player.x+px, self.player.y+py)
-                # if tile2:
-                    # char = tile2.current_char
-                    # if char and isinstance(char, Player):
-                        # SB = SelectionBox( [
-                            # f"[ {char.name} ]",
-                            # "Add to Party",
-                            # "items+",
-                            # "items-",
-                            # "Exit"
-                        # ], action = player_menu, parent = self, game_instance = self, npc = char )
-                        # SB.show()
-                        # return False 
                 return False 
             case Qt.Key_E: # Use first food item
                 self.player.use_first_item_of(Food, self)
@@ -1724,7 +1726,7 @@ class Game(DraggableView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_P
                     "Generate Enemies >", 
                     "Restore Status",
                     "Generate Dungeon Entrance", 
-                    "Add a Cosmetic Layer >",
+                    "Add/Modify Tile >",
                     "Exit"
                 ], action = debugging_menu, game_instance = self).show()
                 return 

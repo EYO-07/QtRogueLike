@@ -2,6 +2,7 @@
 
 # project
 from reality import *
+from special_tiles import * 
 from globals_variables import *
 from events import *
 from pyqt_layer_framework import *
@@ -1071,6 +1072,14 @@ def build_menu(menu, item, instance, game_instance):
     x = game_instance.player.x 
     y = game_instance.player.y    
     match item:
+        case "Quarry":
+            game_instance.certificates.remove("Quarry") 
+            game_instance.map.set_tile(x, y, Quarry(x=x,y=y, stone=0))
+            game_instance.map.update_buildings_list()
+            game_instance.map.place_character(game_instance.player)
+            game_instance.draw() 
+            instance.close()
+            return 
         case "Blacksmith":
             game_instance.certificates.remove("Blacksmith") 
             game_instance.map.set_tile(x, y, Blacksmith(x=x,y=y))
@@ -1237,8 +1246,8 @@ def debugging_menu(menu, item, instance, game_instance):
                     game_instance.draw()
                 instance.close()
                 return 
-            case "Add a Cosmetic Layer >":
-                instance.set_list("Add a Cosmetic Layer >", ["Magic Tower","House", "Enemy Tower","Castle","Lumber Mill","Clear","Mill","Tower",".."])
+            case "Add/Modify Tile >":
+                instance.set_list("Add/Modify Tile >", ["Spawner","Quarry","Magic Tower","House", "Enemy Tower","Castle","Lumber Mill","Clear","Mill","Tower",".."])
                 return 
     # --
     if menu == "Add Item >":
@@ -1332,9 +1341,23 @@ def debugging_menu(menu, item, instance, game_instance):
                 instance.close()
                 return 
     # --
-    if menu == "Add a Cosmetic Layer >":
+    if menu == "Add/Modify Tile >":
         tile = player.current_tile
         match item:
+            case "Spawner":
+                # dx, dy = player.get_forward_direction()
+                # x=player.x+dx
+                # y=player.y+dy
+                # SP = Spawner(x=x, y=y) 
+                # SP.set_spawner_at(x=x,y=y, map = game_instance.map) 
+                # game_instance.map.spawners.append(SP)
+                game_instance.map.fill_spawners(num_spawners=20)
+                game_instance.draw() 
+                instance.close() 
+            case "Quarry":
+                game_instance.map.set_tile(player.x, player.y, Quarry())
+                game_instance.draw()    
+                instance.close()                            
             case "Magic Tower":
                 MT = MagicTower(x=player.x, y=player.y) 
                 MT.villagers = 40 
@@ -1347,7 +1370,7 @@ def debugging_menu(menu, item, instance, game_instance):
                 game_instance.draw()    
                 instance.close()     
             case "House": 
-                tile.add_layer("house")
+                tile.add_layer("abandoned_house")
                 game_instance.draw()    
                 instance.close()                            
             case "Castle": 

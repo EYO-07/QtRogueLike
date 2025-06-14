@@ -156,6 +156,41 @@
 20. weibullvariate(alpha, beta) ; Returns a float from a Weibull distribution
 """
 
+""" Inventory [ OS ] { Python Built-in }
+1. os.name ; Name of the operating system dependent module imported (e.g., 'posix', 'nt').
+2. os.getcwd() ; Returns the current working directory.
+3. os.chdir(path) ; Changes the current working directory to the specified path.
+4. os.listdir(path='.') ; Returns a list of entries in the specified directory.
+5. os.mkdir(path) ; Creates a new directory at the specified path.
+6. os.makedirs(path) ; Recursively creates directories along the specified path.
+7. os.remove(path) ; Deletes the file at the given path.
+8. os.rmdir(path) ; Removes the specified directory (must be empty).
+9. os.rename(src, dst) ; Renames the file or directory from src to dst.
+10. os.path.join(path1, path2, ...) ; Joins one or more path components intelligently.
+11. os.path.exists(path) ; Returns True if the specified path exists.
+12. os.path.isfile(path) ; Returns True if the path is a regular file.
+13. os.path.isdir(path) ; Returns True if the path is a directory.
+14. os.environ ; A mapping object representing the environment variables.
+15. os.system(command) ; Executes the command in a subshell.
+
+Inventory [ os.path ] { built-in python }
+1. os.path.join(path1, path2, ...) ; Joins path components using the correct separator for the OS.
+2. os.path.exists(path) ; Returns True if the specified path exists.
+3. os.path.isfile(path) ; Returns True if the path is an existing regular file.
+4. os.path.isdir(path) ; Returns True if the path is an existing directory.
+5. os.path.abspath(path) ; Returns the absolute version of the given path.
+6. os.path.basename(path) ; Returns the final component of a pathname.
+7. os.path.dirname(path) ; Returns the directory component of a pathname.
+8. os.path.split(path) ; Splits the path into (head, tail) where tail is the last component.
+9. os.path.splitext(path) ; Splits the path into (root, ext) where ext is the file extension.
+10. os.path.getsize(path) ; Returns the size of the file in bytes.
+11. os.path.getmtime(path) ; Returns the last modification time of the file.
+12. os.path.getatime(path) ; Returns the last access time of the file.
+13. os.path.normpath(path) ; Normalizes the path, collapsing redundant separators and up-level references.
+14. os.path.isabs(path) ; Returns True if the path is absolute.
+15. os.path.relpath(path, start=os.curdir) ; Returns the relative path from start to path.
+"""
+
 # -- pyqt5
 
 """ Inventory [ pyqt5 ] { Python, General Methods and Variables }

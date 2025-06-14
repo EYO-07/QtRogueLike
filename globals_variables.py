@@ -1,4 +1,5 @@
 import random 
+import os 
 
 # Global Functions
 def Generate_Square_Diffs(radius=3):
@@ -48,11 +49,26 @@ def rn(num = 5):
         return str(random.randint(0,9))
     return str(random.randint(0,9))+rn(num-1)
 
+def Get_Sprite_Names_From(folder):
+    S = set()
+    valid_exts = {".png", ".webp", ".jpg", ".jpeg"}
+    for file in os.listdir(folder):
+        path = os.path.join(folder, file)
+        if os.path.isdir(path): continue
+        path_, ext = os.path.splitext(path)
+        _, filename = os.path.split(path_)
+        if ext.lower() not in valid_exts: continue
+        S.add(filename)
+    return list(S)
+    
 # Global Variables
 PERFORMANCE_DISTANCE = 8
 PERFORMANCE_TIME = 0.02 
 H_REST_TURNS = 15
 RAIDER_SPAWN_PROBABILITY = 0.1
+SPAWNER_COOLDOWN = 200
+FILL_ENEMIES_QT = 30 
+FILL_SPAWNERS_QT = 50 
 
 # map configuration 
 MAP_WIDTH = 70
@@ -121,6 +137,7 @@ SPRITE_NAMES_CHARACTERS = SPRITE_NAMES_PLAYABLES + [
     "rogue",
     "mercenary",
     "swordman",
+    "upg_swordman",
     "mounted_knight",
     "evil_swordman",
     "crossbowman",
@@ -148,23 +165,8 @@ SPRITE_NAMES_TILES = [
     "shallow_water",
     "rock"
 ]
-SPRITE_NAMES = SPRITE_NAMES_WEAPONS + SPRITE_NAMES_CHARACTERS + SPRITE_NAMES_FOODS + SPRITE_NAMES_TILES + [
-    "sack",
-    "HUD_arrow",
-    "whetstone",
-    "house", 
-    "castle", 
-    "lumber_mill", 
-    "blacksmith",
-    "quarry",
-    "mill",
-    "wood",
-    "tower",
-    "red_flag",
-    "metal",
-    "stone",
-    "magic_tower"
-]
+
+SPRITE_NAMES = Get_Sprite_Names_From("./assets")
 
 # loot
 HAND_SLOTS = ['primary_hand', 'secondary_hand' ]
@@ -229,6 +231,24 @@ TILE_BUILDING_ENEMY_TABLE = [
         {"item_name": "Food", "name":"meat", "nutrition":250}
     ]},
     {"enemy": "Rogue", "chance": 0.7, "b_generate_items": True, "extra_items": [
+        {"item_name": "WeaponRepairTool", "name":"Whetstone", "uses": 2}
+    ]}
+]
+
+ZOMBIE_SPAWNER_LIST = [
+    {"enemy": "Zombie", "chance": 0.25, "b_generate_items": True, "hp": 70},
+    {"enemy": "Zombie", "chance": 0.01, "b_generate_items": True, "hp": 100},
+    {"enemy": "Zombie", "chance": 0.75, "b_generate_items": True}
+]
+
+ROGUE_SPAWNER_LIST = [
+    {"enemy": "Mercenary", "chance": 0.05, "b_generate_items": True, "extra_items": [
+        {"item_name": "WeaponRepairTool", "name":"Whetstone", "uses": 5},
+        {"item_name": "Food", "name":"meat", "nutrition":250}
+    ]},
+    {"enemy": "RangedRaider", "chance": 0.03, "b_generate_items": True, "sprite": "evil_crossbowman", "hp": 50},
+    {"enemy": "Raider", "chance": 0.01, "b_generate_items": True, "sprite": "evil_swordman", "hp": 100},
+    {"enemy": "Rogue", "chance": 0.3, "b_generate_items": True, "extra_items": [
         {"item_name": "WeaponRepairTool", "name":"Whetstone", "uses": 2}
     ]}
 ]
