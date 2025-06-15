@@ -618,7 +618,11 @@ class Game_MAPTRANSITION:
     def horizontal_map_transition(self,x,y):
         if self.flag_event_prevent_map_transition: 
             self.add_message("Can't change map during this event ...")
+            return
+        if self.player.stamina < STAMINA_CONS_MAP_TRANS: 
+            self.add_message("You're too exausted to travel ...")
             return 
+        self.player.stamina -= STAMINA_CONS_MAP_TRANS 
         T1 = tic()
         self.events.clear()
         self.save_current_game(slot=self.current_slot)
@@ -654,6 +658,10 @@ class Game_MAPTRANSITION:
         if self.flag_event_prevent_map_transition: 
             self.add_message("Can't change map during this event ...")
             return 
+        if self.player.stamina < STAMINA_CONS_MAP_TRANS: 
+            self.add_message("You're too exausted to explore this dungeon ...")
+            return 
+        self.player.stamina -= STAMINA_CONS_MAP_TRANS     
         T1 = tic()
         self.events.clear()
         self.save_current_game(slot=self.current_slot)

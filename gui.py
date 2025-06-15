@@ -1077,6 +1077,16 @@ def build_menu(menu, item, instance, game_instance):
     x = game_instance.player.x 
     y = game_instance.player.y    
     match item:
+        case "Tavern":
+            game_instance.certificates.remove("Tavern") 
+            tile = game_instance.map.get_tile(x,y)
+            if not tile: return 
+            game_instance.map.set_tile(x, y, Tavern(x=x,y=y,background_sprite=tile.default_sprite_key))
+            game_instance.map.update_buildings_list()
+            game_instance.map.place_character(game_instance.player)
+            game_instance.draw() 
+            instance.close()
+            return 
         case "Quarry":
             game_instance.certificates.remove("Quarry") 
             game_instance.map.set_tile(x, y, Quarry(x=x,y=y, stone=0))
@@ -1310,7 +1320,7 @@ def debugging_menu(menu, item, instance, game_instance):
         dy = 2*dy
         match item:
             case "Test":
-                game_instance.map.generate_enemy_at(player.x+dx, player.y+dy, EnemySwordman, b_generate_items = True)
+                game_instance.map.generate_enemy_at(player.x+dx, player.y+dy, Raider, b_generate_items = True)
                 game_instance.dirty_tiles.add((player.x+dx, player.y+dy)) 
                 game_instance.draw()    
                 instance.close()                            
@@ -1371,7 +1381,7 @@ def debugging_menu(menu, item, instance, game_instance):
                 dx, dy = player.get_forward_direction()
                 x=player.x+dx
                 y=player.y+dy
-                SP = new_demon_spawner(x=x, y=y, map= game_instance.map) 
+                SP = new_enemy_tower_spawner(x=x, y=y, map= game_instance.map) 
                 # SP = Spawner(x=x, y=y) 
                 # SP.set_spawner_at(x=x,y=y, map = game_instance.map) 
                 # game_instance.map.spawners.append(SP)
@@ -1379,7 +1389,7 @@ def debugging_menu(menu, item, instance, game_instance):
                 game_instance.draw() 
                 instance.close() 
             case "Quarry":
-                game_instance.map.set_tile(player.x, player.y, Quarry())
+                game_instance.map.set_tile(player.x, player.y, Tavern())
                 game_instance.draw()    
                 instance.close()                            
             case "Magic Tower":

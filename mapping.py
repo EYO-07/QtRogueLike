@@ -615,7 +615,8 @@ class Map_CHARACTERS:
             case "field":
                 return random.choice( [
                     new_zombie_spawner,
-                    new_rogue_spawner
+                    new_rogue_spawner,
+                    new_enemy_tower_spawner
                 ] )
             case "default":
                 return random.choice( [
@@ -625,7 +626,8 @@ class Map_CHARACTERS:
             case "road":
                 return random.choice( [
                     new_zombie_spawner,
-                    new_rogue_spawner
+                    new_rogue_spawner,
+                    new_enemy_tower_spawner
                 ] )
             case "lake":
                 return random.choice( [

@@ -66,9 +66,10 @@ PERFORMANCE_DISTANCE = 8
 PERFORMANCE_TIME = 0.02 
 H_REST_TURNS = 15
 RAIDER_SPAWN_PROBABILITY = 0.1
-SPAWNER_COOLDOWN = 200
+SPAWNER_COOLDOWN = 500
 FILL_ENEMIES_QT = 20 
 FILL_SPAWNERS_QT = 40 
+STAMINA_CONS_MAP_TRANS = 50
 
 # map configuration 
 MAP_WIDTH = 70
@@ -235,7 +236,7 @@ ZOMBIE_SPAWNER_LIST = [
     {"enemy": "Zombie", "chance": 0.75, "b_generate_items": True}
 ]
 ROGUE_SPAWNER_LIST = [
-    {"enemy": "Mercenary", "chance": 0.05, "b_generate_items": True, "extra_items": [
+    {"enemy": "Mercenary", "chance": 0.1, "b_generate_items": True, "extra_items": [
         {"item_name": "WeaponRepairTool", "name":"Whetstone", "uses": 5},
         {"item_name": "Food", "name":"meat", "nutrition":250}
     ]},
@@ -252,6 +253,14 @@ RAIDERS_TABLE = [
 DEMON_SPAWNER_LIST = [
     {"enemy": "Demon", "chance": 0.45, "b_generate_items": True}
 ]
+ENEMY_FACTION_LIST = [
+    {"enemy": "EnemyCrossbowman", "chance": 0.25, "b_generate_items": True}, 
+    {"enemy": "Mercenary", "chance": 0.05, "b_generate_items": True, "extra_items": [
+        {"item_name": "WeaponRepairTool", "name":"Whetstone", "uses": 5},
+        {"item_name": "Food", "name":"meat", "nutrition":250}
+    ]},
+    {"enemy": "EnemySwordman", "chance": 0.65, "b_generate_items": True}
+]
 
 # descriptions
 
@@ -260,4 +269,12 @@ STARTING_TEXT = "Day 0 - The world was affected by the plague, why? Maybe I shou
 ZOMBIE_DESC = "Zombies, people affected by the plague, they are still alive but because of this strange disease their bodies smells like rotten flesh. Before they lose their minds, they try to acummulate food to satiate hunger, it's almost certain to find food with them ..."
 ROGUE_DESC = "Rogues and Bandits, they are just robbers, ambushing travellers on the road. Always carry a sword with you ..."
 DEMON_DESC = "We call them demons, but we are not sure where they come from, most likely they are infected variants. Be cautious, they are stronger and more intelligent than normal zombies ..."
+
+MILL_DESC = "Farm : Secure this building to produce food, press Delete to collect the resoucers ..."
+QUARRY_DESC = "Quarry : Secure this building to produce stone, press Delete to collect the resoucers ..."
+TOWER_DESC = "Tower : Secure this building to recruit soldiers and protect this region ..."
+LUMBER_DESC = "Lumber Mill : Secure this building to produce wood, press Delete to collect the resoucers ..."
+BLACKSMITH_DESC = "Blacksmith : This building provides many services and can recycle weapons ..."
+
+
 

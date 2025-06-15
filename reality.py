@@ -11,7 +11,8 @@ import random
 import math
 import os 
 from heapq import heappush, heappop
-from itertools import product
+from itertools import product, count
+from collections import deque
 
 # third-party 
 from PyQt5.QtCore import Qt
@@ -745,50 +746,70 @@ class BehaviourCharacter(Entity): # interface : artificially controlled characte
         self.current_target_building = None # Building Target, never serialize this, can lead to infinite saving. 
         self.current_target_healing = None # Healing Target, never serialize this, can lead to infinite saving. 
         self.current_target_tile = None # Tile Destination Target, never serialize this, can lead to infinite saving. 
-        self.path = None 
+        self.path = []
+        self.last_path_goal = None
+    def reset_path(self):
+        self.path = []
+        self.last_path_goal = None
     def behaviour_update(self, game_instance): 
         if hasattr(self,"current_map"):
             if self.current_map != game_instance.map.coords: return False
             if self.current_map != game_instance.current_map: return False 
         return AB_behavior_default(char=self, game_instance=game_instance)
-    # def find_entity_path(self, entity_1, entity_2):
-        # return self.find_path( entity_1.x, entity_1.y, entity_2.x, entity_2.y )
-    # def find_path(self, start_x: int, start_y: int, goal_x: int, goal_y: int, game_instance) -> list[tuple[int, int]]:
-        # """A* pathfinding to find shortest path from (start_x, start_y) to (goal_x, goal_y)."""
-        # map = game_instance.map 
-        # if not map: return 
-        # if not map.in_grid(start_x, start_y) or not map.in_grid(goal_x, goal_y): return 
-        # open_set = []
-        # heappush(open_set, (0, (start_x, start_y)))
-        # came_from = {}
-        # g_score = {(start_x, start_y): 0}
-        # f_score = {(start_x, start_y): manhattan(start_x, start_y, goal_x, goal_y)}
-        # while open_set:
-            # _, current = heappop(open_set)
-            # x, y = current
-            # Reached the goal
-            # if (x, y) == (goal_x, goal_y):
-                # path = deque()
-                # while (x, y) in came_from:
-                    # path.appendleft((x, y))
-                    # x, y = came_from[(x, y)]
-                # self.path = list(path)
-                # return 
-            # for dx, dy in [(0, 1), (0, -1), (1, 0), (-1, 0)]:
-                # next_x, next_y = x + dx, y + dy
-                # tile = map.get_tile(next_x, next_y)
-                # if tile is None: continue 
-                # Allow the goal tile (player's position) even if occupied
-                # is_goal = (next_x == goal_x and next_y == goal_y)
-                # if tile.walkable and (is_goal or not tile.current_char):
-                    # tentative_g_score = g_score[(x, y)] + 1
-                    # if (next_x, next_y) not in g_score or tentative_g_score < g_score[(next_x, next_y)]:
-                        # came_from[(next_x, next_y)] = (x, y)
-                        # g_score[(next_x, next_y)] = tentative_g_score
-                        # f_score[(next_x, next_y)] = tentative_g_score + manhattan(next_x, next_y, goal_x, goal_y)
-                        # heappush(open_set, (f_score[(next_x, next_y)], (next_x, next_y)))
-        # return # No path found 
+    def find_entity_path(self, entity_1, entity_2):
+        return self.find_path( entity_1.x, entity_1.y, entity_2.x, entity_2.y )
+    def find_path(self, start_x: int, start_y: int, goal_x: int, goal_y: int, game_instance) -> list[tuple[int, int]]:
+        """A* pathfinding to find shortest path from (start_x, start_y) to (goal_x, goal_y)."""
+        # Reuse path if it leads to the same goal
+        if self.last_path_goal == (goal_x, goal_y) and self.path:
+            try:
+                # Find current position in the cached path
+                idx = self.path.index((start_x, start_y))
+                # Trim path to start from current position
+                self.path = self.path[idx:]
+                return self.path
+            except ValueError:
+                pass  # Current position not in path — fall back to full pathfinding
         
+        # Start fresh pathfinding
+        map = game_instance.map 
+        if not map.in_grid(start_x, start_y) or not map.in_grid(goal_x, goal_y): return 
+        def manhattan(x1, y1, x2, y2):
+            return abs(x1 - x2) + abs(y1 - y2)
+        open_set = []
+        heappush(open_set, (0, (start_x, start_y)))
+        came_from = {}
+        g_score = {(start_x, start_y): 0}
+        f_score = {(start_x, start_y): manhattan(start_x, start_y, goal_x, goal_y)}
+        while open_set:
+            _, current = heappop(open_set)
+            x, y = current
+            # Reached the goal
+            if (x, y) == (goal_x, goal_y):
+                path = deque()
+                while (x, y) in came_from:
+                    path.appendleft((x, y))
+                    x, y = came_from[(x, y)]
+                self.path = list(path) 
+                return self.path
+            for dx, dy in [(0, 1), (0, -1), (1, 0), (-1, 0)]:
+                next_x, next_y = x + dx, y + dy
+                if not map.in_grid(next_x, next_y): continue 
+                tile = map.get_tile(next_x, next_y)
+                if tile is None: continue 
+                # Allow the goal tile (player's position) even if occupied
+                is_goal = (next_x == goal_x and next_y == goal_y)
+                if tile.walkable and (is_goal or not tile.current_char):
+                    tentative_g_score = g_score[(x, y)] + 1
+                    if (next_x, next_y) not in g_score or tentative_g_score < g_score[(next_x, next_y)]:
+                        came_from[(next_x, next_y)] = (x, y)
+                        g_score[(next_x, next_y)] = tentative_g_score
+                        f_score[(next_x, next_y)] = tentative_g_score + manhattan(next_x, next_y, goal_x, goal_y)
+                        heappush(open_set, (f_score[(next_x, next_y)], (next_x, next_y)))
+        self.path.clear()
+        self.last_path_goal = None 
+        return # No path found
+    
 class EquippedCharacter(Container): # interface : equip items
     __serialize_only__ = Container.__serialize_only__ + [ "primary_hand", "secondary_hand", "head", "neck", "torso", "waist", "legs", "foot" ]
     def __init__(self):
@@ -1271,6 +1292,17 @@ class EnemySwordman(Enemy):
         self.base_damage = 10
     def generate_initial_items(self):
         self.equip_item(Sword("Long_Sword", damage=10), "primary_hand")
+        if random.random() < 0.3:
+            self.add_item(Food(name="bread", nutrition=random.randint(50, 100)))
+
+class EnemyCrossbowman(Enemy):
+    __serialize_only__ = Enemy.__serialize_only__
+    def __init__(self, name="", hp=80, x=50, y=50, b_generate_items = False, sprite = "enemy_crossbowman"):
+        Enemy.__init__(self, name=name, hp=hp, x=x, y=y, b_generate_items = b_generate_items)
+        self.sprite = sprite 
+        self.base_damage = 10
+    def generate_initial_items(self):
+        self.equip_item(Fireweapon(name = "Crossbow", damage = 5, ammo=70, range=7, projectile_sprite='bolt', ammo_type='bolt'), "primary_hand")
         if random.random() < 0.3:
             self.add_item(Food(name="bread", nutrition=random.randint(50, 100)))
 

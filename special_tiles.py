@@ -102,6 +102,14 @@ def new_demon_spawner(x,y,map):
     SP.set_description(text=DEMON_DESC)
     SP.set_spawner_at(x=x,y=y, map=map)
     return SP 
+def new_enemy_tower_spawner(x,y,map):
+    tile = map.get_tile(x,y)
+    if not tile: return None 
+    floor_sprite = tile.default_sprite_key 
+    SP = Spawner(x=x, y=y, front_sprite = "enemy_tower", sprite_key = floor_sprite, spawn_list = "ENEMY_FACTION_LIST")
+    SP.set_description(text="Once valiant and honorable bannermens, now they do anything for money, worst than mercenaries ...")
+    SP.set_spawner_at(x=x,y=y, map=map)
+    return SP 
 
 class Stair(ActionTile): # not used yet 
     def __init__(self, x=0, y = 0,front_sprite = "stair_up", walkable=True, sprite_key="grass"):
@@ -116,7 +124,7 @@ class Stair(ActionTile): # not used yet
 # TileBuilding.retrieve_wood() || { Character.add_item() | TileBuilding.update_inv_window() } || {}
 # TileBuilding.store_resource() || { Character.remove_item() } || {}
 class TileBuilding(ActionTile): # interface class
-    __serialize_only__ = Tile.__serialize_only__ + ["villagers", "villagers_max", "food", "stone", "metal", "wood", "b_enemy", "turn_counter"]
+    __serialize_only__ = ActionTile.__serialize_only__ + ["villagers", "villagers_max", "food", "stone", "metal", "wood", "b_enemy", "turn_counter"]
     def __init__(self, x=0,y=0,front_sprite = "Castle", walkable=True, sprite_key="grass", b_enemy = False):
         ActionTile.__init__(self, x = x, y = y, front_sprite = front_sprite, walkable=walkable, sprite_key=sprite_key )
         self.villagers = 5
@@ -390,12 +398,17 @@ class TileBuilding(ActionTile): # interface class
             y = self.y + dy 
             if map.can_place_character_at(x,y): return (x,y) 
         return None 
+    def write_quest_note(self, game_instance):
+        map = game_instance.map 
+        if not map: return 
+        text = "Quest : "+self.description+"\n"+f"- Location : {self.x}, {map.height-self.y}\n- Conquest : defeat all enemies and take control of this building."
+        game_instance.take_note_on_diary(text = text)
 
 # Castle.action() || { Castle.update_menu_list() | Castle.new_npc() | TileBuilding.menu_garrison() | TileBuilding.menu_resources() } || { Character.add_item(), TileBuilding.update_inv_window(), Character.remove_item() }
 class Castle(TileBuilding):
     __serialize_only__ = TileBuilding.__serialize_only__ + ["name","heroes","num_heroes"]
-    def __init__(self, x=0, y =0, name = "Home", b_enemy=False):
-        TileBuilding.__init__(self, x=x,y=y, front_sprite = "castle", walkable=True, sprite_key="grass", b_enemy=b_enemy)
+    def __init__(self, x=0, y=0, name = "Home", b_enemy=False):
+        TileBuilding.__init__(self, x=x,y=y, front_sprite = Tile.get_random_sprite(key_filter="castle"), walkable=True, sprite_key="grass", b_enemy=b_enemy)
         self.name = name 
         self.heroes = {}
         self.num_heroes = 0
@@ -420,6 +433,7 @@ class Castle(TileBuilding):
                     "Farm (500 Wood, 500 Food)", 
                     "Blacksmith (500 Wood, 500 Food, 200 Metal)",
                     "Guard Tower (2000 Wood, 2500 Food)", 
+                    "Tavern (100 Wood 150 Food)",
                     ".."])
                 return 
             if "Guard Tower" in current_item:
@@ -459,7 +473,13 @@ class Castle(TileBuilding):
                     game_instance.certificates.append("Blacksmith")
                     menu_instance.close()
                     return 
-            
+            if "Tavern" in current_item:
+                if self.wood >= 100 and self.food >= 150:
+                    self.wood -= 100 
+                    self.food -= 150
+                    game_instance.certificates.append("Tavern")
+                    menu_instance.close()
+                    return 
             if "Quest" in current_item:
                 if self.food >=50:
                     self.food -= 50 
@@ -467,8 +487,11 @@ class Castle(TileBuilding):
                     if len(map.spawners)>0:
                         SP = random.choice(map.spawners) 
                         SP.write_quest_note(game_instance)
-                        menu_instance.close()
-                        return 
+                    if len(map.enemy_buildings)>0:
+                        SP = random.choice( list(map.enemy_buildings) ) 
+                        SP.write_quest_note(game_instance)
+                    menu_instance.close()
+                    return 
                 
             if "New Hero" in current_item:
                 if self.food >= 2000:
@@ -502,7 +525,6 @@ class Castle(TileBuilding):
             "Quest (50 Food)",
             "Exit"
         ]
-        # "Weapon Repair (100 Metal)",
     def new_hero(self, game_instance):
         if self.villagers <= 15: 
             game_instance.add_message("There are no villagers to recruit ...")
@@ -545,6 +567,91 @@ class Castle(TileBuilding):
         game_instance.map.buildings.append(obj)
         game_instance.draw()
         
+class Tavern(TileBuilding):
+    __serialize_only__ = TileBuilding.__serialize_only__ + ["name"]
+    def __init__(self, x=0, y=0, name = "Tavern", b_enemy=False, background_sprite = "grass"):
+        TileBuilding.__init__(self, x=x,y=y, front_sprite = "tavern", walkable=True, sprite_key=background_sprite, b_enemy=b_enemy)
+        self.name = name 
+        self.menu_list = [] 
+    def action(self):
+        from gui import info 
+        self.update_menu_list()
+        def f(current_menu, current_item, menu_instance, game_instance):
+            self.update_menu_list(menu_instance)
+            if current_item == "..": menu_instance.set_list()
+            if current_item == "Overview >": self.set_population_menu(menu_instance)
+            if current_item == "Exit": menu_instance.close()
+            if "Quest" in current_item:
+                if self.food >=50:
+                    self.food -= 50 
+                    map = game_instance.map 
+                    if len(map.spawners)>0:
+                        SP = random.choice(map.spawners) 
+                        SP.write_quest_note(game_instance)
+                    if len(map.enemy_buildings)>0:
+                        SP = random.choice( list(map.enemy_buildings) ) 
+                        SP.write_quest_note(game_instance)
+                    menu_instance.close()
+                    return 
+            if "New Hero" in current_item:
+                if self.food >= 2000:
+                    if self.new_hero(game_instance):
+                        self.food -= 2000 
+                        self.villagers -= 15
+                else:
+                    game_instance.add_message("Can't afford to purchase new heroes ...")
+                menu_instance.close()
+            if self.menu_garrison(current_menu, current_item, menu_instance, game_instance):
+                menu_instance.close()
+                return 
+            if self.menu_resources(current_menu, current_item, menu_instance, game_instance):
+                menu_instance.close()
+                return 
+        return f
+    def update_menu_list(self, selection_box_instance = None):
+        self.menu_list.clear()
+        self.menu_list += [
+            f"Tavern",
+            f"-> food: {self.food:.0f}",
+            f"-> wood: {self.wood:.0f}",
+            f"-> metal: {self.metal:.0f}",
+            f"-> stone: {self.stone:.0f}",
+            "Overview >",
+            "New Hero (2000 Food)",
+            "Resources >",
+            "Quest (50 Food)",
+            "Exit"
+        ]
+    def new_hero(self, game_instance):
+        if self.villagers <= 15: 
+            game_instance.add_message("There are no villagers to recruit ...")
+            return False 
+        spawn_tile = game_instance.map.get_tile( *self.get_free_spawn_position(game_instance) ) #player.x+dx, player.y + dy)
+        if not spawn_tile:
+            print("invalid tile")
+            game_instance.add_message("Can't generate player at this position, please rotate the current character")
+            return False
+        new_name = QInputDialog.getText(game_instance, 'Input Dialog', 'Character Name :')
+        if new_name:
+            npc_name = new_name[0]
+        if not npc_name:
+            npc_name = "Hero_"+rn(7)
+        game_instance.add_hero(
+            key = npc_name, 
+            name = npc_name, 
+            x = spawn_tile.x, 
+            y = spawn_tile.y, 
+            b_generate_items = False, 
+            current_map = game_instance.current_map,
+            sprite = random.choice(SPRITE_NAMES_PLAYABLES)
+        )
+        self.refresh_game_instance(spawn_tile.x, spawn_tile.y, game_instance)
+        return True        
+    def production(self, multiplier = 1.0):
+        if self.b_enemy: return 
+        if self.villagers == 0: self.villagers = 0.1
+        self.villagers = min( (1.0+0.005*multiplier)*self.villagers, self.villagers_max )
+
 # Mill.action() || { Mill.update_menu_list() | TileBuilding.menu_resources() } || { Character.add_item(), TileBuilding.update_inv_window(), Character.remove_item() }
 class Mill(TileBuilding):
     __serialize_only__ = TileBuilding.__serialize_only__ + ["name"]
@@ -553,6 +660,7 @@ class Mill(TileBuilding):
         self.name = name 
         self.menu_list = []
         self.food = food 
+        self.description = MILL_DESC
     def action(self):
         self.update_menu_list()
         def f(current_menu, current_item, menu_instance, game_instance):
@@ -587,6 +695,7 @@ class LumberMill(TileBuilding):
         self.menu_list = []
         self.wood = wood
         self.melt_weap_dict = None
+        self.description = LUMBER_DESC
     def action(self):
         self.update_menu_list()
         def f(current_menu, current_item, menu_instance, game_instance):
@@ -627,6 +736,7 @@ class Quarry(TileBuilding):
         self.menu_list = []
         self.stone = stone
         self.melt_weap_dict = None
+        self.description = QUARRY_DESC
     def action(self):
         self.update_menu_list()
         def f(current_menu, current_item, menu_instance, game_instance):
@@ -666,6 +776,7 @@ class Blacksmith(TileBuilding):
         self.name = name 
         self.menu_list = []
         self.melt_weap_dict = None
+        self.description = BLACKSMITH_DESC
     def update_melt_menu(self, menu_instance):
         menu_instance.set_list("Melt Weapons >", ["Blacksmith > Melt Weapons"] + list(self.melt_weap_dict.keys())+[".."])
     def action(self):
@@ -746,6 +857,7 @@ class GuardTower(TileBuilding):
         self.turret = None
         if self.b_enemy: self.add_enemy_turret() 
         self.b_upg_swordman = False 
+        self.description = TOWER_DESC
     def add_enemy_turret(self):
         self.turret = RangedRaider(name='turret', hp=200, b_generate_items=True, sprite='evil_crossbowman')
     def building_attack(self, game_instance):
