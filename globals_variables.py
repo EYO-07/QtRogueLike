@@ -249,9 +249,15 @@ RAIDERS_TABLE = [
     {"enemy": "RangedRaider", "chance": 0.45, "b_generate_items": True, "sprite": "evil_crossbowman", "hp": 100},
     {"enemy": "Raider", "chance": 0.75, "b_generate_items": True, "sprite": "evil_swordman", "hp": 200}
 ]
+DEMON_SPAWNER_LIST = [
+    {"enemy": "Demon", "chance": 0.45, "b_generate_items": True}
+]
 
 # descriptions
+
+STARTING_TEXT = "Day 0 - The world was affected by the plague, why? Maybe I should've prayed more instead of living with mercenaries and whores, God don't look to us now, and there is no church to pray anymore. Almost every one has transformed to walking deads, their flesh is putrid and their hunger insatiable, strange enough, before they lose their minds, they try desesperately to find food to satiate the hunger, so it's almost certain that I will find some with them, I'm starving. \n\nI should check myself, I'm almost losing my mind too. If I'm right, to move use A,W,S,D, Left, Right, to attack moves forward (only), to interact or use stairs press C, to open inventory press I, to open journal press J, to open build menu press B, to open party press P and to open behaviour controller press Z. I should take notes often, press N to write a quick note. \n\nI need to find food ..."
+
 ZOMBIE_DESC = "Zombies, people affected by the plague, they are still alive but because of this strange disease their bodies smells like rotten flesh. Before they lose their minds, they try to acummulate food to satiate hunger, it's almost certain to find food with them ..."
 ROGUE_DESC = "Rogues and Bandits, they are just robbers, ambushing travellers on the road. Always carry a sword with you ..."
-
+DEMON_DESC = "We call them demons, but we are not sure where they come from, most likely they are infected variants. Be cautious, they are stronger and more intelligent than normal zombies ..."
 

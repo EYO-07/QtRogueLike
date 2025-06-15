@@ -566,19 +566,34 @@ class Map_CHARACTERS:
         self.enemies.append(enemy)
         return self.place_character(enemy)
     def fill_enemies(self, num_enemies=100):
+        def check_tile(x,y):
+            tile = self.get_tile(x, y) 
+            if not tile: return False 
+            if not tile.can_place_character(): return False 
+            if not self.has_adjacent_walkable(tile, x, y): return False 
+            return True 
         placed = 0
         attempts = 0
         max_attempts = num_enemies * 5
         while placed < num_enemies and attempts < max_attempts:
             x = random.randint(1, self.width - 1)
             y = random.randint(1, self.height - 1)
-            tile = self.get_tile(x, y)
-            if not tile:
+            x_ = x 
+            y_ = y
+            for dx,dy in ADJACENT_DIFF_MOVES:
+                if check_tile(x,y): break 
+                x = x_ + dx 
+                y = y_ + dy 
+            if not check_tile(x,y):
                 attempts += 1
                 continue
-            if not tile.can_place_character(): 
-                attempts += 1
-                continue
+            # tile = self.get_tile(x, y)
+            # if not tile:
+                # attempts += 1
+                # continue
+            # if not tile.can_place_character(): 
+                # attempts += 1
+                # continue 
             if self.generate_enemy_at(x,y): placed += 1
             attempts += 1
         if placed < num_enemies: print(f"Warning: Only placed {placed} of {num_enemies} enemies due to limited valid tiles")
@@ -594,7 +609,8 @@ class Map_CHARACTERS:
             case "deep_forest":
                 return random.choice( [
                     new_zombie_spawner,
-                    new_rogue_spawner
+                    new_rogue_spawner,
+                    new_demon_spawner
                 ] )
             case "field":
                 return random.choice( [
@@ -614,7 +630,8 @@ class Map_CHARACTERS:
             case "lake":
                 return random.choice( [
                     new_zombie_spawner,
-                    new_rogue_spawner
+                    new_rogue_spawner,
+                    new_demon_spawner
                 ] )
             case _:
                 return random.choice( [
@@ -622,7 +639,7 @@ class Map_CHARACTERS:
                     new_rogue_spawner
                 ] )
     def fill_spawners(self, num_spawners=20):
-        if len(self.spawners) > 20: return 
+        # if len(self.spawners) > 20: return 
         placed = 0
         attempts = 0
         max_attempts = num_spawners * 5

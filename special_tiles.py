@@ -15,6 +15,7 @@ from heapq import heappush, heappop
 from itertools import product
         
 class ActionTile(Tile): # tile which the player can interact - interface class
+    __serialize_only__ = Tile.__serialize_only__ + ["description"]
     def __init__(self, x =0,y=0,front_sprite = "stair_up", walkable=True, sprite_key="grass"):
         Tile.__init__(self, x=x, y=y, walkable=walkable, sprite_key=sprite_key)
         self.add_layer( front_sprite )
@@ -28,7 +29,7 @@ class ActionTile(Tile): # tile which the player can interact - interface class
         game_instance.take_note_on_diary(text = text)
         
 class Spawner(ActionTile):
-    __serialize_only__ = Tile.__serialize_only__ + ["spawn_list"]
+    __serialize_only__ = ActionTile.__serialize_only__ + ["spawn_list"]
     def __init__(self, x=0, y=0, front_sprite = "abandoned_house", sprite_key="grass", spawn_list = "FOREST_ENEMY_TABLE", spawn_distance = 7):
         ActionTile.__init__(self, x=x,y=y,front_sprite=front_sprite, walkable=True, sprite_key=sprite_key)
         self.spawn_list = spawn_list 
@@ -93,8 +94,14 @@ def new_rogue_spawner(x,y,map):
     SP.set_description(text=ROGUE_DESC)
     SP.set_spawner_at(x=x,y=y, map=map)
     return SP 
-
-def new_demon_spawner(x,y,map): pass 
+def new_demon_spawner(x,y,map): 
+    tile = map.get_tile(x,y)
+    if not tile: return None 
+    floor_sprite = tile.default_sprite_key 
+    SP = Spawner(x=x, y=y, front_sprite = "spawner_demon", sprite_key = floor_sprite, spawn_list = "DEMON_SPAWNER_LIST")
+    SP.set_description(text=DEMON_DESC)
+    SP.set_spawner_at(x=x,y=y, map=map)
+    return SP 
 
 class Stair(ActionTile): # not used yet 
     def __init__(self, x=0, y = 0,front_sprite = "stair_up", walkable=True, sprite_key="grass"):

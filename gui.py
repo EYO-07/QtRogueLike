@@ -1145,12 +1145,24 @@ def skill_menu(menu, item, instance, game_instance, stamina_bound):
         instance.close()
         return 
     player = game_instance.player 
+    map = game_instance.map 
+    x = player.x 
+    y = player.y 
     if "Release Party" in item:
         if isinstance(player, Hero):
             player.release_party(game_instance)
             game_instance.update_prior_next_selection()
             instance.close()
             return 
+    if "Add Adjacent to Party" in item:
+        if not isinstance(player, Hero): return 
+        for dx, dy in CARDINAL_DIFF_MOVES:
+            char = map.get_char(x+dx, y+dy)
+            if not char: continue 
+            if not isinstance(char, Player): continue 
+            player.add_to_party(char.name, game_instance)
+        instance.close()    
+        return 
 def player_menu(menu,item, instance, game_instance, npc):
     player = game_instance.player 
     if not player: 
@@ -1243,7 +1255,7 @@ def debugging_menu(menu, item, instance, game_instance):
                 instance.close()
                 return 
             case "Generate Enemies >":
-                instance.set_list("Generate Enemies >", ["Healer","Raider","Zombie","Bear","Rogue","Mercenary","Player","clear",".."])
+                instance.set_list("Generate Enemies >", ["Test", "Healer","Raider","Zombie","Bear","Rogue","Mercenary","Player","clear",".."])
                 return 
             case "Generate Dungeon Entrance":
                 if game_instance.map.add_dungeon_entrance_at(player.x, player.y):
@@ -1297,6 +1309,12 @@ def debugging_menu(menu, item, instance, game_instance):
         dx = 2*dx 
         dy = 2*dy
         match item:
+            case "Test":
+                game_instance.map.generate_enemy_at(player.x+dx, player.y+dy, EnemySwordman, b_generate_items = True)
+                game_instance.dirty_tiles.add((player.x+dx, player.y+dy)) 
+                game_instance.draw()    
+                instance.close()                            
+                return 
             case "Healer":
                 npc_name = "Healer"+rn(7)
                 game_instance.add_player(key = npc_name, cls_constructor=Healer, name = npc_name, x = player.x+dx, y = player.y+dy)
@@ -1350,13 +1368,14 @@ def debugging_menu(menu, item, instance, game_instance):
         tile = player.current_tile
         match item:
             case "Spawner":
-                # dx, dy = player.get_forward_direction()
-                # x=player.x+dx
-                # y=player.y+dy
+                dx, dy = player.get_forward_direction()
+                x=player.x+dx
+                y=player.y+dy
+                SP = new_demon_spawner(x=x, y=y, map= game_instance.map) 
                 # SP = Spawner(x=x, y=y) 
                 # SP.set_spawner_at(x=x,y=y, map = game_instance.map) 
                 # game_instance.map.spawners.append(SP)
-                game_instance.map.fill_spawners(num_spawners=20)
+                # game_instance.map.fill_spawners(num_spawners=20)
                 game_instance.draw() 
                 instance.close() 
             case "Quarry":

@@ -751,7 +751,8 @@ class Game_DATA:
             self.journal_window.show()
             self.journal_window.update_position()
         # self.journal_window.clear_text()
-        self.journal_window.append_text("Day 0 - The world was affected by the plague, why? Maybe I should've prayed more instead of living with mercenaries and whores, God don't look to us now, and there is no church to pray anymore. Almost every one has transformed to walking deads, their flesh is putrid and their hunger insatiable, strange enough, before they lose their minds, they try desesperately to find food to satiate the hunger, so it's almost certain that I will find some with them, I'm starving. \n\nI should check myself, I'm almost losing my mind too. If I'm right, to move use A,W,S,D, Left, Right, to attack moves forward (only), to interact or use stairs press C, to open inventory press I, to open journal press J, to open build menu press B, to open party press P and to open behaviour controller press Z. I should take notes often, press N to write a quick note. \n\nI need to find food ...")
+        self.journal_window.append_text(STARTING_TEXT)
+        self.journal_window.save_journal()
         self.setFocus()
         # Trigger music playback if not muted
         if not self.is_music_muted:
@@ -1414,6 +1415,7 @@ class Game(DraggableView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_P
                     f"[ Available Skills ](days survived: {self.player.days_survived})",
                     f"-> Current Map: { self.player.current_map[0]}, {-self.player.current_map[1] }, {self.player.current_map[2] }",
                     f"-> Map Position: { self.player.x}, { self.map.height -self.player.y }",
+                    "Add Adjacent to Party",
                     f"Release Party: { self.player.count_party() if isinstance(self.player, Hero) else '...' }",
                     f"Dodge Skill: { self.player.can_use_dodge_skill }",
                     f"Thrust Skill: { self.player.can_use_thrust_skill }",

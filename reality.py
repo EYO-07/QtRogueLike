@@ -1258,16 +1258,17 @@ class Raider(Enemy): # interface class, is an enemy that will try to find the ne
             if self.current_map != game_instance.map.coords: return False
             if self.current_map != game_instance.current_map: return False
         return AB_behavior_raider(char=self, game_instance=game_instance)
-        # primary = self.primary_hand 
-        # if isinstance(primary, Fireweapon):            
-            # target, path = primary.find_target(self, game_instance)
-            # if primary.perform_attack(self, target, path, game_instance): return True 
-        # if self.pursue_target(game_instance.players, game_instance, game_instance.player): return True 
-        # if len(game_instance.map.buildings)>0:
-            # if self.pursue_target(game_instance.map.buildings, game_instance): 
-                # return True 
-        # self.random_walk(game_instance) 
-        # return True 
+    def generate_initial_items(self):
+        self.equip_item(Sword("Long_Sword", damage=10), "primary_hand")
+        if random.random() < 0.3:
+            self.add_item(Food(name="bread", nutrition=random.randint(50, 100)))
+
+class EnemySwordman(Enemy):
+    __serialize_only__ = Enemy.__serialize_only__
+    def __init__(self, name="", hp=100, x=50, y=50, b_generate_items = False, sprite = "enemy_swordman"):
+        Enemy.__init__(self, name=name, hp=hp, x=x, y=y, b_generate_items = b_generate_items)
+        self.sprite = sprite 
+        self.base_damage = 10
     def generate_initial_items(self):
         self.equip_item(Sword("Long_Sword", damage=10), "primary_hand")
         if random.random() < 0.3:
@@ -1297,7 +1298,22 @@ class Zombie(Enemy):
             self.add_item(Food(name="bread", nutrition=random.randint(50, 100)))
         if random.random() < 0.7:
             self.add_item(Food(name="apple", nutrition=random.randint(5, 15)))
-            
+
+class Demon(Zombie):
+    __serialize_only__ = Zombie.__serialize_only__
+    def __init__(self, name="", hp=120, x=50, y=50, b_generate_items = False):
+        Zombie.__init__(self, name=name,hp=hp, x=x,y=y, b_generate_items=b_generate_items)
+        self.type = "Demon"
+        self.description = DEMON_DESC
+        self.sprite = "demon"
+    def generate_initial_items(self):
+        self.add_item(Food(name="meat", nutrition=250)) 
+    def behaviour_update(self, game_instance):
+        if hasattr(self,"current_map"):
+            if self.current_map != game_instance.map.coords: return False 
+            if self.current_map != game_instance.current_map: return False 
+        return AB_behavior_grudge(char=self, game_instance=game_instance)
+        
 class Rogue(Enemy):
     __serialize_only__ = Enemy.__serialize_only__
     def __init__(self, name="", hp=100 , x=50, y=50, b_generate_items = False):
