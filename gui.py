@@ -305,7 +305,7 @@ class JournalWindow(Dialog):
         self.hide()  # Hidden by default
         if self.parent(): self.parent().setFocus()
         self.current_page = 0
-        self.current_content = []
+        self.current_content = [""]
     def update_page_button_label(self):
         self.new_page_button.setText(f"+({self.current_page+1}/{len(self.current_content)})")
     def new_page(self):
