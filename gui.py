@@ -304,15 +304,53 @@ class JournalWindow(Dialog):
         self.restore_state()
         self.hide()  # Hidden by default
         if self.parent(): self.parent().setFocus()
+        self.current_page = 0
+        self.current_content = []
+    def update_page_button_label(self):
+        self.new_page_button.setText(f"+({self.current_page+1}/{len(self.current_content)})")
+    def new_page(self):
+        self.save_journal()
+        self.current_content.append("")
+        self.current_page = len(self.current_content)-1
+        self.text_edit.setPlainText( self.get_current_page_text() )
+        self.update_page_button_label()
+    def next_page(self):
+        self.save_journal()
+        if self.current_page + 1 > len(self.current_content): 
+            self.current_page = len(self.current_content) - 1
+            return 
+        if self.current_page + 1 == len(self.current_content): return 
+        self.current_page += 1
+        self.text_edit.setPlainText( self.get_current_page_text() )
+        self.update_page_button_label()
+    def previous_page(self):
+        self.save_journal()
+        if self.current_page == 0: return 
+        if self.current_page < 0:
+            self.current_page = 0
+            return 
+        self.current_page -= 1 
+        self.text_edit.setPlainText( self.get_current_page_text() )
+        self.update_page_button_label()
+    def text_to_pages(self, text): 
+        self.current_content = text.split("/newpage\n")
+        if self.current_page >= len(self.current_content): self.current_page = len(self.current_content)-1
+    def pages_to_text(self):
+        return "/newpage\n".join(self.current_content)
+    def get_current_page_text(self):
+        if len(self.current_content) == 0: return ""
+        return self.current_content[self.current_page]
     def build_parts(self):
         self.layout = VLayout() # vertical 
         self.button_layout = HLayout()
         self.char_button_list = []
-        # -- G:\mdr\pdr\pyQtRogueLike14042025\QtRogueLike\fonts\
         self.text_edit = new_text(foreground = "black", font = get_font("fonts/Tangerine-Bold.ttf"), fontsize=27, background = "rgba(240, 240, 180, 255)")
         self.update_character_buttons()
         self.save_button = new_button("Save", self.save_journal)
         self.log_button = new_button("Log Entry", self.log_diary_entry)
+        self.next_page_button = new_button(">", self.next_page)
+        self.prev_page_button = new_button("<", self.previous_page)
+        self.new_page_button = new_button("+", self.new_page)
     def update_character_buttons(self):        
         def button_callback(k,v):
             print(k,v)
@@ -355,7 +393,7 @@ class JournalWindow(Dialog):
     def assemble_parts(self):
         set_properties_layout(self.layout)
         self.layout / self.button_layout 
-        self/( self.layout/self.text_edit/( HLayout()/self.save_button/self.log_button ) )
+        self/( self.layout/self.text_edit/( HLayout()/self.save_button/self.log_button/self.new_page_button/self.prev_page_button/self.next_page_button ) )
     def whereAmI(self):
         player = self.parent().player
         if not player: return ""
@@ -406,13 +444,18 @@ class JournalWindow(Dialog):
         journal_file = os.path.join(saves_dir, f"journal_{slot}_{current_char_name}.txt")
         try:
             with open(journal_file, "r", encoding="utf-8") as f:
-                self.text_edit.setPlainText(f.read())
+                self.text_to_pages(f.read())
+                self.text_edit.setPlainText( self.get_current_page_text() )
+                # self.text_edit.setPlainText(f.read())
         except FileNotFoundError:
+            self.text_to_pages("")
             self.text_edit.setPlainText("")  # Empty journal if file doesn't exist
         except Exception as e:
             self.parent().add_message(f"Failed to load journal: {e}")
             print(f"Error loading journal from {journal_file}: {e}")
+            self.text_to_pages("")
             self.text_edit.setPlainText("")
+        self.update_page_button_label()
         # Move cursor to end and scroll
         cursor = self.text_edit.textCursor()
         cursor.movePosition(QTextCursor.End)
@@ -428,7 +471,9 @@ class JournalWindow(Dialog):
         try:
             os.makedirs(saves_dir, exist_ok=True)
             with open(journal_file, "w", encoding="utf-8") as f:
-                f.write(self.text_edit.toPlainText())
+                self.current_content[self.current_page] = self.text_edit.toPlainText()
+                f.write(self.pages_to_text())
+                # f.write(self.text_edit.toPlainText())
             self.parent().add_message("Journal saved")
         except Exception as e:
             self.parent().add_message(f"Failed to save journal: {e}")
@@ -479,7 +524,6 @@ class JournalWindow(Dialog):
         new_text = f"{text}\n" if current_text else f"{text}"
         self.text_edit.setPlainText(current_text.rstrip("\n") +2*"\n" + new_text)
         set_text_cursor_to(self.text_edit)
-        # self.save_journal()  # Autosave after appending
     def clear_text(self):
         self.text_edit.setPlainText("")
     def keyPressEvent(self, event):

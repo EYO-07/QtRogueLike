@@ -56,7 +56,7 @@ class Spawner(ActionTile):
         return False 
     def add_bonus_resources(self, tile):
         if tile is None: return 
-        order = 100
+        order = 1000
         if d()<0.3: tile.add_item(Wood(d(0,order)))
         if d()<0.25: tile.add_item(Stone(d(0,order)))
         if d()<0.2: tile.add_item(Metal(d(0,order)))

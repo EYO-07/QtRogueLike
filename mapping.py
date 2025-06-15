@@ -918,7 +918,7 @@ class Map_TILES:
         if not tile: return False 
         return tile.walkable 
     def has_adjacent_walkable(self, tile, x, y):
-        for dx,dy in CROSS_DIFF_MOVES:
+        for dx,dy in CROSS_DIFF_MOVES_1x1:
             tile_2 = self.get_tile(x+dx,y+dy)
             if tile_2:
                 if tile_2.walkable: return True 

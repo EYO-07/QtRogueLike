@@ -292,9 +292,17 @@ class Usable(Item): # Interface : use item
     def get_utility_info(self):
         return f"({self.uses:.0f})"
 
-class Book(Usable):
-    __serialize_only__ = Usable.__serialize_only__ 
-    def __init__(self): pass 
+# class Book(Item):
+    # __serialize_only__ = Item.__serialize_only__ + ["content", "b_input"]
+    # def __init__(self, name="", description="", weight=1, sprite="item"):
+        # if not description: description = "This item is used to store journal content."
+        # Item.__init__(self, name = name, description = description, weight = weight, sprite = sprite)
+        # self.content = ""
+        # self.b_input = True 
+    # def get_text_from_journal(self):
+        # pass 
+    # def add_text_to_journal(self): 
+        # pass 
 
 class Ammo(Usable):
     __serialize_only__ = Usable.__serialize_only__

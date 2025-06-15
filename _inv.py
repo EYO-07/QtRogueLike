@@ -191,6 +191,24 @@ Inventory [ os.path ] { built-in python }
 15. os.path.relpath(path, start=os.curdir) ; Returns the relative path from start to path.
 """
 
+""" Inventory [ File Manipulation ] { Built-In, Python }
+1. open(filename, mode='r') ; Opens a file in the specified mode (e.g. 'r', 'w', 'a', 'rb', 'wb')
+2. file.read(size=-1) ; Reads the entire file or up to 'size' bytes
+3. file.readline() ; Reads a single line from the file
+4. file.readlines() ; Reads all lines and returns them as a list
+5. file.write(data) ; Writes data (string or bytes) to the file
+6. file.writelines(lines) ; Writes a list of lines to the file without adding newlines
+7. file.seek(offset, whence=0) ; Moves the file pointer to a specific position
+8. file.tell() ; Returns the current file pointer position
+9. file.close() ; Closes the file to free resources
+10. with open(...) as f: ; Context manager that ensures the file is closed automatically
+11. os.remove(path) ; Deletes the specified file
+12. os.rename(src, dst) ; Renames or moves a file
+13. os.path.exists(path) ; Checks if a file or path exists
+14. os.path.getsize(path) ; Returns the file size in bytes
+15. os.listdir(path) ; Lists all files and directories in a given path
+"""
+
 # -- pyqt5
 
 """ Inventory [ pyqt5 ] { Python, General Methods and Variables }
