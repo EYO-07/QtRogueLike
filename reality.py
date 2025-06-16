@@ -1360,7 +1360,7 @@ class Rogue(Enemy):
         Enemy.__init__(self, name = name, hp = hp, x = x, y = y, b_generate_items = b_generate_items)
         self.type = "Rogue"
         self.description = ROGUE_DESC
-        self.sprite = "rogue"
+        self.sprite = Tile.get_random_sprite(key_filter="rogue")
         self.activity = 0.2 
         self.tolerance = 7 
         self.base_damage = 5
@@ -1375,7 +1375,7 @@ class Mercenary(Rogue):
         Rogue.__init__(self, name = name, hp = hp, x = x, y = y, b_generate_items = b_generate_items)
         self.type = "Mercenary"
         self.description = "More experienced in combat than rogues, but often doing the same kind of 'job', money before honor ..."
-        self.sprite = "mercenary"
+        self.sprite = Tile.get_random_sprite(key_filter="mercenary")
         self.activity = 0.1 
         self.tolerance = 10 
         self.base_damage = 5

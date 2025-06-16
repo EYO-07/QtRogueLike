@@ -1230,6 +1230,15 @@ def player_menu(menu,item, instance, game_instance, npc):
         return 
     elif result == False:
         return 
+    if item == "Add Adjacent to Party":
+        if not isinstance(player, Hero): return 
+        for dx, dy in CARDINAL_DIFF_MOVES:
+            char = game_instance.map.get_char(player.x+dx, player.y+dy)
+            if not char: continue 
+            if not isinstance(char, Player): continue 
+            player.add_to_party(char.name, game_instance)
+        instance.close()    
+        return 
     if item == "Add to Party":
         if isinstance(npc, Player) and isinstance(player, Hero):
             player.add_to_party(npc.name, game_instance)

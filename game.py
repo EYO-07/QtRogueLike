@@ -1566,6 +1566,7 @@ class Game(DraggableView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_P
                 if char:
                     SB = SelectionBox( [
                         f"[ {char.name} ]",
+                        "Add Adjacent to Party",
                         "Add to Party",
                         "items+",
                         "items-",
