@@ -810,7 +810,13 @@ class Blacksmith(TileBuilding):
                         menu_instance.close()
                         return 
                 if current_item == "Melt Weapons >":
-                    self.melt_weap_dict = { it.info() : it for it in game_instance.player.items if isinstance(it, Sword) or isinstance(it, Mace) or isinstance(it, Fireweapon) }
+                    ptr_counter = [0]
+                    def boolean_test(it, ctr):                        
+                        if isinstance(it, Sword) or isinstance(it, Mace) or isinstance(it, Fireweapon):
+                            ctr[0] += 1
+                            return True 
+                        return False 
+                    self.melt_weap_dict = { f"{ptr_counter[0]}. "+it.info() : it for it in game_instance.player.items if boolean_test(it, ptr_counter) }
                     self.update_melt_menu(menu_instance)
                     return 
             if self.menu_resources(current_menu, current_item, menu_instance, game_instance):
@@ -1006,6 +1012,7 @@ class GuardTower(TileBuilding):
         npc_obj.equip_item( Sword(name="Long_Sword", damage=sw_dmg, durability_factor=0.9995), "primary_hand" )
         npc_obj.hunger = npc_obj.max_hunger
         npc_obj.can_use_thrust_skill = True 
+        npc_obj.copy_behaviour_config(game_instance.player)
         self.refresh_game_instance(spawn_tile.x, spawn_tile.y, game_instance)
         return True    
     def new_mounted_knight(self, game_instance): # not used yet 
@@ -1037,6 +1044,7 @@ class GuardTower(TileBuilding):
         npc_obj.hunger = npc_obj.max_hunger
         npc_obj.can_use_thrust_skill = True 
         npc_obj.can_use_knight_skill = True 
+        npc_obj.copy_behaviour_config(game_instance.player)
         self.refresh_game_instance(spawn_tile.x, spawn_tile.y, game_instance)
         return True    
     def new_crossbowman(self, game_instance):
@@ -1065,6 +1073,7 @@ class GuardTower(TileBuilding):
         )
         npc_obj.equip_item(Fireweapon(name = "Crossbow", damage = 5, ammo=70, range=7, projectile_sprite='bolt', ammo_type='bolt'), "primary_hand")
         npc_obj.hunger = npc_obj.max_hunger
+        npc_obj.copy_behaviour_config(game_instance.player)
         self.refresh_game_instance(spawn_tile.x, spawn_tile.y, game_instance)
         return True
     def production(self, multiplier = 1.0):

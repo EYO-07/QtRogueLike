@@ -817,6 +817,10 @@ class BehaviourCharacter(Entity): # interface : artificially controlled characte
         self.path.clear()
         self.last_path_goal = None 
         return # No path found
+    def copy_behaviour_config(self, char):
+        if not isinstance(char, BehaviourCharacter): return 
+        self.activity = char.activity
+        self.tolerance = char.tolerance 
     
 class EquippedCharacter(Container): # interface : equip items
     __serialize_only__ = Container.__serialize_only__ + [ "primary_hand", "secondary_hand", "head", "neck", "torso", "waist", "legs", "foot" ]

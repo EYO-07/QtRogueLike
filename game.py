@@ -476,6 +476,18 @@ class Game_PLAYERS:
             if not v.is_placed_on_map(self.map): continue 
             if not self.can_select_player(v): continue 
             v.days_survived += 1
+    def add_all_adjacent_to_party(self):
+        player = self.player 
+        x = player.x 
+        y = player.y 
+        map = self.map 
+        if not isinstance(player, Hero): return 
+        for dx, dy in SQUARE_DIFF_MOVES:
+            if dx==0 and dy==0: continue 
+            char = map.get_char(x+dx, y+dy)
+            if not char: continue 
+            if not isinstance(char, Player): continue 
+            player.add_to_party(char.name, self)
     def update_skill_unlock_notes(self):
         if self.player.days_survived == 5:
             self.journal_window.append_text("(Skill - 5 days) I'm in full shape now, I'm feeling agile, use Ctrl to dodge and move two tiles backward ...") 
@@ -1539,6 +1551,14 @@ class Game(DraggableView, Serializable, Game_VIEWPORT, Game_SOUNDMANAGER, Game_P
         dx, dy = 0, 0
         b_isForwarding = False
         match key: # use, interaction 
+            case Qt.Key_Q:
+                if isinstance(self.player, Hero):
+                    self.player.release_party(self)
+                    self.update_prior_next_selection()
+                    return False 
+            case Qt.Key_V:
+                self.add_all_adjacent_to_party()
+                return False 
             case Qt.Key_R: # use item 
                 self.player.use_first_item_of(WeaponRepairTool, self)
                 return False 

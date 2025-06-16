@@ -1209,12 +1209,13 @@ def skill_menu(menu, item, instance, game_instance, stamina_bound):
             instance.close()
             return 
     if "Add Adjacent to Party" in item:
-        if not isinstance(player, Hero): return 
-        for dx, dy in CARDINAL_DIFF_MOVES:
-            char = map.get_char(x+dx, y+dy)
-            if not char: continue 
-            if not isinstance(char, Player): continue 
-            player.add_to_party(char.name, game_instance)
+        game_instance.add_all_adjacent_to_party()
+        # if not isinstance(player, Hero): return 
+        # for dx, dy in CARDINAL_DIFF_MOVES:
+            # char = map.get_char(x+dx, y+dy)
+            # if not char: continue 
+            # if not isinstance(char, Player): continue 
+            # player.add_to_party(char.name, game_instance)
         instance.close()    
         return 
 def player_menu(menu,item, instance, game_instance, npc):
@@ -1231,12 +1232,13 @@ def player_menu(menu,item, instance, game_instance, npc):
     elif result == False:
         return 
     if item == "Add Adjacent to Party":
-        if not isinstance(player, Hero): return 
-        for dx, dy in CARDINAL_DIFF_MOVES:
-            char = game_instance.map.get_char(player.x+dx, player.y+dy)
-            if not char: continue 
-            if not isinstance(char, Player): continue 
-            player.add_to_party(char.name, game_instance)
+        game_instance.add_all_adjacent_to_party()
+        # if not isinstance(player, Hero): return 
+        # for dx, dy in CARDINAL_DIFF_MOVES:
+            # char = game_instance.map.get_char(player.x+dx, player.y+dy)
+            # if not char: continue 
+            # if not isinstance(char, Player): continue 
+            # player.add_to_party(char.name, game_instance)
         instance.close()    
         return 
     if item == "Add to Party":
