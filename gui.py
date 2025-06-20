@@ -666,26 +666,8 @@ class InventoryWindow(Dialog):
         self.parent().setFocus()
     def build_parts(self):
         self.layout = VLayout()
-        
-        # Inventory [ QLabel ] { PyQt5 }
-        # 1. QLabel(parent=None) ; Creates a new label widget, optionally with a parent.
-        # 2. setText(str) ; Sets the text displayed on the label.
-        # 3. text() ; Returns the current text of the label.
-        # 4. setPixmap(QPixmap) ; Displays a QPixmap image on the label.
-        # 5. pixmap() ; Returns the currently displayed QPixmap.
-        # 6. setAlignment(Qt.Alignment) ; Sets alignment of the text or pixmap (e.g., Qt.AlignCenter).
-        # 7. setWordWrap(bool) ; Enables or disables word wrapping for text.
-        # 8. setTextFormat(Qt.TextFormat) ; Sets how text is interpreted (PlainText, RichText).
-        # 9. setScaledContents(bool) ; Scales the pixmap to fit the label size.
-        # 10. setMargin(int) ; Sets the margin around the contents of the label.
-        # 11. setIndent(int) ; Sets the indentation between the edge and text/pixmap.
-        # 12. setOpenExternalLinks(bool) ; Enables clickable links (when using rich text).
-        # 13. setBuddy(QWidget) ; Associates a keyboard shortcut with another widget.
-        # 14. clear() ; Clears the text or pixmap from the label.
-        # 15. hasScaledContents() ; Returns whether the label scales its contents.
         self.selected_item_label = QLabel()
         self.selected_item_label_desc = QLabel()
-        
         self.list_widget = new_list_widget(callback=self.item_double_click, get_filtered_event_from=self)
         self.tabs = new_tab_bar("*", self.tab_changed)
         self.tabs.addTab("Edible")
@@ -729,7 +711,13 @@ class InventoryWindow(Dialog):
             case "Weapons": 
                 apply_filter_to_list_widget(self.list_widget,"[dmg]")
             case "Resources": 
-                apply_filter_to_list_widget(self.list_widget,"[value]")
+                #apply_filter_to_list_widget(self.list_widget,"[value]")
+                for index in range(self.list_widget.count()):
+                    item = self.list_widget.item(index)
+                    if "[value]".lower() in item.text().lower() or "[ntr]".lower() in item.text().lower():
+                        item.setHidden(False) 
+                    else:
+                        item.setHidden(True) 
     def eventFilter(self, obj, event):
         
         # Inventory [ QEvent ] { For use in eventFilter }

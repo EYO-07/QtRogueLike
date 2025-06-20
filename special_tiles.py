@@ -68,6 +68,7 @@ class Spawner(ActionTile):
             return 
         player.stamina -= 30 
         tile = Tile(self.x,self.y,walkable=True, sprite_key=self.default_sprite_key)
+        self.give_all(tile)
         self.add_bonus_resources(tile = tile)
         map.set_tile(self.x,self.y, tile)
         if self in map.spawners: map.spawners.remove(self)

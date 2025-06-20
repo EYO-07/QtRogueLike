@@ -46,6 +46,18 @@
 18. my_list.count(value) ; Returns the number of times a value appears in the list.
 19. for item in my_list: ; Iterates through each item in the list.
 20. [x for x in my_list if condition] ; List comprehension for filtering or transforming.
+
+Inventory [ List Sorting ] { Python }
+1. sorted(iterable) ; Returns a new sorted list from the elements of any iterable.
+2. sorted(iterable, reverse=True) ; Returns a new list sorted in descending order.
+3. sorted(iterable, key=func) ; Sorts elements using a custom key function.
+4. list.sort() ; Sorts a list in place (modifies the original list).
+5. list.sort(reverse=True) ; Sorts the list in descending order in place.
+6. list.sort(key=func) ; Sorts the list in place using a custom key.
+7. lambda x: x[1] ; Commonly used key function to sort by second element (e.g., tuples).
+8. operator.itemgetter(n) ; Efficient alternative to lambda for sorting by index.
+9. locale.strxfrm ; Used to sort strings according to locale-specific rules.
+10. functools.cmp_to_key(func) ; Converts an old-style comparison function for use with key.
 """
 
 """ Inventory [ Set ] { Basic Python }

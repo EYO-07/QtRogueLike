@@ -438,13 +438,11 @@ class Game_PLAYERS:
             v.current_map = self.current_map
             print(v.name, v.current_map) # debug 
         self.update_prior_next_selection() # -- bug fix -- Carring Players that isn't on current map using pageup and down
-    def release_party(self, diff_moves = CROSS_DIFF_MOVES_1x1):
-        print("releasing everyone from party")
+    def release_party(self, diff_moves = SQUARE_DIFF_MOVES):
         x = self.player.x 
         y = self.player.y 
         for dx,dy in diff_moves:
             if not self.map.can_place_character_at(x+dx,y+dy): continue 
-            # if not self.map.is_adjacent_walkable_at(x+dx,y+dy): continue 
             if dx == 0 and dy == 0: continue
             for key,value in iter(self.players.items()):
                 if value.party:
@@ -456,6 +454,23 @@ class Game_PLAYERS:
                     self.draw()
                     break 
         self.update_prior_next_selection()
+        # x = self.player.x 
+        # y = self.player.y 
+        # ply_list = [ v for k,v in self.players.items() ]
+        # ply_list.sort(key=lambda v: v.hp, reverse=True)
+        # for dx,dy in diff_moves:
+            # if not self.map.can_place_character_at(x+dx,y+dy): continue 
+            # if dx == 0 and dy == 0: continue
+            # for value in ply_list:
+                # if not value.party: continue 
+                # value.x = x+dx 
+                # value.y = y+dy 
+                # value.current_map = self.current_map 
+                # value.party = False 
+                # self.map.place_character(value) 
+                # break 
+        # self.draw() 
+        # self.update_prior_next_selection()
     def release_hero_party(self):
         if not isinstance(self.player, Hero): return 
         self.player.release_party(self)
@@ -487,7 +502,9 @@ class Game_PLAYERS:
             char = map.get_char(x+dx, y+dy)
             if not char: continue 
             if not isinstance(char, Player): continue 
-            player.add_to_party(char.name, self)
+            # player.add_to_party(char.name, self)
+            player.add_to_party_not_tail_update(char.name, self)
+        player.tail_game_instance_update(self)
     def update_skill_unlock_notes(self):
         if self.player.days_survived == 5:
             self.journal_window.append_text("(Skill - 5 days) I'm in full shape now, I'm feeling agile, use Ctrl to dodge and move two tiles backward ...") 
@@ -514,6 +531,12 @@ class Game_MAPTRANSITION:
         else:
             print(f"Map {coords} Not Visited Yet") 
             return False 
+    def teleport_to_home(self):
+        if self.home_castle_location:
+            xy = self.home_castle_location 
+            self.teleport_to_map(x=xy[0], y=xy[1], map_coords=(0, 0, 0))
+            return True 
+        return False 
     def teleport_to_map(self, x=0, y=0, map_coords = (0,0,0)): 
         self.load_random_music()
         def teleport_subroutine():
@@ -558,8 +581,8 @@ class Game_MAPTRANSITION:
             new_y = 0
         return new_x, new_y, new_map_coord
     def fill(self):
-        if len(self.map.enemies) < 10: self.map.fill_enemies(num_enemies=FILL_ENEMIES_QT)
-        if len(self.map.spawners) < 15: self.map.fill_spawners(num_spawners=FILL_SPAWNERS_QT)
+        if len(self.map.enemies) < 15: self.map.fill_enemies(num_enemies=FILL_ENEMIES_QT)
+        if len(self.map.spawners) < 5: self.map.fill_spawners(num_spawners=FILL_SPAWNERS_QT)
         print("Enemies :", len(self.map.enemies), "Spawners :", len(self.map.spawners))
     def new_map_from_current_coords(
             self, 
@@ -1184,6 +1207,7 @@ class Game_ITERATION:
                 # take control of the first valid character 
                 if k and v and isinstance(v, Player):
                     if self.set_player(v.name):
+                        self.teleport_to_home()
                         self.draw()
                         b_new_char_set = True
                         break 

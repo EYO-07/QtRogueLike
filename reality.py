@@ -354,6 +354,9 @@ class Container(Serializable): # Primitive
         self.remove_item( item )
         another.add_item( item ) 
         return True 
+    def give_all(self, another):
+        if not isinstance(another, Container): return False
+        another.items += self.items 
         
 class Durable(Item): # interface : has durability_factor, quality
     __serialize_only__ = Item.__serialize_only__ + ["durability_factor"]
@@ -581,7 +584,7 @@ class Food(Usable, Resource):
     def update_value(self):
         self.value = self.nutrition*self.uses 
     def get_utility_info(self):
-        return f"{self.nutrition:.1f} [ntr] "+Usable.get_utility_info(self)
+        return f"{self.nutrition:.1f} [ntr] "+Usable.get_utility_info(self)+f" {self.nutrition*self.uses:.1f} [value]"
 
 class Wood(Item, Resource):
     __serialize_only__ = Item.__serialize_only__+Resource.__serialize_only__
@@ -962,6 +965,8 @@ class SkilledCharacter(Character):
             game_instance.game_iteration()
             return True 
         return False 
+    def sprint_attack_skill(self, game_instance):
+        return False 
     def activate_all_skills(self):
         self.can_use_power_skill = True
         self.can_use_thrust_skill = True
@@ -969,6 +974,7 @@ class SkilledCharacter(Character):
         self.can_use_tower_skill = True
         self.can_use_bishop_skill = True
         self.can_use_dodge_skill = True
+        self.can_use_sprint_attack_skill = True
     def deactivate_all_skills(self):
         self.can_use_power_skill = False 
         self.can_use_thrust_skill = False 
@@ -976,6 +982,7 @@ class SkilledCharacter(Character):
         self.can_use_tower_skill = False 
         self.can_use_bishop_skill = False 
         self.can_use_dodge_skill = False 
+        self.can_use_sprint_attack_skill = False 
     def update_available_skills(self):
         pass 
 
@@ -1161,7 +1168,12 @@ class Hero(Player): # playable character that can "carry" a party
     def __init__(self, name="", hp=PLAYER_MAX_HP, x=MAP_WIDTH//2, y=MAP_HEIGHT//2, b_generate_items = False, sprite = "player", current_map = (0,0,0)):
         Player.__init__(self, name = name, hp = hp, x = x, y = y, b_generate_items = b_generate_items, sprite = sprite, current_map = current_map)
         self.party_members = set() # names of players that belongs to Hero party 
-    def add_to_party(self, key, game_instance):
+    def tail_game_instance_update(self, game_instance):
+        if not game_instance: return 
+        game_instance.update_prior_next_selection()
+        game_instance.update_all_gui()
+        game_instance.draw()
+    def add_to_party_not_tail_update(self, key, game_instance):
         if not key in game_instance.players: return 
         npc = game_instance.players[key]
         if not isinstance(npc, Player): return 
@@ -1169,13 +1181,15 @@ class Hero(Player): # playable character that can "carry" a party
         if isinstance(npc, Hero):
             if len(npc.party_members) > 0: return 
         if len(self.party_members) >= 7: return 
-        # -- 
         self.party_members.add(key)
-        npc.party = True
-        game_instance.map.remove_character(npc)
-        game_instance.update_prior_next_selection()
-        game_instance.update_all_gui()
-        game_instance.draw()
+        npc.party = True 
+        game_instance.map.remove_character(npc) 
+    def add_to_party(self, key, game_instance):
+        self.add_to_party_not_tail_update(key=key, game_instance=game_instance)
+        self.tail_game_instance_update(game_instance=game_instance)
+        # game_instance.update_prior_next_selection()
+        # game_instance.update_all_gui()
+        # game_instance.draw()
     def release_party_member(self, key, game_instance):
         x = self.x 
         y = self.y 
@@ -1199,17 +1213,43 @@ class Hero(Player): # playable character that can "carry" a party
             break 
         game_instance.update_all_gui() 
     def release_party(self, game_instance):
+        # game_instance.check_player_dict()
+        # x = self.x 
+        # y = self.y 
+        # for dx,dy in CROSS_DIFF_MOVES_1x1:
+            # if not game_instance.map.can_place_character_at(x+dx,y+dy): continue 
+            # if dx == 0 and dy == 0: continue
+            # to_remove = set()
+            # for key in self.party_members:
+                # value = game_instance.players.get(key, None)
+                # if value is None: # Bug Fix - Character can't Release Party
+                    # to_remove.add(key) # self.party_members.remove(key)
+                    # continue 
+                # if value and value.party:
+                    # value.x = x+dx 
+                    # value.y = y+dy 
+                    # value.party = False 
+                    # self.party_members.remove(key)
+                    # game_instance.map.place_character(value)
+                    # game_instance.draw()
+                    # break 
+            # for key in to_remove:
+                # self.party_members.remove(key)
+        # game_instance.update_all_gui() 
         game_instance.check_player_dict()
+        self.remove_invalid_party_names(game_instance=game_instance)
         x = self.x 
         y = self.y 
+        ply_list = [ game_instance.players.get(k, None) for k in self.party_members if not game_instance.players.get(k, None) is None ]
+        ply_list.sort(key=lambda v: v.hp, reverse=True)
         for dx,dy in CROSS_DIFF_MOVES_1x1:
             if not game_instance.map.can_place_character_at(x+dx,y+dy): continue 
             if dx == 0 and dy == 0: continue
             to_remove = set()
-            for key in self.party_members:
-                value = game_instance.players.get(key, None)
-                if value is None: # Bug Fix - Character can't Release Party
-                    to_remove.add(key) # self.party_members.remove(key)
+            for value in ply_list:
+                key = value.name 
+                if value is None: 
+                    to_remove.add(key) 
                     continue 
                 if value and value.party:
                     value.x = x+dx 
@@ -1217,13 +1257,18 @@ class Hero(Player): # playable character that can "carry" a party
                     value.party = False 
                     self.party_members.remove(key)
                     game_instance.map.place_character(value)
-                    game_instance.draw()
                     break 
-            for key in to_remove:
-                self.party_members.remove(key)
+            for key in to_remove: self.party_members.remove(key)
+        game_instance.draw() 
         game_instance.update_all_gui() 
     def count_party(self):
         return len(self.party_members)
+    def remove_invalid_party_names(self, game_instance):
+        discard_set = set()
+        for k in self.party_members:
+            if k in game_instance.players: continue 
+            discard_set.add(k)
+        self.party_members -= discard_set
     
 class Enemy(Character, OfensiveCharacter):
     __serialize_only__ = Character.__serialize_only__ + OfensiveCharacter.__serialize_only__ +["type","stance","canSeeCharacter","patrol_direction"]
